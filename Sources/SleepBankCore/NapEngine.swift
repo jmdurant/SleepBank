@@ -26,6 +26,7 @@ public final class NapEngine {
     public let sessionStart: Date
     private let detector: SleepOnsetDetector
     private let awakening: AwakeningDetector
+    private let deepening: DeepeningDetector
 
     private var onsetTime: Date?
     private var wakeTarget: Date?
@@ -34,11 +35,13 @@ public final class NapEngine {
     private var finished = false
 
     public init(type: NapType, sessionStart: Date, detector: SleepOnsetDetector,
-                awakeningDetector: AwakeningDetector = AwakeningDetector()) {
+                awakeningDetector: AwakeningDetector = AwakeningDetector(),
+                deepeningDetector: DeepeningDetector = DeepeningDetector()) {
         self.type = type
         self.sessionStart = sessionStart
         self.detector = detector
         self.awakening = awakeningDetector
+        self.deepening = deepeningDetector
     }
 
     /// Absolute latest the alarm will fire, regardless of onset.
@@ -60,10 +63,11 @@ public final class NapEngine {
             wakeTarget = min(onset.addingTimeInterval(type.targetWakeAfterOnset), ceiling)
         }
 
-        // Spontaneous awakening — only after onset and before any alarm.
-        if onsetTime != nil, !alarming, !naturallyWoke,
-           awakening.update(signal: signal, at: now) {
-            naturallyWoke = true
+        // Post-onset state detectors — only before any alarm.
+        var physiologicalDeepening = false
+        if let onset = onsetTime, !alarming, !naturallyWoke {
+            if awakening.update(signal: signal, at: now) { naturallyWoke = true }
+            physiologicalDeepening = deepening.update(signal: signal, onset: onset, at: now)
         }
 
         // Decide the outcome.
@@ -75,8 +79,10 @@ public final class NapEngine {
             reason = (wt >= ceiling) ? .ceiling : .reachedTarget; fireAlarm = true
         } else if now >= ceiling {
             reason = .ceiling; fireAlarm = true
-        } else if onsetTime != nil && signal.eegDeepApproaching {
-            reason = .deepening; fireAlarm = true  // EEG sees N3 coming — wake early
+        } else if onsetTime != nil && (signal.eegDeepApproaching || physiologicalDeepening) {
+            // Deep sleep is approaching (EEG delta, or HR-falling-further + deeply
+            // still) — wake now, before N3, to dodge grogginess.
+            reason = .deepening; fireAlarm = true
         }
         if fireAlarm { alarming = true }
 

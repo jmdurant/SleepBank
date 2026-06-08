@@ -139,7 +139,7 @@ struct NapComparisonDetail: View {
     private var wake: String {
         switch record.wakeReason {
         case .reachedTarget: return "smart alarm"
-        case .deepening: return "EEG (deep sleep)"
+        case .deepening: return "deep sleep nearing"
         case .ceiling: return "time limit"
         case .spontaneous: return "woke naturally"
         case .manual, .none: return "manual"

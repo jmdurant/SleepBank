@@ -155,6 +155,30 @@ final class NapEngineTests: XCTestCase {
         XCTAssertEqual(tick.wakeReason, .deepening)
     }
 
+    func testPhysiologicalDeepeningWakesEarlyWithoutEEG() {
+        // Onset at session start; no EEG at all.
+        let engine = NapEngine(type: .power, sessionStart: t0, detector: StubOnsetDetector(onsetAfter: t0))
+
+        // First 2 min asleep at 60 bpm, still → establishes the sleeping-HR reference.
+        for s in stride(from: 0, through: 130, by: 5) {
+            let t = t0.addingTimeInterval(TimeInterval(s))
+            _ = engine.tick(now: t, signal: OnsetSignal(heartRate: 60, movementIntensity: 0.01, stillSeconds: 200))
+        }
+        // After 8 min: HR falls further to 55, body completely still → descending to N3.
+        var fired = false
+        for s in stride(from: 485, through: 760, by: 5) {
+            let t = t0.addingTimeInterval(TimeInterval(s))
+            let tick = engine.tick(now: t, signal: OnsetSignal(heartRate: 55, movementIntensity: 0.0, stillSeconds: 600))
+            if tick.isAlarming {
+                fired = true
+                XCTAssertEqual(tick.wakeReason, .deepening)
+                XCTAssertLessThan(s, Int(NapType.power.targetWakeAfterOnset), "Should fire BEFORE the timer target")
+                break
+            }
+        }
+        XCTAssertTrue(fired, "HR falling further + deep stillness should trigger an early deep-sleep wake")
+    }
+
     func testAwakeningOnSustainedMovement() {
         let detector = AwakeningDetector()
         var woke = false
