@@ -60,6 +60,8 @@ targets:
       path: App/iOS/SleepBank.entitlements
       properties:
         com.apple.developer.healthkit: true
+        com.apple.security.application-groups:
+          - group.com.doctordurant.sleepbank
 
   # -------------------------------------------------------------- watch app
   SleepBankWatch:
@@ -100,6 +102,8 @@ targets:
       - App/Widget
       - path: App/Shared/NapActivityAttributes.swift
         buildPhase: sources
+      - path: App/Shared/SharedStore.swift
+        buildPhase: sources
     info:
       path: App/Widget/Info.plist
       properties:
@@ -109,6 +113,11 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.doctordurant.sleepbank.widget
+    entitlements:
+      path: App/Widget/SleepBankWidget.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.com.doctordurant.sleepbank
 
 schemes:
   SleepBank:

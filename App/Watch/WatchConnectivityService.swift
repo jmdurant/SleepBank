@@ -44,11 +44,12 @@ class WatchConnectivityService: NSObject, WCSessionDelegate {
     /// phone even when backgrounded.
     /// - event: "start" | "update" | "onset" | "end"
     func sendNap(event: String, phase: String, wakeTarget: Date?, heartRate: Int,
-                 typeTitle: String, onset: Bool) {
+                 typeTitle: String, onset: Bool, napsToday: Int = 0, minutesToday: Int = 0) {
         guard WCSession.default.activationState == .activated else { return }
         var info: [String: Any] = [
             "napEvent": event, "phase": phase, "hr": heartRate,
             "type": typeTitle, "onset": onset,
+            "napsToday": napsToday, "minutesToday": minutesToday,
         ]
         if let wt = wakeTarget { info["wakeTarget"] = wt.timeIntervalSince1970 }
         WCSession.default.transferUserInfo(info)

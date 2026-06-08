@@ -10,6 +10,7 @@
 
 import Foundation
 import WatchConnectivity
+import WidgetKit
 import SleepChartKit
 
 @Observable
@@ -66,6 +67,8 @@ class PhoneConnectivity: NSObject, WCSessionDelegate {
                     sessionStart: Date(),
                     state: Self.contentState(from: userInfo)
                 )
+                SharedStore.napActive = true
+                WidgetCenter.shared.reloadAllTimelines()
             case "update":
                 LiveActivityManager.shared.update(Self.contentState(from: userInfo))
             case "onset":
@@ -77,6 +80,10 @@ class PhoneConnectivity: NSObject, WCSessionDelegate {
                 MuseService.shared.disconnect()
                 NoiseService.shared.fadeOut()
                 LiveActivityManager.shared.end()
+                SharedStore.napActive = false
+                SharedStore.napsToday = userInfo["napsToday"] as? Int ?? SharedStore.napsToday
+                SharedStore.minutesToday = userInfo["minutesToday"] as? Int ?? SharedStore.minutesToday
+                WidgetCenter.shared.reloadAllTimelines()
             default:
                 break
             }

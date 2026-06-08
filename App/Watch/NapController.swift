@@ -157,9 +157,11 @@ class NapController {
         workout.stop()
         motion.stopMonitoring()
         NoiseService.shared.fadeOut()    // stop watch sound if onset never fired
-        // Tell the phone to stand sensors down and end the Live Activity.
+        // Tell the phone to stand sensors down, end the Live Activity, and update
+        // the home widget with today's banked totals (the watch is the source).
         sync.sendNap(event: "end", phase: NapPhase.finished.rawValue, wakeTarget: nil,
-                     heartRate: heartRate, typeTitle: napType.title, onset: onsetDetected)
+                     heartRate: heartRate, typeTitle: napType.title, onset: onsetDetected,
+                     napsToday: store.countToday, minutesToday: store.minutesToday)
         timer?.invalidate()
         timer = nil
         isNapping = false

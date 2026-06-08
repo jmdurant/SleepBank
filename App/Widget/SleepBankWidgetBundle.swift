@@ -12,6 +12,7 @@ import SwiftUI
 @main
 struct SleepBankWidgetBundle: WidgetBundle {
     var body: some Widget {
+        SleepBankHomeWidget()
         NapLiveActivityWidget()
     }
 }

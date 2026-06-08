@@ -9,6 +9,7 @@
 //
 
 import SwiftUI
+import WidgetKit
 import SleepChartKit
 
 struct ContentView: View {
@@ -54,6 +55,10 @@ struct ContentView: View {
                     await health.refreshAll()
                     // Push the real last-night timeline to the watch.
                     PhoneConnectivity.shared.sendLastNight(health.lastNightSamples)
+                    // Update the home widget's health summary.
+                    SharedStore.lastNightHours = health.lastNightSleep?.totalHours ?? 0
+                    SharedStore.restingHR = Int(health.restingHeartRate)
+                    WidgetCenter.shared.reloadAllTimelines()
                 }
             }
         }
