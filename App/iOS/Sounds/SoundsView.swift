@@ -56,7 +56,7 @@ struct SoundsView: View {
                 }
             }
 
-            Section("Volume") {
+            Section {
                 Slider(value: $noise.volume, in: 0...1) {
                     Text("Volume")
                 } minimumValueLabel: {
@@ -64,6 +64,11 @@ struct SoundsView: View {
                 } maximumValueLabel: {
                     Image(systemName: "speaker.wave.3.fill").font(.caption2).foregroundStyle(.secondary)
                 }
+                LabeledContent("Level", value: "\(Int(noise.volume * 100))%")
+            } header: {
+                Text("Volume")
+            } footer: {
+                Text("Build check: a fresh install starts at 30%. If this opens at 60%, you're on an old build — force-quit and reopen.")
             }
 
             Section {
