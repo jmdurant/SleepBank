@@ -36,14 +36,12 @@ class GuidedRelaxationService: NSObject, AVSpeechSynthesizerDelegate {
 
     private(set) var isSpeaking = false
 
-    /// Selected guide (persisted).
-    var guide: RelaxationGuide {
-        get { RelaxationGuide(rawValue: UserDefaults.standard.string(forKey: "relaxGuide") ?? "") ?? .none }
-        set { UserDefaults.standard.set(newValue.rawValue, forKey: "relaxGuide") }
+    /// Selected guide (stored so @Observable tracks it; persisted via didSet).
+    var guide: RelaxationGuide = RelaxationGuide(rawValue: UserDefaults.standard.string(forKey: "relaxGuide") ?? "") ?? .none {
+        didSet { UserDefaults.standard.set(guide.rawValue, forKey: "relaxGuide") }
     }
-    var autoPlayDuringNap: Bool {
-        get { UserDefaults.standard.bool(forKey: "relaxAutoPlay") }
-        set { UserDefaults.standard.set(newValue, forKey: "relaxAutoPlay") }
+    var autoPlayDuringNap: Bool = UserDefaults.standard.bool(forKey: "relaxAutoPlay") {
+        didSet { UserDefaults.standard.set(autoPlayDuringNap, forKey: "relaxAutoPlay") }
     }
 
     @ObservationIgnored private let synth = AVSpeechSynthesizer()

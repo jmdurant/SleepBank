@@ -41,9 +41,9 @@ class NoiseService {
     var color: NoiseColor = .pink
 
     /// When on, the phone starts this sound automatically when a nap begins.
-    var autoPlayDuringNap: Bool {
-        get { UserDefaults.standard.bool(forKey: "noiseAutoPlay") }
-        set { UserDefaults.standard.set(newValue, forKey: "noiseAutoPlay") }
+    /// Stored (not computed) so @Observable tracks it; persisted via didSet.
+    var autoPlayDuringNap: Bool = UserDefaults.standard.bool(forKey: "noiseAutoPlay") {
+        didSet { UserDefaults.standard.set(autoPlayDuringNap, forKey: "noiseAutoPlay") }
     }
 
     var volume: Float = 0.6 {
