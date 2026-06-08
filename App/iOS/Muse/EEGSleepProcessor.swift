@@ -56,6 +56,9 @@ class EEGSleepProcessor {
     var channelQuality: [Float] = [0, 0, 0, 0]
     /// Whether enough channels are clean to trust EEG-derived state.
     var hasGoodSignal = false
+    /// Recent raw samples from AF7 (left frontal) for the live waveform display.
+    var traceSamples: [Float] = []
+    private let traceLength = 512   // ~2 s at 256 Hz
 
     // MARK: - Configuration
 
@@ -95,6 +98,7 @@ class EEGSleepProcessor {
     func reset() {
         channelBuffers = [[], [], [], []]
         cleanHistory = [[], [], [], []]
+        traceSamples = []
         alphaBaseline = 0
         baselineCaptured = false
         deltaHistory.removeAll()
@@ -113,6 +117,13 @@ class EEGSleepProcessor {
         let maxSamples = fftSize * 2
         if channelBuffers[channel].count > maxSamples {
             channelBuffers[channel].removeFirst(channelBuffers[channel].count - maxSamples)
+        }
+        // AF7 (channel 1) feeds the live waveform trace.
+        if channel == 1 {
+            traceSamples.append(contentsOf: samples)
+            if traceSamples.count > traceLength {
+                traceSamples.removeFirst(traceSamples.count - traceLength)
+            }
         }
         // Channel 0 filling up triggers a full multi-channel update.
         if channel == 0 && channelBuffers[0].count >= fftSize {

@@ -37,6 +37,7 @@ class PolarH10Service: NSObject {
     var lastRRInterval: Double = 0          // ms
     var rrIntervals: [Double] = []          // rolling, ms
     var hrvRMSSD: Double = 0                 // ms
+    var heartRateHistory: [HeartRateSample] = []   // rolling, for charting
 
     private var api: PolarBleApi!
     private var hrDisposable: Disposable?
@@ -107,6 +108,8 @@ class PolarH10Service: NSObject {
                     guard let self else { return }
                     for sample in hrData {
                         self.currentHeartRate = Int(sample.hr)
+                        self.heartRateHistory.append(HeartRateSample(timestamp: Date(), bpm: Int(sample.hr)))
+                        if self.heartRateHistory.count > 300 { self.heartRateHistory.removeFirst() }
                         for rr in sample.rrsMs {
                             self.lastRRInterval = Double(rr)
                             self.rrIntervals.append(Double(rr))

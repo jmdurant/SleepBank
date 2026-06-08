@@ -22,6 +22,14 @@ struct ContentView: View {
                     chartCard
                     contextCard
                     NavigationLink {
+                        LiveView()
+                    } label: {
+                        Label("Live Data — HR & EEG", systemImage: "waveform.path.ecg.rectangle")
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding()
+                            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 16))
+                    }
+                    NavigationLink {
                         SensorsView()
                     } label: {
                         Label("Sensors — Muse & H10", systemImage: "sensor.tag.radiowaves.forward")
