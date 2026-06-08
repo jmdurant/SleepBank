@@ -68,7 +68,7 @@ struct SoundsView: View {
             } header: {
                 Text("Volume")
             } footer: {
-                Text("Build check: a fresh install starts at 30%. If this opens at 60%, you're on an old build — force-quit and reopen.")
+                Text("Build check: a fresh install starts at 20%. If it opens higher, force-quit and reopen for the latest build.")
             }
 
             Section {
