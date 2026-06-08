@@ -2,11 +2,15 @@
 //  NapHealthWriter.swift
 //  SleepBank Watch App
 //
-//  Writes a completed nap to Apple Health as a sleep sample. This matters most
-//  for short power naps: Apple's own nap detection ignores sleep periods under an
-//  hour, so without this the 20-minute nap never appears in Health. We write the
-//  detected asleep window (onset → wake) as `asleepUnspecified` — honest, since
-//  the watch-only detector doesn't truly stage the nap.
+//  Writes a completed nap to Apple Health as a sleep sample so SleepBank's naps
+//  appear in Health alongside Apple's own records. We write the detected asleep
+//  window (onset → wake) as `asleepUnspecified` — honest, since the watch-only
+//  detector doesn't truly stage the nap.
+//
+//  Note: Apple Watch (watchOS 11+) may also record the same nap if it's above the
+//  user's configured minimum nap duration, so this sample can overlap Apple's.
+//  Ours is tagged (SleepBankNapType) so AppleSleepComparator excludes it when
+//  comparing against Apple's detection. See RATIONALE.md §6.
 //
 
 import Foundation

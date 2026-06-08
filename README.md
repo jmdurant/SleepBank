@@ -4,6 +4,12 @@
 
 A clean, lightweight SwiftUI package for displaying beautiful sleep stage visualizations with comprehensive HealthKit integration.
 
+> **This repository is also the home of the SleepBank app** — a power-nap app
+> (iOS + watchOS) built on top of SleepChartKit. See
+> [`ARCHITECTURE.md`](ARCHITECTURE.md) for the app's design and
+> [`RATIONALE.md`](RATIONALE.md) for the scientific rationale, evidence base, and
+> validation/regulatory considerations.
+
 ## Features
 
 - 📊 **Timeline Visualization** - Interactive sleep stage timeline with smooth stage transitions
