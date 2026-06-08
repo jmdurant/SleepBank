@@ -38,10 +38,13 @@ targets:
         product: PolarBleSdk
       - target: SleepBankWatch
         embed: true
+      - target: SleepBankWidget
+        embed: true
     info:
       path: App/iOS/Info.plist
       properties:
         UILaunchScreen: {}
+        NSSupportsLiveActivities: true
         NSHealthShareUsageDescription: "SleepBank reads your sleep and heart-rate data to study your naps and validate nap-onset detection."
         NSHealthUpdateUsageDescription: "SleepBank records your naps to Apple Health."
         NSBluetoothAlwaysUsageDescription: "SleepBank connects to a Muse headband and Polar H10 to read EEG and continuous heart rate for sleep-onset detection."
@@ -88,6 +91,24 @@ targets:
       path: App/Watch/SleepBankWatch.entitlements
       properties:
         com.apple.developer.healthkit: true
+
+  # ----------------------------------------------------- widget extension (iOS)
+  SleepBankWidget:
+    type: app-extension
+    platform: iOS
+    sources:
+      - App/Widget
+      - path: App/Shared/NapActivityAttributes.swift
+        buildPhase: sources
+    info:
+      path: App/Widget/Info.plist
+      properties:
+        CFBundleDisplayName: SleepBank
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.doctordurant.sleepbank.widget
 
 schemes:
   SleepBank:

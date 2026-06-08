@@ -39,17 +39,19 @@ class WatchConnectivityService: NSObject, WCSessionDelegate {
         return Date().timeIntervalSince(at) <= freshness
     }
 
-    /// Tell the phone a nap started/ended so it can connect and stream sensors.
-    /// transferUserInfo is queued and wakes the phone even when backgrounded.
-    func notifyNap(started: Bool) {
+    /// Forward a nap state event to the phone (sensors, sound, and the Live
+    /// Activity all key off this). transferUserInfo is queued and wakes the
+    /// phone even when backgrounded.
+    /// - event: "start" | "update" | "onset" | "end"
+    func sendNap(event: String, phase: String, wakeTarget: Date?, heartRate: Int,
+                 typeTitle: String, onset: Bool) {
         guard WCSession.default.activationState == .activated else { return }
-        WCSession.default.transferUserInfo(["napEvent": started ? "start" : "end"])
-    }
-
-    /// Tell the phone sleep onset was detected, so it can fade the relaxing sound.
-    func notifyOnset() {
-        guard WCSession.default.activationState == .activated else { return }
-        WCSession.default.transferUserInfo(["napEvent": "onset"])
+        var info: [String: Any] = [
+            "napEvent": event, "phase": phase, "hr": heartRate,
+            "type": typeTitle, "onset": onset,
+        ]
+        if let wt = wakeTarget { info["wakeTarget"] = wt.timeIntervalSince1970 }
+        WCSession.default.transferUserInfo(info)
     }
 
     private override init() {

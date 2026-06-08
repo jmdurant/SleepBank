@@ -38,6 +38,8 @@ class NapController {
     private var wakeScheduled = false
     private var lastOnset: Date?
     private var lastWakeReason: WakeReason?
+    private var lastSentPhase: NapPhase?
+    private var liveTickCounter = 0
 
     var heartRate: Int { sync.freshExternalHR ?? workout.currentHeartRate }
     var movementIntensity: Double { motion.movementIntensity }
@@ -65,8 +67,13 @@ class NapController {
             print("[NapController] failed to start workout session: \(error)")
         }
         motion.startMonitoring()
-        sync.notifyNap(started: true)   // ask the phone to connect + stream sensors
         if NoiseService.shared.autoPlayDuringNap { NoiseService.shared.play() }
+        // Tell the phone to connect sensors, start sound, and raise the Live Activity.
+        sync.sendNap(event: "start", phase: NapPhase.settling.rawValue,
+                     wakeTarget: engine?.ceiling, heartRate: 0,
+                     typeTitle: type.title, onset: false)
+        lastSentPhase = .settling
+        liveTickCounter = 0
         isNapping = true
         phase = .settling
 
@@ -101,10 +108,21 @@ class NapController {
         lastOnset = result.onsetTime
         if let reason = result.wakeReason { lastWakeReason = reason }
 
-        // First moment of onset: fade the relaxing sound (here and on the phone).
+        let effectiveTarget = result.wakeTarget ?? engine.ceiling
+        liveTickCounter += 1
+
+        // First moment of onset: fade the relaxing sound (here and on the phone)
+        // and push the new wake target to the Live Activity.
         if onsetDetected && !wasOnset {
             NoiseService.shared.fadeOut()
-            sync.notifyOnset()
+            sync.sendNap(event: "onset", phase: result.phase.rawValue, wakeTarget: effectiveTarget,
+                         heartRate: heartRate, typeTitle: napType.title, onset: true)
+            lastSentPhase = result.phase
+        } else if result.phase != lastSentPhase || liveTickCounter % 30 == 0 {
+            // Phase change, or a periodic refresh so HR doesn't go stale.
+            sync.sendNap(event: "update", phase: result.phase.rawValue, wakeTarget: effectiveTarget,
+                         heartRate: heartRate, typeTitle: napType.title, onset: onsetDetected)
+            lastSentPhase = result.phase
         }
 
         // Schedule the guaranteed-wake session as soon as onset gives us a target.
@@ -139,7 +157,9 @@ class NapController {
         workout.stop()
         motion.stopMonitoring()
         NoiseService.shared.fadeOut()    // stop watch sound if onset never fired
-        sync.notifyNap(started: false)   // tell the phone to stand sensors down
+        // Tell the phone to stand sensors down and end the Live Activity.
+        sync.sendNap(event: "end", phase: NapPhase.finished.rawValue, wakeTarget: nil,
+                     heartRate: heartRate, typeTitle: napType.title, onset: onsetDetected)
         timer?.invalidate()
         timer = nil
         isNapping = false

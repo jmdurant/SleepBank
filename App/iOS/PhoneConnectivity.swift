@@ -61,17 +61,36 @@ class PhoneConnectivity: NSObject, WCSessionDelegate {
                 PolarH10Service.shared.autoConnect()
                 MuseService.shared.startScanning()
                 if NoiseService.shared.autoPlayDuringNap { NoiseService.shared.play() }
+                LiveActivityManager.shared.start(
+                    title: userInfo["type"] as? String ?? "Nap",
+                    sessionStart: Date(),
+                    state: Self.contentState(from: userInfo)
+                )
+            case "update":
+                LiveActivityManager.shared.update(Self.contentState(from: userInfo))
             case "onset":
                 // Asleep now — the sound has done its masking job; fade it out.
                 NoiseService.shared.fadeOut()
+                LiveActivityManager.shared.update(Self.contentState(from: userInfo))
             case "end":
                 PolarH10Service.shared.disconnect()
                 MuseService.shared.disconnect()
                 NoiseService.shared.fadeOut()
+                LiveActivityManager.shared.end()
             default:
                 break
             }
         }
+    }
+
+    private static func contentState(from info: [String: Any]) -> NapActivityAttributes.ContentState {
+        let wake = (info["wakeTarget"] as? TimeInterval).map { Date(timeIntervalSince1970: $0) }
+        return NapActivityAttributes.ContentState(
+            phase: info["phase"] as? String ?? "settling",
+            wakeTarget: wake,
+            heartRate: info["hr"] as? Int ?? 0,
+            onsetDetected: info["onset"] as? Bool ?? false
+        )
     }
 
     // MARK: - WCSessionDelegate (iOS requires all three lifecycle methods)
