@@ -62,6 +62,9 @@ class PhoneNapController {
         recorder.begin(at: now)
         motion.startMonitoring()
         if NoiseService.shared.autoPlayDuringNap { NoiseService.shared.play() }
+        if GuidedRelaxationService.shared.autoPlayDuringNap {
+            GuidedRelaxationService.shared.start(GuidedRelaxationService.shared.guide)
+        }
 
         lastOnset = nil; lastReason = nil; wakeTarget = nil
         onsetDetected = false
@@ -124,7 +127,10 @@ class PhoneNapController {
         wakeTarget = result.wakeTarget
         if let reason = result.wakeReason { lastReason = reason }
 
-        if onsetDetected && !wasOnset { NoiseService.shared.fadeOut() }
+        if onsetDetected && !wasOnset {
+            NoiseService.shared.fadeOut()
+            GuidedRelaxationService.shared.stop()   // asleep — the wind-down is done
+        }
         if result.isAlarming { alarm.start() }
 
         LiveActivityManager.shared.update(.init(
@@ -151,6 +157,7 @@ class PhoneNapController {
         alarm.stop()
         motion.stopMonitoring()
         NoiseService.shared.fadeOut()
+        GuidedRelaxationService.shared.stop()
         LiveActivityManager.shared.end()
         SharedStore.napActive = false
         WidgetCenter.shared.reloadAllTimelines()

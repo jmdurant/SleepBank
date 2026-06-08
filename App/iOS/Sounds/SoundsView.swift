@@ -11,6 +11,7 @@ import AVFoundation
 
 struct SoundsView: View {
     @State private var noise = NoiseService.shared
+    @State private var relax = GuidedRelaxationService.shared
     @State private var routeTick = 0   // bumps to refresh the output label
 
     var body: some View {
@@ -72,6 +73,28 @@ struct SoundsView: View {
                 ))
             } footer: {
                 Text("Starts the selected sound when a nap begins and fades it out as you wake.")
+            }
+
+            Section {
+                Picker("Spoken guide", selection: Binding(
+                    get: { relax.guide },
+                    set: { relax.guide = $0 }
+                )) {
+                    ForEach(RelaxationGuide.allCases) { Text($0.title).tag($0) }
+                }
+                if relax.guide != .none {
+                    Toggle("Play guide during naps", isOn: Binding(
+                        get: { relax.autoPlayDuringNap },
+                        set: { relax.autoPlayDuringNap = $0 }
+                    ))
+                    Button(relax.isSpeaking ? "Stop preview" : "Preview guide") {
+                        relax.isSpeaking ? relax.stop() : relax.start(relax.guide)
+                    }
+                }
+            } header: {
+                Text("Wind-down guide")
+            } footer: {
+                Text("A spoken relaxation that plays as you settle and stops once you're asleep. Layers over the sound.")
             }
 
             if noise.isPlaying {

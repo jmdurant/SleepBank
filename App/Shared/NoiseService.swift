@@ -124,7 +124,8 @@ class NoiseService {
 
     private func configureSession() {
         let session = AVAudioSession.sharedInstance()
-        try? session.setCategory(.playback, mode: .default)
+        // mixWithOthers so the spoken wind-down guide can layer over the noise.
+        try? session.setCategory(.playback, mode: .default, options: [.mixWithOthers])
         try? session.setActive(true)
     }
 
