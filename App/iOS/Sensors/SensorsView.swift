@@ -54,6 +54,11 @@ struct SensorsView: View {
                 LabeledContent("HRV (RMSSD)", value: polar.hrvRMSSD > 0 ? String(format: "%.0f ms", polar.hrvRMSSD) : "—")
                 LabeledContent("Breathing", value: polar.breathingRate > 0 ? String(format: "%.0f br/min", polar.breathingRate) : "—")
                 LabeledContent("Movement", value: polar.isAccStreaming ? String(format: "%.0f%%", polar.movementIntensity * 100) : "—")
+                if polar.isAccStreaming {
+                    LabeledContent("Posture", value: polar.posture)
+                    LabeledContent("Orientation",
+                        value: String(format: "x %.2f  y %.2f  z %.2f", polar.accelX, polar.accelY, polar.accelZ))
+                }
             }
             Button(polar.isConnected ? "Disconnect" : "Connect H10") {
                 polar.isConnected ? polar.disconnect() : polar.autoConnect()

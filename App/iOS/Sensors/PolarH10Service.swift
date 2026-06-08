@@ -45,6 +45,11 @@ class PolarH10Service: NSObject {
     var stillSeconds: TimeInterval = 0       // continuous seconds below the stillness threshold
     var isLyingDown = false                  // gravity aligned with the body's long axis
     var breathingRate: Double = 0            // breaths/min (estimate from chest accel)
+    var accelX: Double = 0                   // live gravity vector (g), for orientation check
+    var accelY: Double = 0
+    var accelZ: Double = 0
+
+    var posture: String { isLyingDown ? "Lying down" : "Upright" }
 
     private var api: PolarBleApi!
     private var hrDisposable: Disposable?
@@ -176,6 +181,7 @@ class PolarH10Service: NSObject {
     /// Convert a chest-accel sample (g) into a normalized movement level + a
     /// running stillness duration, mirroring the watch's MotionService.
     private func feedAccel(x: Double, y: Double, z: Double) {
+        accelX = x; accelY = y; accelZ = z
         let magnitude = (x * x + y * y + z * z).squareRoot()
         let movement = abs(magnitude - 1.0)        // subtract gravity
 

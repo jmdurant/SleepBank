@@ -61,12 +61,28 @@ class MuseService: NSObject {
     }
 
     private func startStreaming() {
-        guard let controlCharacteristic, let peripheral else { return }
+        guard controlCharacteristic != nil, peripheral != nil else { return }
         eeg.reset()
-        if let data = "d".data(using: .utf8) {   // "d" = start data streaming
-            peripheral.writeValue(data, for: controlCharacteristic, type: .withResponse)
-            isStreaming = true
+        // Muse control protocol: halt → set preset (p21 enables the 4 EEG channels)
+        // → status → resume. Commands are length-prefixed and newline-terminated;
+        // a bare "d" (as before) doesn't start EEG, which is why range stayed 0.
+        // Spaced out so each control write lands before the next.
+        let sequence = ["h", "p21", "s", "d"]
+        for (i, cmd) in sequence.enumerated() {
+            DispatchQueue.main.asyncAfter(deadline: .now() + Double(i) * 0.15) { [weak self] in
+                self?.writeCommand(cmd)
+            }
         }
+        isStreaming = true
+    }
+
+    /// Encode and send a Muse control command: [length, ascii…, 0x0A].
+    private func writeCommand(_ command: String) {
+        guard let controlCharacteristic, let peripheral else { return }
+        var bytes: [UInt8] = [UInt8(command.utf8.count + 1)]
+        bytes.append(contentsOf: Array(command.utf8))
+        bytes.append(0x0A)   // newline
+        peripheral.writeValue(Data(bytes), for: controlCharacteristic, type: .withResponse)
     }
 
     /// Unpack a Muse EEG packet: 2-byte sequence header then 12 × 12-bit samples.
