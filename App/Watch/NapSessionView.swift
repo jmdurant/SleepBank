@@ -58,11 +58,19 @@ struct NapSessionView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                NavigationLink {
-                    SleepChartWatchView()
-                } label: {
-                    Label("Last night", systemImage: "chart.bar.fill")
-                        .font(.caption)
+                HStack(spacing: 10) {
+                    NavigationLink {
+                        SleepChartWatchView()
+                    } label: {
+                        Label("Last night", systemImage: "chart.bar.fill")
+                            .font(.caption)
+                    }
+                    NavigationLink {
+                        WatchSoundsView()
+                    } label: {
+                        Label("Sounds", systemImage: "speaker.wave.2.fill")
+                            .font(.caption)
+                    }
                 }
             }
         }

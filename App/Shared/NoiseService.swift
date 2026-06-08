@@ -1,12 +1,13 @@
 //
 //  NoiseService.swift
-//  SleepBank
+//  SleepBank (shared — phone and watch)
 //
 //  Relaxing sound for falling asleep, synthesized in real time — no audio assets.
 //  White / pink / brown noise via an AVAudioEngine source node, with smooth
 //  fades. Pink and brown are the sleep-friendly "colours" (energy weighted toward
-//  lower frequencies, less hissy than white). Plays on the phone during a nap and
-//  fades out at wake; can also be driven manually from the Sounds screen.
+//  lower frequencies, less hissy than white). Plays during a nap and fades out at
+//  sleep onset (job done — saves the speaker); phone-side it can also be driven
+//  manually from the Sounds screen. Each target has its own .shared instance.
 //
 
 import Foundation

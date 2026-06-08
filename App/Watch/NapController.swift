@@ -66,6 +66,7 @@ class NapController {
         }
         motion.startMonitoring()
         sync.notifyNap(started: true)   // ask the phone to connect + stream sensors
+        if NoiseService.shared.autoPlayDuringNap { NoiseService.shared.play() }
         isNapping = true
         phase = .settling
 
@@ -95,9 +96,16 @@ class NapController {
 
         phase = result.phase
         timeUntilWake = result.timeUntilWake ?? 0
+        let wasOnset = onsetDetected
         onsetDetected = result.onsetTime != nil
         lastOnset = result.onsetTime
         if let reason = result.wakeReason { lastWakeReason = reason }
+
+        // First moment of onset: fade the relaxing sound (here and on the phone).
+        if onsetDetected && !wasOnset {
+            NoiseService.shared.fadeOut()
+            sync.notifyOnset()
+        }
 
         // Schedule the guaranteed-wake session as soon as onset gives us a target.
         if !wakeScheduled, let target = result.wakeTarget {
@@ -130,6 +138,7 @@ class NapController {
         alarm.stop()
         workout.stop()
         motion.stopMonitoring()
+        NoiseService.shared.fadeOut()    // stop watch sound if onset never fired
         sync.notifyNap(started: false)   // tell the phone to stand sensors down
         timer?.invalidate()
         timer = nil

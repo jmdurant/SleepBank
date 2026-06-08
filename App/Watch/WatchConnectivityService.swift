@@ -46,6 +46,12 @@ class WatchConnectivityService: NSObject, WCSessionDelegate {
         WCSession.default.transferUserInfo(["napEvent": started ? "start" : "end"])
     }
 
+    /// Tell the phone sleep onset was detected, so it can fade the relaxing sound.
+    func notifyOnset() {
+        guard WCSession.default.activationState == .activated else { return }
+        WCSession.default.transferUserInfo(["napEvent": "onset"])
+    }
+
     private override init() {
         super.init()
         guard WCSession.isSupported() else { return }

@@ -61,6 +61,9 @@ class PhoneConnectivity: NSObject, WCSessionDelegate {
                 PolarH10Service.shared.autoConnect()
                 MuseService.shared.startScanning()
                 if NoiseService.shared.autoPlayDuringNap { NoiseService.shared.play() }
+            case "onset":
+                // Asleep now — the sound has done its masking job; fade it out.
+                NoiseService.shared.fadeOut()
             case "end":
                 PolarH10Service.shared.disconnect()
                 MuseService.shared.disconnect()
