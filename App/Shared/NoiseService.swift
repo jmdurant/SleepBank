@@ -46,8 +46,21 @@ class NoiseService {
         didSet { UserDefaults.standard.set(autoPlayDuringNap, forKey: "noiseAutoPlay") }
     }
 
-    var volume: Float = 0.6 {
-        didSet { engine.mainMixerNode.outputVolume = isPlaying ? volume : 0 }
+    var volume: Float = 0.35 {
+        didSet { applyVolume() }
+    }
+
+    /// Multiplier applied while a spoken guide is talking, so the voice sits on top.
+    @ObservationIgnored private var duckLevel: Float = 1
+
+    /// Duck (or restore) the noise under the spoken wind-down guide.
+    func setDucked(_ ducked: Bool) {
+        duckLevel = ducked ? 0.2 : 1
+        applyVolume()
+    }
+
+    private func applyVolume() {
+        engine.mainMixerNode.outputVolume = isPlaying ? volume * duckLevel : 0
     }
 
     /// The current audio output device (name + an SF Symbol), read live from the
@@ -89,8 +102,8 @@ class NoiseService {
         fadeTimer?.invalidate(); fadeTimer = nil
         do {
             if !engine.isRunning { try engine.start() }
-            engine.mainMixerNode.outputVolume = volume
             isPlaying = true
+            applyVolume()
         } catch {
             print("[Noise] engine start failed: \(error)")
         }
@@ -101,6 +114,7 @@ class NoiseService {
         engine.mainMixerNode.outputVolume = 0
         engine.pause()
         isPlaying = false
+        duckLevel = 1
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 

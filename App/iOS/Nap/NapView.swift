@@ -75,6 +75,17 @@ struct NapView: View {
                     .font(.caption2).foregroundStyle(.secondary)
             }
 
+            Group {
+                if let err = LiveActivityManager.shared.lastError {
+                    Text("Live Activity: \(err)")
+                } else if LiveActivityManager.shared.enabled {
+                    Text("Live Activity active — see it on the Lock Screen / Dynamic Island")
+                } else {
+                    Text("Live Activities are off in Settings → SleepBank")
+                }
+            }
+            .font(.caption2).foregroundStyle(.secondary).multilineTextAlignment(.center)
+
             Button(role: .destructive) { nap.stop() } label: {
                 Label("End nap", systemImage: "stop.fill").frame(maxWidth: .infinity)
             }

@@ -61,6 +61,7 @@ class GuidedRelaxationService: NSObject, AVSpeechSynthesizerDelegate {
         current = guide
         cycle = 0
         isSpeaking = true
+        NoiseService.shared.setDucked(true)   // drop the noise under the voice
         enqueueNextCycle()
     }
 
@@ -68,6 +69,7 @@ class GuidedRelaxationService: NSObject, AVSpeechSynthesizerDelegate {
         active = false
         isSpeaking = false
         synth.stopSpeaking(at: .immediate)
+        NoiseService.shared.setDucked(false)
     }
 
     private func configureSession() {

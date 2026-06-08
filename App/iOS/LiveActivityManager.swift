@@ -17,8 +17,16 @@ class LiveActivityManager {
 
     private var activity: Activity<NapActivityAttributes>?
 
+    /// Whether Live Activities are permitted (Settings → SleepBank).
+    var enabled: Bool { ActivityAuthorizationInfo().areActivitiesEnabled }
+    /// Last failure reason, surfaced for diagnostics.
+    private(set) var lastError: String?
+
     func start(title: String, sessionStart: Date, state: NapActivityAttributes.ContentState) {
-        guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
+        guard ActivityAuthorizationInfo().areActivitiesEnabled else {
+            lastError = "Live Activities are off in Settings → SleepBank."
+            return
+        }
         end()   // clear any existing/orphan before starting fresh
         let attributes = NapActivityAttributes(napTitle: title, sessionStart: sessionStart)
         do {
@@ -27,7 +35,9 @@ class LiveActivityManager {
                 content: .init(state: state, staleDate: nil),
                 pushType: nil
             )
+            lastError = nil
         } catch {
+            lastError = error.localizedDescription
             print("[LiveActivity] start failed: \(error)")
         }
     }
