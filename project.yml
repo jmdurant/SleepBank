@@ -75,6 +75,8 @@ targets:
         product: SleepBankCore
       - package: SleepChartKit
         product: SleepChartKit
+      - target: SleepBankWatchWidget
+        embed: true
     info:
       path: App/Watch/Info.plist
       properties:
@@ -93,6 +95,31 @@ targets:
       path: App/Watch/SleepBankWatch.entitlements
       properties:
         com.apple.developer.healthkit: true
+        com.apple.security.application-groups:
+          - group.com.doctordurant.sleepbank
+
+  # ------------------------------------------ watch complication widget extension
+  SleepBankWatchWidget:
+    type: app-extension
+    platform: watchOS
+    sources:
+      - App/WatchWidget
+      - path: App/Shared/SharedStore.swift
+        buildPhase: sources
+    info:
+      path: App/WatchWidget/Info.plist
+      properties:
+        CFBundleDisplayName: SleepBank
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.doctordurant.sleepbank.watchkitapp.widget
+    entitlements:
+      path: App/WatchWidget/SleepBankWatchWidget.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.com.doctordurant.sleepbank
 
   # ----------------------------------------------------- widget extension (iOS)
   SleepBankWidget:

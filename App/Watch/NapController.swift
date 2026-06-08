@@ -10,10 +10,21 @@
 //
 
 import Foundation
+import WidgetKit
 import SleepBankCore
 
 @Observable
 class NapController {
+
+    /// Shared instance so App Intents (Siri/Shortcuts) and the UI drive the same
+    /// session.
+    static let shared = NapController()
+
+    /// A nap type requested from an App Intent, consumed by the UI once visible.
+    private(set) var pendingStart: NapType?
+
+    func requestStart(_ type: NapType) { pendingStart = type }
+    func clearPending() { pendingStart = nil }
 
     let workout = NapWorkoutService()
     let motion = MotionService()
@@ -76,6 +87,8 @@ class NapController {
         }
         motion.startMonitoring()
         if NoiseService.shared.autoPlayDuringNap { NoiseService.shared.play() }
+        SharedStore.napActive = true
+        WidgetCenter.shared.reloadAllTimelines()   // refresh the complication
         // Tell the phone to connect sensors, start sound, and raise the Live Activity.
         sync.sendNap(event: "start", phase: NapPhase.settling.rawValue,
                      wakeTarget: engine?.ceiling, heartRate: 0,
@@ -165,7 +178,12 @@ class NapController {
             // Apple-comparison and CreateML export.
             let decision = recorder.build(record: record, trigger: detector?.onsetTrigger)
             sync.sendDecision(decision)
+            // Update the complication with today's banked totals.
+            SharedStore.napsToday = store.countToday
+            SharedStore.minutesToday = store.minutesToday
         }
+        SharedStore.napActive = false
+        WidgetCenter.shared.reloadAllTimelines()
 
         engine?.finish()
         alarm.stop()

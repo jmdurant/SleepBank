@@ -10,7 +10,7 @@ import SwiftUI
 import SleepBankCore
 
 struct NapSessionView: View {
-    @State private var nap = NapController()
+    @State private var nap = NapController.shared
 
     var body: some View {
         Group {
@@ -25,7 +25,15 @@ struct NapSessionView: View {
             }
         }
         .padding()
-        .onAppear { nap.requestPermissions() }
+        .onAppear { nap.requestPermissions(); consumePending() }
+        .onChange(of: nap.pendingStart) { consumePending() }
+    }
+
+    /// Start a nap requested via Siri/Shortcuts once the UI is visible.
+    private func consumePending() {
+        guard let type = nap.pendingStart, !nap.isNapping else { return }
+        nap.clearPending()
+        nap.start(type: type)
     }
 
     // MARK: - Idle: choose a nap
