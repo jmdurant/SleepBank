@@ -21,7 +21,7 @@ class NapController {
     let store = NapStore()
     private let sync = WatchConnectivityService.shared
     private let recorder = NapSessionRecorder()
-    private var detector: HeartRateImmobilityOnsetDetector?
+    private var detector: CoreMLOnsetDetector?
 
     /// True when the loop is currently using H10 data forwarded from the phone
     /// rather than wrist HR.
@@ -55,7 +55,7 @@ class NapController {
         guard !isNapping else { return }
         napType = type
 
-        let detector = HeartRateImmobilityOnsetDetector()
+        let detector = CoreMLOnsetDetector()
         self.detector = detector
         let now = Date()
         engine = NapEngine(type: type, sessionStart: now, detector: detector)

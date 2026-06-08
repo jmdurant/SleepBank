@@ -7,15 +7,19 @@ public struct OnsetTrigger: Codable, Hashable, Sendable {
     public var heartRate: Bool
     public var hrv: Bool
     public var eeg: Bool
+    /// Onset was declared by a trained Core ML model rather than the heuristic.
+    public var model: Bool
 
-    public init(heartRate: Bool, hrv: Bool, eeg: Bool) {
+    public init(heartRate: Bool, hrv: Bool, eeg: Bool, model: Bool = false) {
         self.heartRate = heartRate
         self.hrv = hrv
         self.eeg = eeg
+        self.model = model
     }
 
     /// Compact label for display/logging.
     public var label: String {
+        if model { return "Model" }
         if eeg { return heartRate || hrv ? "EEG+" : "EEG" }
         if heartRate && hrv { return "HR+HRV" }
         if hrv { return "HRV" }
