@@ -36,6 +36,21 @@ struct MuseMonitorView: View {
                     .foregroundStyle(muse.eeg.hasGoodSignal ? .green : .orange)
             }
 
+            Section {
+                ForEach(Array(["TP9", "AF7", "AF8", "TP10"].enumerated()), id: \.offset) { i, name in
+                    HStack {
+                        Text(name).frame(width: 50, alignment: .leading)
+                        Spacer()
+                        Text("mean \(Int(muse.eeg.channelMean[i]))  ·  range \(Int(muse.eeg.channelRange[i]))")
+                            .font(.caption2.monospacedDigit()).foregroundStyle(.secondary)
+                    }
+                }
+            } header: {
+                Text("Raw diagnostics (12-bit)")
+            } footer: {
+                Text("Good contact ≈ mean near 2048, range a few hundred. Mean pinned near 0/4095 or a flat range means the electrode isn't reading skin.")
+            }
+
             Section("Sleep signals") {
                 metric("Onset index", muse.eeg.onsetIndex,
                        flag: muse.eeg.onsetDetected ? "ONSET" : nil, flagColor: .indigo)

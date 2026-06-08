@@ -52,10 +52,13 @@ class EEGSleepProcessor {
     /// Spindle-band power — a hint that the sleeper has consolidated into N2.
     var spindlePower: Float = 0
 
-    /// Per-channel contact quality, 0 (no contact / artifact) … 1 (clean).
+    /// Per-channel contact quality, 0 (no contact) … 1 (good contact).
     var channelQuality: [Float] = [0, 0, 0, 0]
-    /// Whether enough channels are clean to trust EEG-derived state.
+    /// Whether enough channels have contact to trust EEG-derived state.
     var hasGoodSignal = false
+    /// Live raw per-channel diagnostics (12-bit ADC units) for calibration.
+    var channelRange: [Float] = [0, 0, 0, 0]
+    var channelMean: [Float] = [0, 0, 0, 0]
     /// Recent raw samples from AF7 (left frontal) for the live waveform display.
     var traceSamples: [Float] = []
     private let traceLength = 512   // ~2 s at 256 Hz
@@ -98,6 +101,8 @@ class EEGSleepProcessor {
     func reset() {
         channelBuffers = [[], [], [], []]
         cleanHistory = [[], [], [], []]
+        channelRange = [0, 0, 0, 0]
+        channelMean = [0, 0, 0, 0]
         traceSamples = []
         alphaBaseline = 0
         baselineCaptured = false
@@ -139,8 +144,8 @@ class EEGSleepProcessor {
             let samples = Array(channelBuffers[ch].suffix(fftSize))
 
             let (clean, contact) = assessQuality(samples, channel: ch)
-            recordQuality(channel: ch, clean: clean && contact)
-            guard clean && contact else { continue }   // skip artifacted/no-contact frames
+            recordQuality(channel: ch, contact: contact)   // contact, not cleanliness
+            guard clean && contact else { continue }       // skip artifacted/no-contact frames for the FFT
 
             var windowed = [Float](repeating: 0, count: fftSize)
             vDSP_vmul(samples, 1, window, 1, &windowed, 1, vDSP_Length(fftSize))
@@ -210,18 +215,33 @@ class EEGSleepProcessor {
 
     // MARK: - Quality
 
-    /// Returns (isClean, hasContact) for a frame. Artifact = amplitude spike;
-    /// no-contact = near-flatline.
-    private func assessQuality(_ samples: [Float], channel: Int) -> (Bool, Bool) {
-        let range = (samples.max() ?? 0) - (samples.min() ?? 0)
-        let contact = range > flatlineThreshold
+    /// Returns (isClean, hasContact) for a frame.
+    /// - contact: the electrode is on skin producing real signal — mean sits away
+    ///   from the ADC rails and the window isn't flat. A blink is a large
+    ///   deflection but *confirms* contact, so it counts as contact.
+    /// - clean: free of large transient artifact (blink/jaw). Used only to gate
+    ///   which frames feed the FFT, NOT whether we have contact.
+    private func assessQuality(_ samples: [Float], channel: Int) -> (clean: Bool, contact: Bool) {
+        let maxV = samples.max() ?? 0
+        let minV = samples.min() ?? 0
+        let range = maxV - minV
+        let mean = samples.reduce(0, +) / Float(samples.count)
+
+        channelRange[channel] = range   // live diagnostics for calibration
+        channelMean[channel] = mean
+
+        // Contact: not flatlined, and DC not pinned to a rail (12-bit, 0…4095).
+        let alive = range > flatlineThreshold
+        let offRails = mean > 200 && mean < 3895
+        let contact = alive && offRails
+
         let threshold = (channel == 1 || channel == 2) ? blinkThreshold : jawClenchThreshold
         let clean = range < threshold
         return (clean, contact)
     }
 
-    private func recordQuality(channel: Int, clean: Bool) {
-        cleanHistory[channel].append(clean)
+    private func recordQuality(channel: Int, contact: Bool) {
+        cleanHistory[channel].append(contact)
         if cleanHistory[channel].count > qualityWindow {
             cleanHistory[channel].removeFirst()
         }
@@ -232,7 +252,7 @@ class EEGSleepProcessor {
             let h = cleanHistory[ch]
             channelQuality[ch] = h.isEmpty ? 0 : Float(h.filter { $0 }.count) / Float(h.count)
         }
-        // Trust EEG state when at least the two frontal channels are mostly clean.
+        // Trust EEG state when the two frontal channels have steady contact.
         hasGoodSignal = channelQuality[1] > 0.5 && channelQuality[2] > 0.5
     }
 
