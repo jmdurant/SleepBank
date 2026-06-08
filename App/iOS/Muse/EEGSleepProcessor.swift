@@ -147,8 +147,14 @@ class EEGSleepProcessor {
             recordQuality(channel: ch, contact: contact)   // contact, not cleanliness
             guard clean && contact else { continue }       // skip artifacted/no-contact frames for the FFT
 
+            // Remove the DC offset (raw Muse samples sit ~2048) before windowing —
+            // otherwise the baseline dominates the low-frequency bins and delta
+            // pins at ~100% with everything else near 0.
+            let mean = samples.reduce(0, +) / Float(samples.count)
+            let centered = samples.map { $0 - mean }
+
             var windowed = [Float](repeating: 0, count: fftSize)
-            vDSP_vmul(samples, 1, window, 1, &windowed, 1, vDSP_Length(fftSize))
+            vDSP_vmul(centered, 1, window, 1, &windowed, 1, vDSP_Length(fftSize))
             let powers = computeFFT(windowed)
 
             switch ch {
