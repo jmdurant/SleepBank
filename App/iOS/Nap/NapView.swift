@@ -63,11 +63,12 @@ struct NapView: View {
             Text(nap.onsetDetected ? "until wake" : "max remaining")
                 .font(.caption).foregroundStyle(.secondary)
 
-            HStack(spacing: 24) {
+            HStack(spacing: 18) {
                 stat("heart.fill", .red, nap.heartRate > 0 ? "\(nap.heartRate)" : "--", "bpm")
                 stat("waveform.path.ecg", .pink, nap.hrv > 0 ? String(format: "%.0f", nap.hrv) : "--", "HRV")
+                stat("lungs.fill", .teal, nap.breathingRate > 0 ? String(format: "%.0f", nap.breathingRate) : "--", "br/min")
                 stat("brain.head.profile", nap.museGood ? .purple : .gray,
-                     nap.museGood ? "EEG" : "—", nap.museGood ? "good" : "no signal")
+                     nap.museGood ? "EEG" : "—", nap.museGood ? "good" : "no sig")
             }
 
             Button(role: .destructive) { nap.stop() } label: {

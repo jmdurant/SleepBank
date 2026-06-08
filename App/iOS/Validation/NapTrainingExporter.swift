@@ -22,7 +22,7 @@ enum NapTrainingExporter {
     static func exportCSV(records: [NapDecisionRecord]) async -> URL? {
         let comparator = AppleSleepComparator()
         var rows: [String] = [
-            "napId,napType,t,hr,hrv,movement,stillSeconds,eegOnset,eegDeep,label,labelSource",
+            "napId,napType,t,hr,hrv,movement,stillSeconds,eegOnset,eegDeep,breathing,label,labelSource",
         ]
 
         for record in records {
@@ -42,6 +42,7 @@ enum NapTrainingExporter {
                     String(format: "%.0f", e.stillSeconds),
                     e.eegOnset.map { String(format: "%.3f", $0) } ?? "",
                     e.eegDeep ? "1" : "0",
+                    e.breathing.map { String(format: "%.1f", $0) } ?? "",
                     label,
                     source,
                 ].joined(separator: ","))

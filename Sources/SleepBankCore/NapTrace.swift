@@ -37,10 +37,12 @@ public struct NapEpochFeatures: Codable, Hashable, Sendable {
     public let stillSeconds: TimeInterval
     public let eegOnset: Double?
     public let eegDeep: Bool
+    public let breathing: Double?
     public let phase: String
 
     public init(t: TimeInterval, heartRate: Int?, hrv: Double?, movement: Double,
-                stillSeconds: TimeInterval, eegOnset: Double?, eegDeep: Bool, phase: String) {
+                stillSeconds: TimeInterval, eegOnset: Double?, eegDeep: Bool,
+                breathing: Double? = nil, phase: String) {
         self.t = t
         self.heartRate = heartRate
         self.hrv = hrv
@@ -48,6 +50,7 @@ public struct NapEpochFeatures: Codable, Hashable, Sendable {
         self.stillSeconds = stillSeconds
         self.eegOnset = eegOnset
         self.eegDeep = eegDeep
+        self.breathing = breathing
         self.phase = phase
     }
 }

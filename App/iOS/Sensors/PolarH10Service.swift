@@ -44,14 +44,22 @@ class PolarH10Service: NSObject {
     var movementIntensity: Double = 0        // 0…1, from chest accel
     var stillSeconds: TimeInterval = 0       // continuous seconds below the stillness threshold
     var isLyingDown = false                  // gravity aligned with the body's long axis
+    var breathingRate: Double = 0            // breaths/min (estimate from chest accel)
 
     private var api: PolarBleApi!
     private var hrDisposable: Disposable?
     private var accDisposable: Disposable?
     private var searchDisposable: Disposable?
     private var pendingAutoConnect = false
-    private var accBuffer: [Double] = []
-    private var lastAccUpdate: Date?
+    @ObservationIgnored private var accBuffer: [Double] = []
+    @ObservationIgnored private var lastAccUpdate: Date?
+    // Breathing estimator state (slow chest-normal oscillation).
+    @ObservationIgnored private var slowZ = 0.0
+    @ObservationIgnored private var fastZ = 0.0
+    @ObservationIgnored private var prevBreath = 0.0
+    @ObservationIgnored private var prevPrevBreath = 0.0
+    @ObservationIgnored private var lastBreathPeak: Date?
+    @ObservationIgnored private var breathIntervals: [Double] = []
 
     override init() {
         super.init()
@@ -183,6 +191,33 @@ class PolarH10Service: NSObject {
         let dt = lastAccUpdate.map { now.timeIntervalSince($0) } ?? 0
         lastAccUpdate = now
         if avg > 0.05 { stillSeconds = 0 } else { stillSeconds += dt }
+
+        estimateBreathing(z: z, now: now, dt: dt)
+    }
+
+    /// Breathing rate from the slow chest-normal (z) oscillation: band-limit with
+    /// a fast/slow EMA pair, peak-detect, and convert peak intervals to bpm.
+    /// An estimate — respiration slows and regularizes at sleep onset.
+    private func estimateBreathing(z: Double, now: Date, dt: TimeInterval) {
+        guard dt > 0 else { return }
+        slowZ += (z - slowZ) * min(1, dt / 8.0)     // ~posture / DC
+        fastZ += (z - fastZ) * min(1, dt / 0.5)     // light smoothing
+        let breath = fastZ - slowZ                  // ~breathing band
+
+        if prevBreath > prevPrevBreath, prevBreath > breath, prevBreath > 0.008 {
+            if let last = lastBreathPeak {
+                let interval = now.timeIntervalSince(last)
+                if interval > 2.0, interval < 10.0 {     // 6–30 breaths/min
+                    breathIntervals.append(interval)
+                    if breathIntervals.count > 8 { breathIntervals.removeFirst() }
+                    let mean = breathIntervals.reduce(0, +) / Double(breathIntervals.count)
+                    breathingRate = 60.0 / mean
+                }
+            }
+            lastBreathPeak = now
+        }
+        prevPrevBreath = prevBreath
+        prevBreath = breath
     }
 
     private func computeHRV() {

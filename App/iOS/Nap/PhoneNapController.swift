@@ -41,6 +41,7 @@ class PhoneNapController {
 
     var heartRate: Int { polar.currentHeartRate }
     var hrv: Double { polar.hrvRMSSD }
+    var breathingRate: Double { polar.breathingRate }
     var museGood: Bool { muse.eeg.hasGoodSignal }
     var isAlarming: Bool { alarm.isAlarming }
 
@@ -90,7 +91,8 @@ class PhoneNapController {
             stillSeconds: still,
             hrvRMSSD: polar.hrvRMSSD > 0 ? polar.hrvRMSSD : nil,
             eegOnsetConfidence: muse.eeg.hasGoodSignal ? Double(muse.eeg.onsetIndex) : nil,
-            eegDeepApproaching: muse.eeg.hasGoodSignal && muse.eeg.deepSleepApproaching
+            eegDeepApproaching: muse.eeg.hasGoodSignal && muse.eeg.deepSleepApproaching,
+            breathing: (usingChest && polar.breathingRate > 0) ? polar.breathingRate : nil
         )
         let result = engine.tick(now: now, signal: signal)
         recorder.record(now: now, signal: signal, phase: result.phase)

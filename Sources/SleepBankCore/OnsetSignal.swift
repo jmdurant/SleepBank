@@ -19,15 +19,19 @@ public struct OnsetSignal: Sendable {
     /// EEG says slow-wave (N3) is encroaching — the cue to wake now, before
     /// grogginess sets in.
     public let eegDeepApproaching: Bool
+    /// Breathing rate (breaths/min) from the chest accelerometer, or nil. Slows
+    /// and regularizes at sleep onset.
+    public let breathing: Double?
 
     public init(heartRate: Int?, movementIntensity: Double, stillSeconds: TimeInterval,
                 hrvRMSSD: Double? = nil, eegOnsetConfidence: Double? = nil,
-                eegDeepApproaching: Bool = false) {
+                eegDeepApproaching: Bool = false, breathing: Double? = nil) {
         self.heartRate = heartRate
         self.movementIntensity = movementIntensity
         self.stillSeconds = stillSeconds
         self.hrvRMSSD = hrvRMSSD
         self.eegOnsetConfidence = eegOnsetConfidence
         self.eegDeepApproaching = eegDeepApproaching
+        self.breathing = breathing
     }
 }
