@@ -46,7 +46,7 @@ class NoiseService {
         didSet { UserDefaults.standard.set(autoPlayDuringNap, forKey: "noiseAutoPlay") }
     }
 
-    var volume: Float = 0.35 {
+    var volume: Float = 0.3 {
         didSet { applyVolume() }
     }
 
@@ -55,7 +55,7 @@ class NoiseService {
 
     /// Duck (or restore) the noise under the spoken wind-down guide.
     func setDucked(_ ducked: Bool) {
-        duckLevel = ducked ? 0.2 : 1
+        duckLevel = ducked ? 0.45 : 1
         applyVolume()
     }
 
@@ -168,7 +168,7 @@ class NoiseService {
         let white = whiteSample()
         switch color {
         case .white:
-            return white * 0.25
+            return white * 0.13
         case .pink:
             // Paul Kellet's economical pink-noise filter.
             b0 = 0.99886 * b0 + white * 0.0555179
@@ -177,12 +177,12 @@ class NoiseService {
             b3 = 0.86650 * b3 + white * 0.3104856
             b4 = 0.55000 * b4 + white * 0.5329522
             b5 = -0.7616 * b5 - white * 0.0168980
-            let pink = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362) * 0.11
+            let pink = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362) * 0.07
             b6 = white * 0.115926
             return pink
         case .brown:
             lastBrown = (lastBrown + 0.02 * white) / 1.02
-            return lastBrown * 3.5 * 0.25
+            return lastBrown * 3.5 * 0.16
         }
     }
 
