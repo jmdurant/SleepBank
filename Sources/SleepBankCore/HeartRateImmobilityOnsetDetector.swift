@@ -38,6 +38,8 @@ public final class HeartRateImmobilityOnsetDetector: SleepOnsetDetector {
     private var hrvBaseline: Double?
     private var candidateSince: Date?
     public private(set) var onsetTime: Date?
+    /// Which signal(s) crossed threshold at the firing tick.
+    public private(set) var onsetTrigger: OnsetTrigger?
 
     public init(config: Config = Config()) {
         self.config = config
@@ -51,6 +53,7 @@ public final class HeartRateImmobilityOnsetDetector: SleepOnsetDetector {
         hrvBaseline = nil
         candidateSince = nil
         onsetTime = nil
+        onsetTrigger = nil
     }
 
     public func update(signal: OnsetSignal, at time: Date) -> Bool {
@@ -87,6 +90,7 @@ public final class HeartRateImmobilityOnsetDetector: SleepOnsetDetector {
             if candidateSince == nil { candidateSince = time }
             if let since = candidateSince, time.timeIntervalSince(since) >= config.holdSeconds {
                 onsetTime = time
+                onsetTrigger = OnsetTrigger(heartRate: hrDropped, hrv: hrvRose, eeg: eegOnset)
                 return true
             }
         } else {

@@ -12,6 +12,7 @@ import Foundation
 import WatchConnectivity
 import WidgetKit
 import SleepChartKit
+import SleepBankCore
 
 @Observable
 class PhoneConnectivity: NSObject, WCSessionDelegate {
@@ -87,6 +88,15 @@ class PhoneConnectivity: NSObject, WCSessionDelegate {
             default:
                 break
             }
+        }
+    }
+
+    /// Receive a nap decision + trace file synced from the watch.
+    func session(_ session: WCSession, didReceive file: WCSessionFile) {
+        guard let data = try? Data(contentsOf: file.fileURL),
+              let record = try? JSONDecoder().decode(NapDecisionRecord.self, from: data) else { return }
+        DispatchQueue.main.async {
+            NapDecisionStore.shared.add(record)
         }
     }
 

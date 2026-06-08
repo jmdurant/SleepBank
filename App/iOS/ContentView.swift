@@ -46,6 +46,14 @@ struct ContentView: View {
                             .padding()
                             .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 16))
                     }
+                    NavigationLink {
+                        ValidationView()
+                    } label: {
+                        Label("Validation & Training Data", systemImage: "checklist")
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding()
+                            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 16))
+                    }
                 }
                 .padding()
             }

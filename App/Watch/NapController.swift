@@ -20,6 +20,8 @@ class NapController {
     let alarm = SmartAlarmService()
     let store = NapStore()
     private let sync = WatchConnectivityService.shared
+    private let recorder = NapSessionRecorder()
+    private var detector: HeartRateImmobilityOnsetDetector?
 
     /// True when the loop is currently using H10 data forwarded from the phone
     /// rather than wrist HR.
@@ -54,8 +56,10 @@ class NapController {
         napType = type
 
         let detector = HeartRateImmobilityOnsetDetector()
+        self.detector = detector
         let now = Date()
         engine = NapEngine(type: type, sessionStart: now, detector: detector)
+        recorder.begin(at: now)
         wakeScheduled = false
         onsetDetected = false
         lastOnset = nil
@@ -99,7 +103,9 @@ class NapController {
             eegOnsetConfidence: sync.freshEEGConfidence,
             eegDeepApproaching: sync.freshEEGDeep
         )
-        let result = engine.tick(now: Date(), signal: signal)
+        let now = Date()
+        let result = engine.tick(now: now, signal: signal)
+        recorder.record(now: now, signal: signal, phase: result.phase)
 
         phase = result.phase
         timeUntilWake = result.timeUntilWake ?? 0
@@ -151,6 +157,10 @@ class NapController {
             store.add(record)
             lastCompletedNap = record
             NapHealthWriter.shared.write(record)   // record the nap in Apple Health
+            // Assemble the decision + trace and sync it to the phone for
+            // Apple-comparison and CreateML export.
+            let decision = recorder.build(record: record, trigger: detector?.onsetTrigger)
+            sync.sendDecision(decision)
         }
 
         engine?.finish()

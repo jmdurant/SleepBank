@@ -9,6 +9,7 @@
 import Foundation
 import WatchConnectivity
 import SleepChartKit
+import SleepBankCore
 
 @Observable
 class WatchConnectivityService: NSObject, WCSessionDelegate {
@@ -53,6 +54,21 @@ class WatchConnectivityService: NSObject, WCSessionDelegate {
         ]
         if let wt = wakeTarget { info["wakeTarget"] = wt.timeIntervalSince1970 }
         WCSession.default.transferUserInfo(info)
+    }
+
+    /// Send a completed nap's decision + feature trace to the phone as a file
+    /// (transferFile handles the larger payload and delivers in the background).
+    func sendDecision(_ record: NapDecisionRecord) {
+        guard WCSession.default.activationState == .activated,
+              let data = try? JSONEncoder().encode(record) else { return }
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("nap-\(record.id.uuidString).json")
+        do {
+            try data.write(to: url, options: .atomic)
+            WCSession.default.transferFile(url, metadata: ["kind": "napDecision"])
+        } catch {
+            print("[WatchConnectivity] decision file write failed: \(error)")
+        }
     }
 
     private override init() {

@@ -89,6 +89,21 @@ final class NapEngineTests: XCTestCase {
         XCTAssertNotNil(onsetAt, "Confident EEG onset (with immobility) should declare onset")
     }
 
+    func testOnsetTriggerReportsFiringSignal() {
+        // HR-only descent: the trigger should credit HR, not HRV or EEG.
+        let detector = HeartRateImmobilityOnsetDetector()
+        for s in stride(from: 0, through: 200, by: 5) {
+            let t = t0.addingTimeInterval(TimeInterval(s))
+            let hr = s < 120 ? 70 : 62
+            let sig = OnsetSignal(heartRate: hr, movementIntensity: 0.01, stillSeconds: TimeInterval(s))
+            if detector.update(signal: sig, at: t) { break }
+        }
+        let trigger = detector.onsetTrigger
+        XCTAssertEqual(trigger?.heartRate, true)
+        XCTAssertEqual(trigger?.eeg, false)
+        XCTAssertEqual(trigger?.label, "HR")
+    }
+
     func testEEGOnsetStillNeedsImmobility() {
         let detector = HeartRateImmobilityOnsetDetector()
         var detected = false
