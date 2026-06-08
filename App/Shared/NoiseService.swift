@@ -52,12 +52,32 @@ class NoiseService {
 
     /// Multiplier applied while a spoken guide is talking, so the voice sits on top.
     @ObservationIgnored private var duckLevel: Float = 1
+    @ObservationIgnored private var duckTimer: Timer?
 
-    /// Duck (or restore) the noise under the spoken wind-down guide. A gentle dip
-    /// — the noise stays mostly present while the voice sits on top.
+    /// Duck (or restore) the noise under the spoken wind-down guide. A gentle dip,
+    /// ramped so the resume slopes smoothly back up rather than snapping.
     func setDucked(_ ducked: Bool) {
-        duckLevel = ducked ? 0.7 : 1
-        applyVolume()
+        // Quick dip under the voice, slow smooth recovery on resume.
+        rampDuck(to: ducked ? 0.7 : 1.0, over: ducked ? 0.2 : 0.5)
+    }
+
+    private func rampDuck(to target: Float, over duration: TimeInterval) {
+        duckTimer?.invalidate()
+        let start = duckLevel
+        guard duration > 0, abs(target - start) > 0.001 else {
+            duckLevel = target; applyVolume(); return
+        }
+        let interval = 0.02
+        let steps = max(1, Int(duration / interval))
+        var step = 0
+        duckTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] timer in
+            guard let self else { timer.invalidate(); return }
+            step += 1
+            let p = Float(step) / Float(steps)
+            self.duckLevel = start + (target - start) * p
+            self.applyVolume()
+            if step >= steps { self.duckLevel = target; self.applyVolume(); timer.invalidate() }
+        }
     }
 
     private func applyVolume() {
@@ -112,6 +132,7 @@ class NoiseService {
 
     func stop() {
         fadeTimer?.invalidate(); fadeTimer = nil
+        duckTimer?.invalidate(); duckTimer = nil
         engine.mainMixerNode.outputVolume = 0
         engine.pause()
         isPlaying = false
