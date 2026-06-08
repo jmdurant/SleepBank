@@ -19,6 +19,16 @@ struct ContentView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
+                    NavigationLink {
+                        NapView()
+                    } label: {
+                        Label("Start a Nap", systemImage: "moon.zzz.fill")
+                            .font(.headline)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(.indigo, in: RoundedRectangle(cornerRadius: 16))
+                            .foregroundStyle(.white)
+                    }
                     lastNightCard
                     chartCard
                     contextCard

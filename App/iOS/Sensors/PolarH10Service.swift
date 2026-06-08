@@ -39,10 +39,19 @@ class PolarH10Service: NSObject {
     var hrvRMSSD: Double = 0                 // ms
     var heartRateHistory: [HeartRateSample] = []   // rolling, for charting
 
+    // Chest accelerometer — a real immobility source for phone naps.
+    var isAccStreaming = false
+    var movementIntensity: Double = 0        // 0…1, from chest accel
+    var stillSeconds: TimeInterval = 0       // continuous seconds below the stillness threshold
+    var isLyingDown = false                  // gravity aligned with the body's long axis
+
     private var api: PolarBleApi!
     private var hrDisposable: Disposable?
+    private var accDisposable: Disposable?
     private var searchDisposable: Disposable?
     private var pendingAutoConnect = false
+    private var accBuffer: [Double] = []
+    private var lastAccUpdate: Date?
 
     override init() {
         super.init()
@@ -91,10 +100,12 @@ class PolarH10Service: NSObject {
 
     func disconnect() {
         hrDisposable?.dispose(); hrDisposable = nil
+        accDisposable?.dispose(); accDisposable = nil
         searchDisposable?.dispose(); searchDisposable = nil
         if let id = deviceId { try? api.disconnectFromDevice(id) }
         isConnected = false
         isStreaming = false
+        isAccStreaming = false
         deviceId = nil
     }
 
@@ -126,6 +137,52 @@ class PolarH10Service: NSObject {
                     logger.notice("[PolarH10] HR stream error: \($0)")
                 }
             )
+    }
+
+    // MARK: - Accelerometer stream (immobility + posture)
+
+    private func startAccStream(_ id: String) {
+        accDisposable = api.requestStreamSettings(id, feature: .acc)
+            .asObservable()
+            .flatMap { settings -> Observable<PolarAccData> in
+                self.api.startAccStreaming(id, settings: settings.maxSettings())
+            }
+            .observe(on: MainScheduler.instance)
+            .subscribe(
+                onNext: { [weak self] accData in
+                    guard let self else { return }
+                    for sample in accData {
+                        self.feedAccel(x: Double(sample.x) / 1000.0,
+                                       y: Double(sample.y) / 1000.0,
+                                       z: Double(sample.z) / 1000.0)
+                    }
+                    self.isAccStreaming = true
+                },
+                onError: { [weak self] in
+                    self?.lastStreamError = "ACC: \($0)"
+                    logger.notice("[PolarH10] ACC stream error: \($0)")
+                }
+            )
+    }
+
+    /// Convert a chest-accel sample (g) into a normalized movement level + a
+    /// running stillness duration, mirroring the watch's MotionService.
+    private func feedAccel(x: Double, y: Double, z: Double) {
+        let magnitude = (x * x + y * y + z * z).squareRoot()
+        let movement = abs(magnitude - 1.0)        // subtract gravity
+
+        accBuffer.append(movement)
+        if accBuffer.count > 50 { accBuffer.removeFirst() }
+        let avg = accBuffer.reduce(0, +) / Double(accBuffer.count)
+        movementIntensity = min(avg / 0.5, 1.0)
+
+        // Lying down: gravity mostly along one horizontal body axis (chest flat).
+        isLyingDown = abs(z) < 0.5
+
+        let now = Date()
+        let dt = lastAccUpdate.map { now.timeIntervalSince($0) } ?? 0
+        lastAccUpdate = now
+        if avg > 0.05 { stillSeconds = 0 } else { stillSeconds += dt }
     }
 
     private func computeHRV() {
@@ -187,6 +244,11 @@ extension PolarH10Service: PolarBleApiDeviceFeaturesObserver {
         if feature == .feature_polar_online_streaming {
             streamingFeatureReady = true
             if let id = deviceId, hrDisposable == nil { startHRStream(id) }
+            // ACC needs PMD notifications enabled — brief delay after subscribe.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
+                guard let self, let id = self.deviceId, self.isConnected, self.accDisposable == nil else { return }
+                self.startAccStream(id)
+            }
         }
     }
 }

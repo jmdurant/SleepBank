@@ -1,0 +1,162 @@
+//
+//  PhoneNapController.swift
+//  SleepBank
+//
+//  Runs the full nap loop on the phone — the at-home mode that uses the paired
+//  Polar H10 (HR + HRV) and Muse (EEG), plus the phone's own motion, to detect
+//  onset, then sounds a phone alarm at the smart wake. Mirrors the watch's
+//  NapController but hosted on iOS. The detection/timing logic is the shared,
+//  tested SleepBankCore engine.
+//
+
+import Foundation
+import WidgetKit
+import SleepBankCore
+
+@Observable
+class PhoneNapController {
+
+    static let shared = PhoneNapController()
+
+    let alarm = PhoneAlarmService()
+    private let motion = MotionService()
+    private let polar = PolarH10Service.shared
+    private let muse = MuseService.shared
+    private let store = NapDecisionStore.shared
+    private let recorder = NapSessionRecorder()
+
+    private(set) var napType: NapType = .power
+    private(set) var phase: NapPhase = .finished
+    private(set) var isNapping = false
+    private(set) var onsetDetected = false
+    private(set) var timeUntilWake: TimeInterval = 0
+    private(set) var lastCompletedNap: NapRecord?
+
+    private var engine: NapEngine?
+    private var detector: HeartRateImmobilityOnsetDetector?
+    private var timer: Timer?
+    private var lastOnset: Date?
+    private var lastReason: WakeReason?
+    private var wakeTarget: Date?
+
+    var heartRate: Int { polar.currentHeartRate }
+    var hrv: Double { polar.hrvRMSSD }
+    var museGood: Bool { muse.eeg.hasGoodSignal }
+    var isAlarming: Bool { alarm.isAlarming }
+
+    func start(type: NapType) {
+        guard !isNapping else { return }
+        napType = type
+
+        // Make sure the at-home sensors are coming up.
+        if !polar.isConnected { polar.autoConnect() }
+        if !muse.isConnected { muse.startScanning() }
+
+        let detector = HeartRateImmobilityOnsetDetector()
+        self.detector = detector
+        let now = Date()
+        engine = NapEngine(type: type, sessionStart: now, detector: detector)
+        recorder.begin(at: now)
+        motion.startMonitoring()
+        if NoiseService.shared.autoPlayDuringNap { NoiseService.shared.play() }
+
+        lastOnset = nil; lastReason = nil; wakeTarget = nil
+        onsetDetected = false
+        isNapping = true
+        phase = .settling
+
+        LiveActivityManager.shared.start(
+            title: type.title, sessionStart: now,
+            state: .init(phase: NapPhase.settling.rawValue, wakeTarget: engine?.ceiling,
+                         heartRate: 0, onsetDetected: false)
+        )
+        SharedStore.napActive = true
+        WidgetCenter.shared.reloadAllTimelines()
+
+        timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in self?.tick() }
+    }
+
+    private func tick() {
+        guard let engine else { return }
+        let now = Date()
+        // Prefer the H10 chest accelerometer for immobility (the phone may be on a
+        // nightstand and never move); fall back to the phone's own motion.
+        let usingChest = polar.isAccStreaming
+        let movement = usingChest ? polar.movementIntensity : motion.movementIntensity
+        let still = usingChest ? polar.stillSeconds : motion.stillSeconds
+        let signal = OnsetSignal(
+            heartRate: polar.currentHeartRate > 0 ? polar.currentHeartRate : nil,
+            movementIntensity: movement,
+            stillSeconds: still,
+            hrvRMSSD: polar.hrvRMSSD > 0 ? polar.hrvRMSSD : nil,
+            eegOnsetConfidence: muse.eeg.hasGoodSignal ? Double(muse.eeg.onsetIndex) : nil,
+            eegDeepApproaching: muse.eeg.hasGoodSignal && muse.eeg.deepSleepApproaching
+        )
+        let result = engine.tick(now: now, signal: signal)
+        recorder.record(now: now, signal: signal, phase: result.phase)
+
+        phase = result.phase
+        timeUntilWake = result.timeUntilWake ?? 0
+        let wasOnset = onsetDetected
+        onsetDetected = result.onsetTime != nil
+        lastOnset = result.onsetTime
+        wakeTarget = result.wakeTarget
+        if let reason = result.wakeReason { lastReason = reason }
+
+        if onsetDetected && !wasOnset { NoiseService.shared.fadeOut() }
+        if result.isAlarming { alarm.start() }
+
+        LiveActivityManager.shared.update(.init(
+            phase: result.phase.rawValue,
+            wakeTarget: result.wakeTarget ?? engine.ceiling,
+            heartRate: polar.currentHeartRate,
+            onsetDetected: onsetDetected
+        ))
+    }
+
+    func stop() {
+        if let engine {
+            let record = NapRecord(start: engine.sessionStart, end: Date(), type: napType,
+                                   onset: lastOnset, wakeReason: lastReason ?? .manual)
+            lastCompletedNap = record
+            NapHealthWriter.shared.write(record)
+            store.add(recorder.build(record: record, trigger: detector?.onsetTrigger))
+            SharedStore.napsToday += record.onset != nil ? 1 : 0
+            if let onset = record.onset {
+                SharedStore.minutesToday += Int(max(0, record.end.timeIntervalSince(onset)) / 60)
+            }
+            engine.finish()
+        }
+        alarm.stop()
+        motion.stopMonitoring()
+        NoiseService.shared.fadeOut()
+        LiveActivityManager.shared.end()
+        SharedStore.napActive = false
+        WidgetCenter.shared.reloadAllTimelines()
+        timer?.invalidate(); timer = nil
+        isNapping = false
+        phase = .finished
+        timeUntilWake = 0
+        onsetDetected = false
+        engine = nil
+    }
+
+    func dismissRecap() { lastCompletedNap = nil }
+
+    // MARK: - Display helpers
+
+    var phaseLabel: String {
+        switch phase {
+        case .settling:   return "Settling…"
+        case .monitoring: return "Watching for sleep"
+        case .asleep:     return "Asleep · wake armed"
+        case .waking:     return "Time to wake"
+        case .finished:   return ""
+        }
+    }
+
+    var countdownLabel: String {
+        let s = max(0, Int(timeUntilWake))
+        return String(format: "%d:%02d", s / 60, s % 60)
+    }
+}
