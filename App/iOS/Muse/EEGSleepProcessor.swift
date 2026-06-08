@@ -81,11 +81,17 @@ class EEGSleepProcessor {
     private var cleanHistory: [[Bool]] = [[], [], [], []]
     private let qualityWindow = 8
 
-    // Quiet-wake baseline (captured shortly after a clean signal appears).
+    // Awake baseline, averaged over the first ~20 s of good signal (not the first
+    // frame), so onset/deep are judged relative to *your* awake spectrum.
     private var alphaBaseline: Float = 0
+    private var deltaBaseline: Float = 0
     private var baselineCaptured = false
-    private var deltaHistory: [Float] = []
+    private var baselineFrames = 0
+    private var alphaBaselineSum: Float = 0
+    private var deltaBaselineSum: Float = 0
+    private let baselineTarget = 20
     private var onsetHoldFrames = 0
+    private var deepHoldFrames = 0
 
     init() {
         log2n = vDSP_Length(log2(Float(fftSize)))
@@ -105,9 +111,13 @@ class EEGSleepProcessor {
         channelMean = [0, 0, 0, 0]
         traceSamples = []
         alphaBaseline = 0
+        deltaBaseline = 0
         baselineCaptured = false
-        deltaHistory.removeAll()
+        baselineFrames = 0
+        alphaBaselineSum = 0
+        deltaBaselineSum = 0
         onsetHoldFrames = 0
+        deepHoldFrames = 0
         onsetIndex = 0
         onsetDetected = false
         deepSleepApproaching = false
@@ -171,9 +181,18 @@ class EEGSleepProcessor {
 
         guard hasGoodSignal else { return }
 
-        if !baselineCaptured && avgPowers.alpha > 0.01 {
-            alphaBaseline = avgPowers.alpha
-            baselineCaptured = true
+        // Accumulate an awake baseline over the first ~20 s of good signal before
+        // judging any sleep change. No onset/deep flags during calibration.
+        if !baselineCaptured {
+            baselineFrames += 1
+            alphaBaselineSum += avgPowers.alpha
+            deltaBaselineSum += avgPowers.delta
+            if baselineFrames >= baselineTarget {
+                alphaBaseline = max(0.01, alphaBaselineSum / Float(baselineFrames))
+                deltaBaseline = deltaBaselineSum / Float(baselineFrames)
+                baselineCaptured = true
+            }
+            return
         }
         computeSleepMetrics()
     }
@@ -275,26 +294,26 @@ class EEGSleepProcessor {
     // MARK: - Sleep metrics
 
     private func computeSleepMetrics() {
-        // ONSET: alpha attenuated vs quiet-wake baseline AND theta now exceeds alpha.
-        let alphaRatio = alphaBaseline > 0.01 ? avgPowers.alpha / alphaBaseline : 1
+        // ONSET: alpha attenuated vs the awake baseline AND theta now exceeds alpha.
+        let alphaRatio = avgPowers.alpha / alphaBaseline
         let alphaAttenuated = max(0, min(1, (1 - alphaRatio) / 0.6))   // full credit by 60% drop
         let thetaOverAlpha = avgPowers.alpha > 0.01 ? avgPowers.theta / avgPowers.alpha : 0
         let thetaEmergent = max(0, min(1, (thetaOverAlpha - 1) / 1.0))  // theta passing alpha
         onsetIndex = min(1, 0.6 * alphaAttenuated + 0.4 * thetaEmergent)
 
-        if onsetIndex > 0.6 {
-            onsetHoldFrames += 1
-        } else {
-            onsetHoldFrames = max(0, onsetHoldFrames - 1)
-        }
-        onsetDetected = onsetHoldFrames >= 3   // held ~3 s
+        // Sustained, with a higher bar and asymmetric decay, so brief awake
+        // fluctuations don't trip it.
+        if onsetIndex > 0.7 { onsetHoldFrames += 1 } else { onsetHoldFrames = max(0, onsetHoldFrames - 2) }
+        onsetDetected = onsetHoldFrames >= 6   // ~6 s sustained
 
-        // DEEP SLEEP APPROACH: relative delta rising.
+        // DEEP SLEEP APPROACH: delta risen well ABOVE the awake baseline (not an
+        // absolute threshold — EEG is 1/f, so delta is high even awake) with a
+        // quiet cortex (low beta), sustained.
         deltaDominance = avgPowers.delta
-        deltaHistory.append(avgPowers.delta)
-        if deltaHistory.count > 10 { deltaHistory.removeFirst() }
-        let rising = (deltaHistory.last ?? 0) > (deltaHistory.first ?? 0) + 0.05
-        deepSleepApproaching = avgPowers.delta > 0.35 && rising
+        let deltaRisen = avgPowers.delta >= deltaBaseline + 0.15
+        let calmCortex = avgPowers.beta < 0.18
+        if deltaRisen && calmCortex { deepHoldFrames += 1 } else { deepHoldFrames = max(0, deepHoldFrames - 2) }
+        deepSleepApproaching = deepHoldFrames >= 8   // ~8 s sustained
 
         // N2 hint.
         spindlePower = avgPowers.sigma
