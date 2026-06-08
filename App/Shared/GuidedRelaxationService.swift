@@ -61,7 +61,6 @@ class GuidedRelaxationService: NSObject, AVSpeechSynthesizerDelegate {
         current = guide
         cycle = 0
         isSpeaking = true
-        NoiseService.shared.setDucked(true)   // drop the noise under the voice
         enqueueNextCycle()
     }
 
@@ -135,7 +134,18 @@ class GuidedRelaxationService: NSObject, AVSpeechSynthesizerDelegate {
 
     // MARK: - Delegate
 
+    // Duck the noise only while a phrase is actually being spoken, so it audibly
+    // dips under each cue and returns during the breath/relaxation gaps.
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didStart utterance: AVSpeechUtterance) {
+        NoiseService.shared.setDucked(true)
+    }
+
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
+        NoiseService.shared.setDucked(false)
+    }
+
     func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
+        NoiseService.shared.setDucked(false)
         // When the queued cycle drains, enqueue the next one.
         if active, !synthesizer.isSpeaking {
             DispatchQueue.main.async { [weak self] in self?.enqueueNextCycle() }
