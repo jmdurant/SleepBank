@@ -22,10 +22,13 @@ public struct OnsetSignal: Sendable {
     /// Breathing rate (breaths/min) from the chest accelerometer, or nil. Slows
     /// and regularizes at sleep onset.
     public let breathing: Double?
+    /// Blood-oxygen saturation (%), or nil. Captured for completeness — it does
+    /// not shift at onset, so it isn't used for detection.
+    public let spo2: Double?
 
     public init(heartRate: Int?, movementIntensity: Double, stillSeconds: TimeInterval,
                 hrvRMSSD: Double? = nil, eegOnsetConfidence: Double? = nil,
-                eegDeepApproaching: Bool = false, breathing: Double? = nil) {
+                eegDeepApproaching: Bool = false, breathing: Double? = nil, spo2: Double? = nil) {
         self.heartRate = heartRate
         self.movementIntensity = movementIntensity
         self.stillSeconds = stillSeconds
@@ -33,5 +36,6 @@ public struct OnsetSignal: Sendable {
         self.eegOnsetConfidence = eegOnsetConfidence
         self.eegDeepApproaching = eegDeepApproaching
         self.breathing = breathing
+        self.spo2 = spo2
     }
 }

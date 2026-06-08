@@ -70,6 +70,10 @@ struct NapView: View {
                 stat("brain.head.profile", nap.museGood ? .purple : .gray,
                      nap.museGood ? "EEG" : "—", nap.museGood ? "good" : "no sig")
             }
+            if nap.spo2 > 0 {
+                Label(String(format: "SpO₂ %.0f%%", nap.spo2), systemImage: "drop.fill")
+                    .font(.caption2).foregroundStyle(.secondary)
+            }
 
             Button(role: .destructive) { nap.stop() } label: {
                 Label("End nap", systemImage: "stop.fill").frame(maxWidth: .infinity)

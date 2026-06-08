@@ -118,7 +118,8 @@ class NapController {
             stillSeconds: motion.stillSeconds,
             hrvRMSSD: sync.freshExternalHRV,
             eegOnsetConfidence: sync.freshEEGConfidence,
-            eegDeepApproaching: sync.freshEEGDeep
+            eegDeepApproaching: sync.freshEEGDeep,
+            spo2: workout.oxygenSaturation > 0 ? workout.oxygenSaturation : nil
         )
         let now = Date()
         let result = engine.tick(now: now, signal: signal)

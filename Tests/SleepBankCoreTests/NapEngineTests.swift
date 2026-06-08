@@ -89,6 +89,27 @@ final class NapEngineTests: XCTestCase {
         XCTAssertNotNil(onsetAt, "Confident EEG onset (with immobility) should declare onset")
     }
 
+    func testBreathingSlowingCanCorroborateOnset() {
+        let detector = HeartRateImmobilityOnsetDetector()
+        var onsetAt: Date?
+        // Baseline: HR flat at 70, breathing ~16/min, settling.
+        for s in stride(from: 0, through: 120, by: 5) {
+            let t = t0.addingTimeInterval(TimeInterval(s))
+            let sig = OnsetSignal(heartRate: 70, movementIntensity: 0.02,
+                                  stillSeconds: TimeInterval(s), breathing: 16)
+            _ = detector.update(signal: sig, at: t)
+        }
+        // After baseline: HR unchanged, but breathing slows to 11/min while still.
+        for s in stride(from: 125, through: 200, by: 5) {
+            let t = t0.addingTimeInterval(TimeInterval(s))
+            let sig = OnsetSignal(heartRate: 70, movementIntensity: 0.01,
+                                  stillSeconds: TimeInterval(s), breathing: 11)
+            if detector.update(signal: sig, at: t) { onsetAt = t; break }
+        }
+        XCTAssertNotNil(onsetAt, "Breathing slowing while still should corroborate onset")
+        XCTAssertEqual(detector.onsetTrigger?.breathing, true)
+    }
+
     func testOnsetTriggerReportsFiringSignal() {
         // HR-only descent: the trigger should credit HR, not HRV or EEG.
         let detector = HeartRateImmobilityOnsetDetector()

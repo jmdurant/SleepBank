@@ -22,7 +22,7 @@ enum NapTrainingExporter {
     static func exportCSV(records: [NapDecisionRecord]) async -> URL? {
         let comparator = AppleSleepComparator()
         var rows: [String] = [
-            "napId,napType,t,hr,hrv,movement,stillSeconds,eegOnset,eegDeep,breathing,label,labelSource",
+            "napId,napType,t,hr,hrv,movement,stillSeconds,eegOnset,eegDeep,breathing,spo2,label,labelSource",
         ]
 
         for record in records {
@@ -32,20 +32,21 @@ enum NapTrainingExporter {
                 let epochTime = record.start.addingTimeInterval(e.t)
                 let (label, source) = self.label(epoch: e, epochTime: epochTime,
                                                  record: record, comparison: comparison)
-                rows.append([
-                    record.id.uuidString,
-                    record.type.rawValue,
-                    String(format: "%.0f", e.t),
-                    e.heartRate.map(String.init) ?? "",
-                    e.hrv.map { String(format: "%.1f", $0) } ?? "",
-                    String(format: "%.3f", e.movement),
-                    String(format: "%.0f", e.stillSeconds),
-                    e.eegOnset.map { String(format: "%.3f", $0) } ?? "",
-                    e.eegDeep ? "1" : "0",
-                    e.breathing.map { String(format: "%.1f", $0) } ?? "",
-                    label,
-                    source,
-                ].joined(separator: ","))
+                var cols: [String] = []
+                cols.append(record.id.uuidString)
+                cols.append(record.type.rawValue)
+                cols.append(String(format: "%.0f", e.t))
+                cols.append(e.heartRate.map(String.init) ?? "")
+                cols.append(e.hrv.map { String(format: "%.1f", $0) } ?? "")
+                cols.append(String(format: "%.3f", e.movement))
+                cols.append(String(format: "%.0f", e.stillSeconds))
+                cols.append(e.eegOnset.map { String(format: "%.3f", $0) } ?? "")
+                cols.append(e.eegDeep ? "1" : "0")
+                cols.append(e.breathing.map { String(format: "%.1f", $0) } ?? "")
+                cols.append(e.spo2.map { String(format: "%.0f", $0) } ?? "")
+                cols.append(label)
+                cols.append(source)
+                rows.append(cols.joined(separator: ","))
             }
         }
 

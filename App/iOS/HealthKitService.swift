@@ -88,6 +88,12 @@ class HealthKitService {
         }
     }
 
+    /// Latest blood-oxygen saturation (%) from Health — spot-measured, so this is
+    /// best-effort and often recent-but-not-live. Captured for completeness.
+    func latestOxygenSaturation() async -> Double {
+        await fetchLatestQuantity(.oxygenSaturation, unit: .percent()) * 100
+    }
+
     /// Raw last-night sleep stages converted to SleepChartKit samples.
     func fetchLastNightSamples() async -> [SleepSample] {
         let sleepType = HKCategoryType(.sleepAnalysis)

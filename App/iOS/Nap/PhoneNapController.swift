@@ -38,6 +38,8 @@ class PhoneNapController {
     private var lastOnset: Date?
     private var lastReason: WakeReason?
     private var wakeTarget: Date?
+    private var tickCount = 0
+    private(set) var spo2: Double = 0   // % — spot from HealthKit, completeness only
 
     var heartRate: Int { polar.currentHeartRate }
     var hrv: Double { polar.hrvRMSSD }
@@ -80,6 +82,14 @@ class PhoneNapController {
     private func tick() {
         guard let engine else { return }
         let now = Date()
+        // Refresh the spot SpO2 occasionally (it's not a live stream).
+        tickCount += 1
+        if tickCount % 30 == 1 {
+            Task { [weak self] in
+                let value = await HealthKitService.shared.latestOxygenSaturation()
+                await MainActor.run { self?.spo2 = value }
+            }
+        }
         // Prefer the H10 chest accelerometer for immobility (the phone may be on a
         // nightstand and never move); fall back to the phone's own motion.
         let usingChest = polar.isAccStreaming
@@ -92,7 +102,8 @@ class PhoneNapController {
             hrvRMSSD: polar.hrvRMSSD > 0 ? polar.hrvRMSSD : nil,
             eegOnsetConfidence: muse.eeg.hasGoodSignal ? Double(muse.eeg.onsetIndex) : nil,
             eegDeepApproaching: muse.eeg.hasGoodSignal && muse.eeg.deepSleepApproaching,
-            breathing: (usingChest && polar.breathingRate > 0) ? polar.breathingRate : nil
+            breathing: (usingChest && polar.breathingRate > 0) ? polar.breathingRate : nil,
+            spo2: spo2 > 0 ? spo2 : nil
         )
         let result = engine.tick(now: now, signal: signal)
         recorder.record(now: now, signal: signal, phase: result.phase)

@@ -19,6 +19,9 @@ public final class HeartRateImmobilityOnsetDetector: SleepOnsetDetector {
         public var hrDropBPM: Double = 4
         /// Required HRV (RMSSD ms) rise above baseline to count as a cardiac onset sign.
         public var hrvRiseMS: Double = 10
+        /// Required breathing-rate drop (breaths/min) below baseline to count as a
+        /// respiratory onset sign (respiration slows at sleep onset).
+        public var breathingDropRate: Double = 3
         /// EEG onset confidence at/above which EEG alone counts as an onset sign.
         public var eegOnsetThreshold: Double = 0.6
         /// Required continuous stillness before onset can be declared.
@@ -34,8 +37,10 @@ public final class HeartRateImmobilityOnsetDetector: SleepOnsetDetector {
     private var startTime: Date?
     private var hrSamples: [(t: Date, v: Double)] = []
     private var hrvSamples: [(t: Date, v: Double)] = []
+    private var breathingSamples: [(t: Date, v: Double)] = []
     private var hrBaseline: Double?
     private var hrvBaseline: Double?
+    private var breathingBaseline: Double?
     private var candidateSince: Date?
     public private(set) var onsetTime: Date?
     /// Which signal(s) crossed threshold at the firing tick.
@@ -49,8 +54,10 @@ public final class HeartRateImmobilityOnsetDetector: SleepOnsetDetector {
         startTime = nil
         hrSamples.removeAll()
         hrvSamples.removeAll()
+        breathingSamples.removeAll()
         hrBaseline = nil
         hrvBaseline = nil
+        breathingBaseline = nil
         candidateSince = nil
         onsetTime = nil
         onsetTrigger = nil
@@ -63,11 +70,13 @@ public final class HeartRateImmobilityOnsetDetector: SleepOnsetDetector {
 
         collect(signal.heartRate.map(Double.init), into: &hrSamples, at: time)
         collect(signal.hrvRMSSD, into: &hrvSamples, at: time)
+        collect(signal.breathing, into: &breathingSamples, at: time)
 
         // Establish baselines once the early window has elapsed.
         if time.timeIntervalSince(start) >= config.baselineWindow {
             if hrBaseline == nil { hrBaseline = baseline(of: hrSamples, start: start) }
             if hrvBaseline == nil { hrvBaseline = baseline(of: hrvSamples, start: start) }
+            if breathingBaseline == nil { breathingBaseline = baseline(of: breathingSamples, start: start) }
         }
 
         // Cardiac onset signs — each only evaluable when its baseline + a recent
@@ -80,17 +89,22 @@ public final class HeartRateImmobilityOnsetDetector: SleepOnsetDetector {
             guard let base = hrvBaseline, let recent = recentAverage(hrvSamples, at: time) else { return false }
             return recent >= base + config.hrvRiseMS
         }()
+        // Respiration slows at onset.
+        let breathingSlowed: Bool = {
+            guard let base = breathingBaseline, let recent = recentAverage(breathingSamples, at: time) else { return false }
+            return recent <= base - config.breathingDropRate
+        }()
         // EEG is the gold-standard onset signal — no baseline needed; the phone
         // only forwards it when contact quality is good.
         let eegOnset = (signal.eegOnsetConfidence ?? 0) >= config.eegOnsetThreshold
-        let cardiacSign = hrDropped || hrvRose || eegOnset
+        let onsetSign = hrDropped || hrvRose || breathingSlowed || eegOnset
         let stillEnough = signal.stillSeconds >= config.requiredStillSeconds
 
-        if cardiacSign && stillEnough {
+        if onsetSign && stillEnough {
             if candidateSince == nil { candidateSince = time }
             if let since = candidateSince, time.timeIntervalSince(since) >= config.holdSeconds {
                 onsetTime = time
-                onsetTrigger = OnsetTrigger(heartRate: hrDropped, hrv: hrvRose, eeg: eegOnset)
+                onsetTrigger = OnsetTrigger(heartRate: hrDropped, hrv: hrvRose, eeg: eegOnset, breathing: breathingSlowed)
                 return true
             }
         } else {

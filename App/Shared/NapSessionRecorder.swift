@@ -31,6 +31,7 @@ final class NapSessionRecorder {
             eegOnset: signal.eegOnsetConfidence,
             eegDeep: signal.eegDeepApproaching,
             breathing: signal.breathing,
+            spo2: signal.spo2,
             phase: phase.rawValue
         ))
     }

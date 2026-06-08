@@ -7,24 +7,38 @@ public struct OnsetTrigger: Codable, Hashable, Sendable {
     public var heartRate: Bool
     public var hrv: Bool
     public var eeg: Bool
+    public var breathing: Bool
     /// Onset was declared by a trained Core ML model rather than the heuristic.
     public var model: Bool
 
-    public init(heartRate: Bool, hrv: Bool, eeg: Bool, model: Bool = false) {
+    public init(heartRate: Bool, hrv: Bool, eeg: Bool, breathing: Bool = false, model: Bool = false) {
         self.heartRate = heartRate
         self.hrv = hrv
         self.eeg = eeg
+        self.breathing = breathing
         self.model = model
+    }
+
+    // Forgiving decoder: missing flags default to false so records written before
+    // a flag existed still load.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        heartRate = try c.decodeIfPresent(Bool.self, forKey: .heartRate) ?? false
+        hrv = try c.decodeIfPresent(Bool.self, forKey: .hrv) ?? false
+        eeg = try c.decodeIfPresent(Bool.self, forKey: .eeg) ?? false
+        breathing = try c.decodeIfPresent(Bool.self, forKey: .breathing) ?? false
+        model = try c.decodeIfPresent(Bool.self, forKey: .model) ?? false
     }
 
     /// Compact label for display/logging.
     public var label: String {
         if model { return "Model" }
-        if eeg { return heartRate || hrv ? "EEG+" : "EEG" }
-        if heartRate && hrv { return "HR+HRV" }
-        if hrv { return "HRV" }
-        if heartRate { return "HR" }
-        return "—"
+        if eeg { return (heartRate || hrv || breathing) ? "EEG+" : "EEG" }
+        var parts: [String] = []
+        if heartRate { parts.append("HR") }
+        if hrv { parts.append("HRV") }
+        if breathing { parts.append("Br") }
+        return parts.isEmpty ? "—" : parts.joined(separator: "+")
     }
 }
 
@@ -38,11 +52,12 @@ public struct NapEpochFeatures: Codable, Hashable, Sendable {
     public let eegOnset: Double?
     public let eegDeep: Bool
     public let breathing: Double?
+    public let spo2: Double?
     public let phase: String
 
     public init(t: TimeInterval, heartRate: Int?, hrv: Double?, movement: Double,
                 stillSeconds: TimeInterval, eegOnset: Double?, eegDeep: Bool,
-                breathing: Double? = nil, phase: String) {
+                breathing: Double? = nil, spo2: Double? = nil, phase: String) {
         self.t = t
         self.heartRate = heartRate
         self.hrv = hrv
@@ -51,6 +66,7 @@ public struct NapEpochFeatures: Codable, Hashable, Sendable {
         self.eegOnset = eegOnset
         self.eegDeep = eegDeep
         self.breathing = breathing
+        self.spo2 = spo2
         self.phase = phase
     }
 }
