@@ -105,6 +105,15 @@ struct NapSessionView: View {
 
             ProgressView(value: nap.movementIntensity).tint(.orange)
 
+            if nap.soundPlaying {
+                HStack(spacing: 4) {
+                    Image(systemName: nap.soundOutput.icon)
+                    Text(nap.soundOutput.name).lineLimit(1)
+                }
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            }
+
             Button(role: .destructive) { nap.stop() } label: {
                 Label("End", systemImage: "stop.fill")
             }

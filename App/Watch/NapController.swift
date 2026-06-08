@@ -47,6 +47,10 @@ class NapController {
     var movementIntensity: Double { motion.movementIntensity }
     var isAlarming: Bool { alarm.isAlarming }
 
+    /// Relaxing-sound state for the active-session readout (watch playback only).
+    var soundPlaying: Bool { NoiseService.shared.isPlaying }
+    var soundOutput: (name: String, icon: String) { NoiseService.shared.currentOutput }
+
     func requestPermissions() {
         workout.requestPermissions()
     }
