@@ -23,6 +23,8 @@ public enum WakeReason: String, Codable, Sendable {
     case ceiling
     /// EEG showed deep sleep (N3) encroaching — woke early to avoid grogginess.
     case deepening
+    /// The sleeper woke on their own before the alarm (detected awakening).
+    case spontaneous
     /// The user ended the session manually.
     case manual
 }

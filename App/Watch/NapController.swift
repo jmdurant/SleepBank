@@ -11,6 +11,7 @@
 
 import Foundation
 import WidgetKit
+import WatchKit
 import SleepBankCore
 
 @Observable
@@ -124,6 +125,15 @@ class NapController {
         let now = Date()
         let result = engine.tick(now: now, signal: signal)
         recorder.record(now: now, signal: signal, phase: result.phase)
+
+        // Woke on their own before the alarm — end gracefully, no alarm.
+        if result.naturallyWoke {
+            lastOnset = result.onsetTime
+            lastWakeReason = .spontaneous
+            WKInterfaceDevice.current().play(.success)
+            stop()
+            return
+        }
 
         phase = result.phase
         timeUntilWake = result.timeUntilWake ?? 0

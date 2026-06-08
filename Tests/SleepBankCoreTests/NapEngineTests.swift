@@ -155,6 +155,55 @@ final class NapEngineTests: XCTestCase {
         XCTAssertEqual(tick.wakeReason, .deepening)
     }
 
+    func testAwakeningOnSustainedMovement() {
+        let detector = AwakeningDetector()
+        var woke = false
+        for s in stride(from: 0, through: 120, by: 5) {     // asleep, still
+            let t = t0.addingTimeInterval(TimeInterval(s))
+            _ = detector.update(signal: OnsetSignal(heartRate: 58, movementIntensity: 0.01, stillSeconds: 200), at: t)
+        }
+        for s in stride(from: 125, through: 220, by: 5) {   // sustained movement
+            let t = t0.addingTimeInterval(TimeInterval(s))
+            if detector.update(signal: OnsetSignal(heartRate: 70, movementIntensity: 0.4, stillSeconds: 0), at: t) {
+                woke = true; break
+            }
+        }
+        XCTAssertTrue(woke, "Sustained movement after sleep should be detected as awakening")
+    }
+
+    func testBriefMovementDoesNotEndNap() {
+        let detector = AwakeningDetector()
+        var woke = false
+        for s in stride(from: 0, through: 200, by: 5) {
+            let t = t0.addingTimeInterval(TimeInterval(s))
+            // A 10-second turn-over every ~minute — never sustained.
+            let moving = (s % 60) < 10
+            let sig = OnsetSignal(heartRate: 58, movementIntensity: moving ? 0.3 : 0.01, stillSeconds: moving ? 0 : 200)
+            if detector.update(signal: sig, at: t) { woke = true; break }
+        }
+        XCTAssertFalse(woke, "Brief position changes must not be read as awakening")
+    }
+
+    func testEngineNaturalAwakeningEndsWithoutAlarm() {
+        let onset = t0.addingTimeInterval(60)
+        let engine = NapEngine(type: .power, sessionStart: t0, detector: StubOnsetDetector(onsetAfter: onset))
+        _ = engine.tick(now: onset, signal: stillSignal)   // establish onset
+
+        var woke = false
+        for s in stride(from: 70, through: 200, by: 5) {
+            let t = t0.addingTimeInterval(TimeInterval(s))
+            let moving = OnsetSignal(heartRate: 72, movementIntensity: 0.5, stillSeconds: 0)
+            let tick = engine.tick(now: t, signal: moving)
+            if tick.naturallyWoke {
+                woke = true
+                XCTAssertEqual(tick.wakeReason, .spontaneous)
+                XCTAssertFalse(tick.isAlarming, "A natural wake should not fire the alarm")
+                break
+            }
+        }
+        XCTAssertTrue(woke)
+    }
+
     func testOnsetDeclaredOnlyOnce() {
         let detector = HeartRateImmobilityOnsetDetector()
         var fireCount = 0

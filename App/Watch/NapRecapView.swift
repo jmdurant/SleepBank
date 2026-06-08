@@ -60,6 +60,7 @@ struct NapRecapView: View {
         case .reachedTarget: return "smart alarm"
         case .deepening: return "EEG (deep sleep)"
         case .ceiling: return "time limit"
+        case .spontaneous: return "woke naturally"
         case .manual, .none: return "you"
         }
     }
