@@ -46,7 +46,7 @@ class NoiseService {
         didSet { UserDefaults.standard.set(autoPlayDuringNap, forKey: "noiseAutoPlay") }
     }
 
-    var volume: Float = 0.2 {
+    var volume: Float = 0.15 {
         didSet { applyVolume() }
     }
 
@@ -182,7 +182,7 @@ class NoiseService {
             return pink
         case .brown:
             lastBrown = (lastBrown + 0.02 * white) / 1.02
-            return lastBrown * 3.5 * 0.16
+            return lastBrown * 3.5 * 0.12
         }
     }
 
