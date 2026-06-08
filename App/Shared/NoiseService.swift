@@ -46,16 +46,17 @@ class NoiseService {
         didSet { UserDefaults.standard.set(autoPlayDuringNap, forKey: "noiseAutoPlay") }
     }
 
-    var volume: Float = 0.15 {
+    var volume: Float = 0.2 {
         didSet { applyVolume() }
     }
 
     /// Multiplier applied while a spoken guide is talking, so the voice sits on top.
     @ObservationIgnored private var duckLevel: Float = 1
 
-    /// Duck (or restore) the noise under the spoken wind-down guide.
+    /// Duck (or restore) the noise under the spoken wind-down guide. A gentle dip
+    /// — the noise stays mostly present while the voice sits on top.
     func setDucked(_ ducked: Bool) {
-        duckLevel = ducked ? 0.45 : 1
+        duckLevel = ducked ? 0.7 : 1
         applyVolume()
     }
 
@@ -182,7 +183,7 @@ class NoiseService {
             return pink
         case .brown:
             lastBrown = (lastBrown + 0.02 * white) / 1.02
-            return lastBrown * 3.5 * 0.12
+            return lastBrown * 3.5 * 0.16
         }
     }
 
