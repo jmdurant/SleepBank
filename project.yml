@@ -38,15 +38,19 @@ targets:
         product: PolarBleSdk
       - target: SleepBankWatch
         embed: true
+    info:
+      path: App/iOS/Info.plist
+      properties:
+        UILaunchScreen: {}
+        NSHealthShareUsageDescription: "SleepBank reads your sleep and heart-rate data to study your naps and validate nap-onset detection."
+        NSHealthUpdateUsageDescription: "SleepBank records your naps to Apple Health."
+        NSBluetoothAlwaysUsageDescription: "SleepBank connects to a Muse headband and Polar H10 to read EEG and continuous heart rate for sleep-onset detection."
+        # Keep the H10/Muse streaming to the watch nap loop while backgrounded.
+        UIBackgroundModes:
+          - bluetooth-central
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.doctordurant.sleepbank
-        GENERATE_INFOPLIST_FILE: YES
-        INFOPLIST_KEY_UILaunchScreen_Generation: YES
-        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
-        INFOPLIST_KEY_NSHealthShareUsageDescription: "SleepBank reads your sleep and heart-rate data to study your naps and validate nap-onset detection."
-        INFOPLIST_KEY_NSHealthUpdateUsageDescription: "SleepBank records your naps to Apple Health."
-        INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription: "SleepBank connects to a Muse headband to read EEG for high-accuracy sleep-onset detection."
     entitlements:
       path: App/iOS/SleepBank.entitlements
       properties:
