@@ -11,7 +11,7 @@
 import SwiftUI
 
 struct SensorsView: View {
-    @State private var muse = MuseService()
+    @State private var muse = MuseService.shared
     @State private var polar = PolarH10Service.shared
 
     var body: some View {

@@ -60,6 +60,9 @@ public final class NapEngine {
             reason = (wt >= ceiling) ? .ceiling : .reachedTarget
         } else if now >= ceiling {
             reason = .ceiling
+        } else if onsetTime != nil && signal.eegDeepApproaching {
+            // EEG sees N3 coming before the timer — wake early to dodge inertia.
+            reason = .deepening
         }
         if reason != nil { alarming = true }
 

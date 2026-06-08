@@ -41,6 +41,34 @@ class PhoneConnectivity: NSObject, WCSessionDelegate {
         session.sendMessage(["liveHR": bpm, "liveHRV": hrv], replyHandler: nil, errorHandler: nil)
     }
 
+    /// Forward the Muse EEG onset signal to the watch nap loop.
+    func sendEEG(onsetConfidence: Double, deepApproaching: Bool) {
+        let session = WCSession.default
+        guard session.activationState == .activated, session.isReachable else { return }
+        session.sendMessage(["eegOnset": onsetConfidence, "eegDeep": deepApproaching],
+                            replyHandler: nil, errorHandler: nil)
+    }
+
+    // MARK: - Session control from the watch
+
+    /// The watch told us a nap started/ended. On start, connect and stream the
+    /// paired sensors so their data feeds the nap loop; on end, stand down.
+    func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any]) {
+        guard let event = userInfo["napEvent"] as? String else { return }
+        DispatchQueue.main.async {
+            switch event {
+            case "start":
+                PolarH10Service.shared.autoConnect()
+                MuseService.shared.startScanning()
+            case "end":
+                PolarH10Service.shared.disconnect()
+                MuseService.shared.disconnect()
+            default:
+                break
+            }
+        }
+    }
+
     // MARK: - WCSessionDelegate (iOS requires all three lifecycle methods)
 
     func session(_ session: WCSession, activationDidCompleteWith state: WCSessionActivationState, error: Error?) {}

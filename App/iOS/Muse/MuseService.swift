@@ -19,6 +19,8 @@ import CoreBluetooth
 @Observable
 class MuseService: NSObject {
 
+    static let shared = MuseService()
+
     var isScanning = false
     var isConnected = false
     var isStreaming = false
@@ -29,6 +31,7 @@ class MuseService: NSObject {
     private var centralManager: CBCentralManager?
     private var peripheral: CBPeripheral?
     private var controlCharacteristic: CBCharacteristic?
+    private var eegForwardCounter = 0
 
     // Muse BLE UUIDs
     private let museServiceUUID = CBUUID(string: "0000fe8d-0000-1000-8000-00805f9b34fb")
@@ -83,6 +86,18 @@ class MuseService: NSObject {
             samples.append(Float(sample))
         }
         eeg.feedSamples(channel: channel, samples: samples)
+
+        // Channel 0 drives a processor update (~1/s). Forward the EEG onset signal
+        // to the watch nap loop, but only with good contact and throttled.
+        if channel == 0 {
+            eegForwardCounter += 1
+            if eegForwardCounter % 8 == 0, eeg.hasGoodSignal {
+                PhoneConnectivity.shared.sendEEG(
+                    onsetConfidence: Double(eeg.onsetIndex),
+                    deepApproaching: eeg.deepSleepApproaching
+                )
+            }
+        }
     }
 }
 

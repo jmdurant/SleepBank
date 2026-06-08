@@ -65,6 +65,7 @@ class NapController {
             print("[NapController] failed to start workout session: \(error)")
         }
         motion.startMonitoring()
+        sync.notifyNap(started: true)   // ask the phone to connect + stream sensors
         isNapping = true
         phase = .settling
 
@@ -86,7 +87,9 @@ class NapController {
             heartRate: externalHR ?? wristHR,
             movementIntensity: motion.movementIntensity,
             stillSeconds: motion.stillSeconds,
-            hrvRMSSD: sync.freshExternalHRV
+            hrvRMSSD: sync.freshExternalHRV,
+            eegOnsetConfidence: sync.freshEEGConfidence,
+            eegDeepApproaching: sync.freshEEGDeep
         )
         let result = engine.tick(now: Date(), signal: signal)
 
@@ -127,6 +130,7 @@ class NapController {
         alarm.stop()
         workout.stop()
         motion.stopMonitoring()
+        sync.notifyNap(started: false)   // tell the phone to stand sensors down
         timer?.invalidate()
         timer = nil
         isNapping = false

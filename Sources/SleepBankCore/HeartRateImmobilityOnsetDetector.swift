@@ -19,6 +19,8 @@ public final class HeartRateImmobilityOnsetDetector: SleepOnsetDetector {
         public var hrDropBPM: Double = 4
         /// Required HRV (RMSSD ms) rise above baseline to count as a cardiac onset sign.
         public var hrvRiseMS: Double = 10
+        /// EEG onset confidence at/above which EEG alone counts as an onset sign.
+        public var eegOnsetThreshold: Double = 0.6
         /// Required continuous stillness before onset can be declared.
         public var requiredStillSeconds: TimeInterval = 90
         /// Both conditions must hold continuously this long (debounce).
@@ -75,7 +77,10 @@ public final class HeartRateImmobilityOnsetDetector: SleepOnsetDetector {
             guard let base = hrvBaseline, let recent = recentAverage(hrvSamples, at: time) else { return false }
             return recent >= base + config.hrvRiseMS
         }()
-        let cardiacSign = hrDropped || hrvRose
+        // EEG is the gold-standard onset signal — no baseline needed; the phone
+        // only forwards it when contact quality is good.
+        let eegOnset = (signal.eegOnsetConfidence ?? 0) >= config.eegOnsetThreshold
+        let cardiacSign = hrDropped || hrvRose || eegOnset
         let stillEnough = signal.stillSeconds >= config.requiredStillSeconds
 
         if cardiacSign && stillEnough {

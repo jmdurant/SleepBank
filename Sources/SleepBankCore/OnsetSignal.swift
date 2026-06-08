@@ -13,12 +13,21 @@ public struct OnsetSignal: Sendable {
     /// Most recent HRV (RMSSD, ms), or nil if no HRV source is present. Rises at
     /// sleep onset as parasympathetic tone increases.
     public let hrvRMSSD: Double?
+    /// EEG-derived onset confidence (0…1) from a Muse headband, or nil if no EEG
+    /// is present / signal quality is poor. The gold-standard onset signal.
+    public let eegOnsetConfidence: Double?
+    /// EEG says slow-wave (N3) is encroaching — the cue to wake now, before
+    /// grogginess sets in.
+    public let eegDeepApproaching: Bool
 
     public init(heartRate: Int?, movementIntensity: Double, stillSeconds: TimeInterval,
-                hrvRMSSD: Double? = nil) {
+                hrvRMSSD: Double? = nil, eegOnsetConfidence: Double? = nil,
+                eegDeepApproaching: Bool = false) {
         self.heartRate = heartRate
         self.movementIntensity = movementIntensity
         self.stillSeconds = stillSeconds
         self.hrvRMSSD = hrvRMSSD
+        self.eegOnsetConfidence = eegOnsetConfidence
+        self.eegDeepApproaching = eegDeepApproaching
     }
 }

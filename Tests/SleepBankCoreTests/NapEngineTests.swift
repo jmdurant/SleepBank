@@ -76,6 +76,49 @@ final class NapEngineTests: XCTestCase {
         XCTAssertFalse(detected, "HRV rise alone, while moving, must not declare onset")
     }
 
+    func testEEGOnsetTriggersWithoutCardiacChange() {
+        let detector = HeartRateImmobilityOnsetDetector()
+        var onsetAt: Date?
+        // Flat HR, no HRV, but EEG reports high onset confidence while still.
+        for s in stride(from: 0, through: 160, by: 5) {
+            let t = t0.addingTimeInterval(TimeInterval(s))
+            let sig = OnsetSignal(heartRate: 70, movementIntensity: 0.01,
+                                  stillSeconds: TimeInterval(s), eegOnsetConfidence: 0.8)
+            if detector.update(signal: sig, at: t) { onsetAt = t; break }
+        }
+        XCTAssertNotNil(onsetAt, "Confident EEG onset (with immobility) should declare onset")
+    }
+
+    func testEEGOnsetStillNeedsImmobility() {
+        let detector = HeartRateImmobilityOnsetDetector()
+        var detected = false
+        for s in stride(from: 0, through: 200, by: 5) {
+            let t = t0.addingTimeInterval(TimeInterval(s))
+            let sig = OnsetSignal(heartRate: 70, movementIntensity: 0.5,
+                                  stillSeconds: 0, eegOnsetConfidence: 0.9)
+            if detector.update(signal: sig, at: t) { detected = true; break }
+        }
+        XCTAssertFalse(detected, "Even confident EEG onset must not fire while moving")
+    }
+
+    func testEngineWakesEarlyOnEEGDeepening() {
+        let onset = t0.addingTimeInterval(120)
+        let detector = StubOnsetDetector(onsetAfter: onset)
+        let engine = NapEngine(type: .power, sessionStart: t0, detector: detector)
+
+        _ = engine.tick(now: onset, signal: stillSignal)   // establish onset
+        let target = onset.addingTimeInterval(NapType.power.targetWakeAfterOnset)
+
+        // Well before the timer target, EEG flags deep sleep approaching.
+        let deepening = OnsetSignal(heartRate: 58, movementIntensity: 0.01,
+                                    stillSeconds: 300, eegDeepApproaching: true)
+        let tick = engine.tick(now: onset.addingTimeInterval(60), signal: deepening)
+
+        XCTAssertLessThan(onset.addingTimeInterval(60), target)
+        XCTAssertTrue(tick.isAlarming)
+        XCTAssertEqual(tick.wakeReason, .deepening)
+    }
+
     func testOnsetDeclaredOnlyOnce() {
         let detector = HeartRateImmobilityOnsetDetector()
         var fireCount = 0

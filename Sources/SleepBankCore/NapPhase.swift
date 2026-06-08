@@ -21,6 +21,8 @@ public enum WakeReason: String, Codable, Sendable {
     case reachedTarget
     /// Hit the absolute session ceiling, e.g. onset was never detected.
     case ceiling
+    /// EEG showed deep sleep (N3) encroaching — woke early to avoid grogginess.
+    case deepening
     /// The user ended the session manually.
     case manual
 }
