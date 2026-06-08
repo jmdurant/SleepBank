@@ -57,8 +57,8 @@ class NoiseService {
     /// Duck (or restore) the noise under the spoken wind-down guide. A gentle dip,
     /// ramped so the resume slopes smoothly back up rather than snapping.
     func setDucked(_ ducked: Bool) {
-        // Quick dip under the voice, slow smooth recovery on resume.
-        rampDuck(to: ducked ? 0.7 : 1.0, over: ducked ? 0.2 : 0.5)
+        // Quick dip under the voice, long smooth recovery on resume.
+        rampDuck(to: ducked ? 0.7 : 1.0, over: ducked ? 0.3 : 0.9)
     }
 
     private func rampDuck(to target: Float, over duration: TimeInterval) {
