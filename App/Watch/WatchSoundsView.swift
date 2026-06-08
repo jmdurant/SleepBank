@@ -42,6 +42,14 @@ struct WatchSoundsView: View {
                 Slider(value: $noise.volume, in: 0...1)
             }
 
+            Section {
+                Label(noise.currentOutput.name, systemImage: noise.currentOutput.icon)
+            } header: {
+                Text("Output")
+            } footer: {
+                Text("Plays through AirPods when connected, otherwise the watch speaker. Use the Now Playing controls to switch output.")
+            }
+
             if noise.isPlaying {
                 Button(role: .destructive) { noise.stop() } label: {
                     Label("Stop preview", systemImage: "stop.fill")

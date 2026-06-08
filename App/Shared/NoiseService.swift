@@ -50,6 +50,23 @@ class NoiseService {
         didSet { engine.mainMixerNode.outputVolume = isPlaying ? volume : 0 }
     }
 
+    /// The current audio output device (name + an SF Symbol), read live from the
+    /// session route. Drives the "Output" row; the actual device picker is the
+    /// AirPlay route picker on iOS (and the system Now Playing controls on watch).
+    var currentOutput: (name: String, icon: String) {
+        let out = AVAudioSession.sharedInstance().currentRoute.outputs.first
+        let name = out?.portName ?? "Default output"
+        let icon: String
+        switch out?.portType {
+        case .some(.builtInSpeaker): icon = "speaker.wave.2.fill"
+        case .some(.headphones): icon = "headphones"
+        case .some(.bluetoothA2DP), .some(.bluetoothLE), .some(.bluetoothHFP): icon = "airpods"
+        case .some(.airPlay): icon = "airplayaudio"
+        default: icon = "speaker.wave.2"
+        }
+        return (name, icon)
+    }
+
     @ObservationIgnored private let engine = AVAudioEngine()
     @ObservationIgnored private var sourceNode: AVAudioSourceNode?
     @ObservationIgnored private var fadeTimer: Timer?

@@ -7,12 +7,27 @@
 //
 
 import SwiftUI
+import AVFoundation
 
 struct SoundsView: View {
     @State private var noise = NoiseService.shared
+    @State private var routeTick = 0   // bumps to refresh the output label
 
     var body: some View {
         List {
+            Section {
+                HStack {
+                    Image(systemName: noise.currentOutput.icon).foregroundStyle(.indigo)
+                    Text(noise.currentOutput.name).id(routeTick)
+                    Spacer()
+                    RoutePickerView().frame(width: 40, height: 40)
+                }
+            } header: {
+                Text("Output")
+            } footer: {
+                Text("Tap the AirPlay icon to send the sound to AirPods, a speaker, or another AirPlay device.")
+            }
+
             Section("Sound") {
                 ForEach(NoiseColor.allCases) { color in
                     Button {
@@ -68,6 +83,9 @@ struct SoundsView: View {
             }
         }
         .navigationTitle("Sounds")
+        .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.routeChangeNotification)) { _ in
+            routeTick += 1
+        }
     }
 }
 
