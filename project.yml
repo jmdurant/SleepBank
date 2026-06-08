@@ -45,9 +45,11 @@ targets:
         NSHealthShareUsageDescription: "SleepBank reads your sleep and heart-rate data to study your naps and validate nap-onset detection."
         NSHealthUpdateUsageDescription: "SleepBank records your naps to Apple Health."
         NSBluetoothAlwaysUsageDescription: "SleepBank connects to a Muse headband and Polar H10 to read EEG and continuous heart rate for sleep-onset detection."
-        # Keep the H10/Muse streaming to the watch nap loop while backgrounded.
+        # Keep H10/Muse streaming and relaxing-sound playback alive while the
+        # phone is backgrounded/locked during a nap.
         UIBackgroundModes:
           - bluetooth-central
+          - audio
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.doctordurant.sleepbank

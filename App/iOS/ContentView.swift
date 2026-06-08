@@ -37,6 +37,14 @@ struct ContentView: View {
                             .padding()
                             .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 16))
                     }
+                    NavigationLink {
+                        SoundsView()
+                    } label: {
+                        Label("Relaxing Sounds", systemImage: "speaker.wave.2.fill")
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding()
+                            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 16))
+                    }
                 }
                 .padding()
             }

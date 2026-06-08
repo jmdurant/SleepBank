@@ -60,9 +60,11 @@ class PhoneConnectivity: NSObject, WCSessionDelegate {
             case "start":
                 PolarH10Service.shared.autoConnect()
                 MuseService.shared.startScanning()
+                if NoiseService.shared.autoPlayDuringNap { NoiseService.shared.play() }
             case "end":
                 PolarH10Service.shared.disconnect()
                 MuseService.shared.disconnect()
+                NoiseService.shared.fadeOut()
             default:
                 break
             }
