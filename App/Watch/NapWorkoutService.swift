@@ -30,8 +30,9 @@ class NapWorkoutService: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutBuilde
 
     func requestPermissions() {
         // We don't save a workout, but starting a session needs workoutType
-        // share access; HR/SpO2 are read.
-        let share: Set<HKSampleType> = [HKQuantityType.workoutType()]
+        // share access; HR/SpO2 are read; sleepAnalysis is written per completed
+        // nap (see NapHealthWriter).
+        let share: Set<HKSampleType> = [HKQuantityType.workoutType(), HKCategoryType(.sleepAnalysis)]
         let read: Set<HKObjectType> = [
             HKQuantityType(.heartRate),
             HKQuantityType(.oxygenSaturation),

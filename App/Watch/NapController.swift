@@ -150,6 +150,7 @@ class NapController {
             )
             store.add(record)
             lastCompletedNap = record
+            NapHealthWriter.shared.write(record)   // record the nap in Apple Health
         }
 
         engine?.finish()
