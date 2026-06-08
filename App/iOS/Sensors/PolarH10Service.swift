@@ -190,8 +190,10 @@ class PolarH10Service: NSObject {
         let avg = accBuffer.reduce(0, +) / Double(accBuffer.count)
         movementIntensity = min(avg / 0.5, 1.0)
 
-        // Lying down: gravity mostly along one horizontal body axis (chest flat).
-        isLyingDown = abs(z) < 0.5
+        // Upright, the H10's X axis aligns with gravity (|x|≈1); lying down, gravity
+        // shifts off X onto the chest-normal axis. (Calibrated to the strap's
+        // typical mounting — empirically upright reads x≈-0.9.)
+        isLyingDown = abs(x) < 0.5
 
         let now = Date()
         let dt = lastAccUpdate.map { now.timeIntervalSince($0) } ?? 0

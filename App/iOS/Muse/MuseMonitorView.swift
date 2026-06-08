@@ -51,6 +51,12 @@ struct MuseMonitorView: View {
                 Text("Good contact ≈ mean near 2048, range a few hundred. Mean pinned near 0/4095 or a flat range means the electrode isn't reading skin.")
             }
 
+            Section("Stream debug") {
+                LabeledContent("EEG channels subscribed", value: "\(muse.subscribedChannels)/4")
+                LabeledContent("Packets received", value: "\(muse.packetsReceived)")
+                LabeledContent("Last packet bytes", value: "\(muse.lastPacketLength)")
+            }
+
             Section("Sleep signals") {
                 metric("Onset index", muse.eeg.onsetIndex,
                        flag: muse.eeg.onsetDetected ? "ONSET" : nil, flagColor: .indigo)
