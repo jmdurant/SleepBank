@@ -115,6 +115,55 @@ reduces sleepiness; it does **not** mathematically erase sleep debt. SleepBank's
 sleep-bank is therefore a **descriptive tally**, not a quantitative ledger — the
 science says a ledger would be pseudo-accounting.
 
+### 4a. Cycle naps and sleep debt — a *different* transaction than the power nap
+
+The "no debt repayment" finding above is specific to **brief naps that contain
+virtually no N3**. A **~90-min Cycle Nap** is a fundamentally different physiological
+transaction, and the same mechanism that explains why the power nap *doesn't* repay
+debt predicts that a full-cycle nap *partly does*:
+
+- **N3 is the currency of homeostatic discharge.** Slow-wave activity (concentrated
+  in N3) is the physiological index of **Process S** dissipating (Borbély two-process
+  model — see `RATIONALE.md §2`). A ~90-min nap completes a cycle with **substantial
+  N3 plus REM**, so it **genuinely discharges accumulated sleep pressure** — exactly
+  what the power nap deliberately avoids. Stepan et al. (2021) tie real
+  sleep-pressure relief to the **amount of slow-wave sleep**, which the cycle nap has
+  and the power nap lacks.
+
+So the two nap types are **two different transactions**, not just short vs long:
+
+| | Power Nap (~10–20 min) | Cycle Nap (~90 min) |
+|---|---|---|
+| Sleep architecture | mostly N1/N2, ~no N3 | full cycle: N3 + REM |
+| Discharges Process S (sleep debt)? | **No** | **Partly — yes** |
+| Primary value | transient alertness, fast & clean | real restorative sleep, memory consolidation |
+| Sleep inertia risk | minimal | higher if mistimed (wake from N3) |
+
+**But three caveats keep even the cycle nap *descriptive, not a ledger*:**
+1. **Partial, not a substitute.** A cycle nap repays *some* pressure; you cannot
+   nap your way out of chronic restriction. Naps supplement nocturnal sleep, they
+   don't replace it.
+2. **It partly borrows from tonight.** Discharging sleep pressure in the afternoon
+   lowers the *nighttime* sleep drive — a long/late nap can blunt or fragment that
+   night's sleep (the basis of standard sleep-hygiene advice against long afternoon
+   naps for poor sleepers). So it is partly recovery, partly time-shifting.
+3. **Not quantifiable to the minute.** The discharge depends on prior sleep
+   pressure, circadian phase, and how much N3 was actually obtained — "90 min napped
+   ≠ 90 min of debt repaid."
+
+> **Open question (needs a targeted research pass for hard numbers):** the canonical
+> duration studies in §2 tested only **≤30-min** naps. The *magnitude* of sleep-debt
+> repaid by a daytime ~90-min cycle nap — and how much it costs subsequent nocturnal
+> sleep — is not pinned down here from primary sources. The N3→Process-S reasoning
+> is well-established; the specific daytime-cycle-nap recovery figures are not yet
+> cited.
+
+**Design implication:** SleepBank should frame the two naps honestly by their
+*kind* of value — Power Nap = "wake up sharper" (alertness, no debt claim, minimal
+grogginess); Cycle Nap = "actually get some sleep" (restorative N3/REM that does
+discharge real sleep pressure, at the cost of ~90 min and a borrow against tonight).
+Neither is a numeric ledger entry.
+
 ## 5. Sleep inertia — the cost side of longer naps
 
 - **Stage at waking tracks inertia** (simulated night shift, **n=31**, PVT-B,
