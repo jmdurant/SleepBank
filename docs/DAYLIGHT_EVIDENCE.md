@@ -117,6 +117,15 @@ healthy cortisol surge that helps you get going:
   improving night sleep and mood (e.g., office workers with more daylight) — see
   Boubekri 2014 (JCSM) and others in References. *Specific effect sizes not
   re-verified here; confirm before citing numbers.*
+- **Prior bright light buffers the *evening* light hit (te Kulve 2019, *Sci Rep*):**
+  randomised crossover, **n=12** healthy young women. Late-evening light (750 lx,
+  22:30–23:30) suppressed melatonin and reduced sleepiness (sleep-disruptive) — but
+  when **preceded by 2.5 h of early-evening bright light (1200 lx, 18:30–21:00)**,
+  those effects were **blunted**. So a day with enough bright light makes your
+  system **less sensitive to evening screen/room light** — a second reason daytime
+  light (which we track) protects that night's sleep. *(suggestive — small n,
+  young-female sample, "early-evening" rather than morning light; the broad "light
+  history reduces later-light sensitivity" concept has wider support.)*
 - **Apple "Time in Daylight"** (`HKQuantityTypeIdentifier.timeInDaylight`, Apple
   Watch ambient-light sensor, watchOS 10 / iOS 17): a daily total of estimated
   daylight minutes. We already read it and **sub-segment by window** (morning vs
@@ -188,4 +197,5 @@ warning). See `NAP_BENEFIT_EVIDENCE.md` §4 for the sleep-debt framing.
 18. Figueiro MG, Rea MS. *Short-wavelength light enhances cortisol awakening response in sleep-restricted adolescents.* Int J Endocrinol 2012. https://pmc.ncbi.nlm.nih.gov/articles/PMC3413982/
 19. Wright KP et al. *Entrainment of the human circadian clock to the natural light-dark cycle.* Current Biology 2013. https://www.cell.com/current-biology/fulltext/S0960-9822(13)00764-1
 20. Stothard ER, … Wright KP. *Circadian entrainment to the natural light-dark cycle across seasons and the weekend.* Current Biology 2017. https://pmc.ncbi.nlm.nih.gov/articles/PMC5335920/
-21. ⚠️ Popular/blog (flagged, not peer-reviewed): Huberman Lab — *Light Exposure & Circadian Rhythm* topic page (citation-thin; **value is as a pointer to the primary studies above** — the CAR and natural-light entrainment lines verify; the "delay caffeine 90–120 min after waking" protocol is a popular heuristic, not strongly evidenced). https://www.hubermanlab.com/topics/light-exposure-and-circadian-rhythm · *Using light for health* https://www.hubermanlab.com/newsletter/using-light-for-health
+21. te Kulve M, Schlangen LJM, van Marken Lichtenbelt WD. *Early evening light mitigates sleep compromising physiological and alerting responses to subsequent late evening light.* Sci Rep 2019;9:16064. (n=12; prior bright light blunts evening light's melatonin suppression / alerting.) https://doi.org/10.1038/s41598-019-52352-w
+22. ⚠️ Popular/blog (flagged, not peer-reviewed): Huberman Lab — *Light Exposure & Circadian Rhythm* topic page (citation-thin; **value is as a pointer to the primary studies above** — the CAR and natural-light entrainment lines verify; the "delay caffeine 90–120 min after waking" protocol is a popular heuristic, not strongly evidenced). https://www.hubermanlab.com/topics/light-exposure-and-circadian-rhythm · *Using light for health* https://www.hubermanlab.com/newsletter/using-light-for-health
