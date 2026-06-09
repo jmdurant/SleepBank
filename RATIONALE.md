@@ -60,6 +60,12 @@ deliver much of the benefit with the least post-nap impairment.
 - Rosekind, M. R., et al. (1995). NASA Ames "planned cockpit rest" / fatigue
   countermeasure work — operational basis for the ~20–26 min planned nap.
 
+> **Full evidence:** `docs/NAP_BENEFIT_EVIDENCE.md` — the durable, citable base for
+> *why short naps work* (dose–response by duration, the NASA figures cited
+> precisely, sleep-inertia costs, subjective-rating instruments, and the honest
+> sleep-debt framing that anchors our "descriptive, not a ledger" design). All
+> findings adversarially verified, with effect sizes and primary citations.
+
 **Design implication.** Our default **Power Nap** targets waking in N1/early-N2,
 before substantial slow-wave (N3) sleep consolidates. A **Cycle Nap** (~90 min)
 option targets the end of one full sleep cycle. Cycle length varies (~70–120 min
