@@ -12,6 +12,7 @@
 import Foundation
 import HealthKit
 import SleepChartKit
+import SleepBankCore
 
 @Observable
 class HealthKitService {
@@ -28,6 +29,8 @@ class HealthKitService {
     var restingHeartRate: Double = 0          // bpm
     var restingHRTrend: String = "stable"     // rising, falling, stable
     var hrvAverage: Double = 0                // ms (SDNN)
+    /// Today's daylight, split into morning / afternoon / evening windows.
+    var daylightToday: DaylightDay = .empty
     var lastRefresh: Date?
 
     struct SleepSummary {
@@ -53,6 +56,7 @@ class HealthKitService {
             HKQuantityType(.restingHeartRate),
             HKQuantityType(.heartRateVariabilitySDNN),
             HKQuantityType(.heartRate),
+            HKQuantityType(.timeInDaylight),
         ]
         do {
             try await store.requestAuthorization(toShare: [], read: readTypes)
@@ -74,8 +78,15 @@ class HealthKitService {
         async let rhr = fetchLatestQuantity(.restingHeartRate, unit: .count().unitDivided(by: .minute()))
         async let hrv = fetchLatestQuantity(.heartRateVariabilitySDNN, unit: .secondUnit(with: .milli))
         async let trend = fetchRestingHRTrend()
+        async let daylight = fetchDaylightToday()
 
-        let (sleepResult, sampleResult, rhrVal, hrvVal, trendVal) = await (sleep, samples, rhr, hrv, trend)
+        let (sleepResult, sampleResult, rhrVal, hrvVal, trendVal, daylightIntervals) =
+            await (sleep, samples, rhr, hrv, trend, daylight)
+
+        // Bucket daylight around today's wake time (default 7:00 if no sleep data).
+        let wake = sleepResult?.wakeTime
+            ?? Calendar.current.date(bySettingHour: 7, minute: 0, second: 0, of: Date()) ?? Date()
+        let daylightDay = DaylightDay.summarize(intervals: daylightIntervals, wakeTime: wake)
 
         await MainActor.run {
             lastNightSleep = sleepResult
@@ -83,8 +94,28 @@ class HealthKitService {
             restingHeartRate = rhrVal
             hrvAverage = hrvVal
             restingHRTrend = trendVal
+            daylightToday = daylightDay
             sleepAverage7Day = sleepResult?.averageLast7Days ?? 0
             lastRefresh = Date()
+        }
+    }
+
+    /// Today's "Time in Daylight" samples (Apple Watch ambient-light metric, iOS
+    /// 17+), as plain intervals for `DaylightDay` to bucket by time window.
+    func fetchDaylightToday() async -> [Daylight.Interval] {
+        let type = HKQuantityType(.timeInDaylight)
+        let start = Calendar.current.startOfDay(for: Date())
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: Date(), options: .strictStartDate)
+        return await withCheckedContinuation { continuation in
+            let query = HKSampleQuery(sampleType: type, predicate: predicate, limit: HKObjectQueryNoLimit,
+                                      sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)]) { _, results, _ in
+                let intervals = (results as? [HKQuantitySample] ?? []).map {
+                    Daylight.Interval(start: $0.startDate, end: $0.endDate,
+                                      minutes: $0.quantity.doubleValue(for: .minute()))
+                }
+                continuation.resume(returning: intervals)
+            }
+            store.execute(query)
         }
     }
 

@@ -32,6 +32,8 @@ struct AlertnessCurveView: View {
                 chart(baseline: baseline, projection: projection, now: now, nowLevel: nowLevel)
                     .frame(height: 170)
                 legend(hasProjection: !projection.isEmpty)
+                Divider()
+                daylightRow(now: now)
             }
             .padding()
             .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 20))
@@ -115,6 +117,45 @@ struct AlertnessCurveView: View {
             Circle().fill(color).frame(width: 7, height: 7)
             Text(text)
         }
+    }
+
+    // MARK: - Daylight
+
+    /// Apple Watch "Time in Daylight," with the morning window (the circadian-
+    /// critical part) called out, plus a gentle nudge. Light anchors Process C —
+    /// the curve's height — the natural counterpart to the nap discharging Process
+    /// S. (The exact morning target and curve weighting land with the daylight
+    /// evidence pass; for now this surfaces the metric and a soft nudge.)
+    private func daylightRow(now: Date) -> some View {
+        let d = health.daylightToday
+        let hour = Calendar.current.component(.hour, from: now)
+        let isMorning = hour < 11
+        return VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 6) {
+                Image(systemName: "sun.max.fill").foregroundStyle(.orange)
+                Text("\(Int(d.total.rounded())) min daylight today")
+                    .font(.caption.weight(.medium))
+                if d.morning >= 1 {
+                    Text("· \(Int(d.morning.rounded())) min this morning")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer()
+            }
+            if let nudge = daylightNudge(d, isMorning: isMorning) {
+                Text(nudge).font(.caption2).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func daylightNudge(_ d: DaylightDay, isMorning: Bool) -> String? {
+        // Provisional threshold — refined once the daylight evidence lands.
+        if isMorning && d.morning < 10 {
+            return "A few minutes of morning light outside helps anchor your day."
+        }
+        if d.morning >= 10 {
+            return "Nice — you caught some morning light."
+        }
+        return nil
     }
 
     // MARK: - Model wiring
