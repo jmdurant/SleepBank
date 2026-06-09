@@ -50,4 +50,51 @@ final class NapBankTests: XCTestCase {
         let decoded = try JSONDecoder().decode(NapRecord.self, from: data)
         XCTAssertEqual(decoded, original)
     }
+
+    // MARK: - Streak
+
+    func testStreakCountsConsecutiveNappedDays() {
+        let base = Date(timeIntervalSince1970: 1_700_000_000)   // "today"
+        let records = [
+            nap(startHour: 13, asleepMinutes: 18, dayOffset: 0),
+            nap(startHour: 14, asleepMinutes: 20, dayOffset: -1),
+            nap(startHour: 13, asleepMinutes: 15, dayOffset: -2),
+        ]
+        XCTAssertEqual(NapBank.currentStreak(asOf: base, in: records, calendar: cal), 3)
+    }
+
+    func testStreakSurvivesNotHavingNappedYetToday() {
+        let base = Date(timeIntervalSince1970: 1_700_000_000)
+        // Napped yesterday and the day before, but not yet today.
+        let records = [
+            nap(startHour: 14, asleepMinutes: 20, dayOffset: -1),
+            nap(startHour: 13, asleepMinutes: 15, dayOffset: -2),
+        ]
+        XCTAssertEqual(NapBank.currentStreak(asOf: base, in: records, calendar: cal), 2)
+    }
+
+    func testStreakBreaksAfterAMissedDay() {
+        let base = Date(timeIntervalSince1970: 1_700_000_000)
+        let records = [
+            nap(startHour: 13, asleepMinutes: 18, dayOffset: 0),
+            // gap at -1
+            nap(startHour: 13, asleepMinutes: 15, dayOffset: -2),
+        ]
+        XCTAssertEqual(NapBank.currentStreak(asOf: base, in: records, calendar: cal), 1)
+    }
+
+    func testStreakIsZeroWhenLastNapTooOld() {
+        let base = Date(timeIntervalSince1970: 1_700_000_000)
+        let records = [nap(startHour: 13, asleepMinutes: 18, dayOffset: -3)]
+        XCTAssertEqual(NapBank.currentStreak(asOf: base, in: records, calendar: cal), 0)
+    }
+
+    func testStreakIgnoresNapsWithoutOnset() {
+        let base = Date(timeIntervalSince1970: 1_700_000_000)
+        let day = cal.startOfDay(for: base)
+        let start = cal.date(byAdding: .hour, value: 14, to: day)!
+        let noOnset = NapRecord(start: start, end: start.addingTimeInterval(1800),
+                                type: .power, onset: nil, wakeReason: .ceiling)
+        XCTAssertEqual(NapBank.currentStreak(asOf: base, in: [noOnset], calendar: cal), 0)
+    }
 }

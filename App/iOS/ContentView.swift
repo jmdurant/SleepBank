@@ -19,6 +19,7 @@ struct ContentView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
+                    EnergyRingView()
                     NavigationLink {
                         NapView()
                     } label: {

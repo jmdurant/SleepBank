@@ -31,4 +31,36 @@ public enum NapBank {
             .reduce(0.0) { $0 + $1.asleepDuration }
         return Int(seconds / 60)
     }
+
+    /// Consecutive days, counting back from `day`, with at least one nap that
+    /// actually reached sleep (onset detected). The honest gamification: it counts
+    /// what really happened, no points or formulas. Not having napped *yet* today
+    /// doesn't break a streak that ran through yesterday — we anchor on the most
+    /// recent napped day if that's today or yesterday, otherwise the streak is 0.
+    public static func currentStreak(asOf day: Date, in records: [NapRecord],
+                                     calendar: Calendar = .current) -> Int {
+        let nappedDays = Set(records
+            .filter { $0.onset != nil }
+            .map { calendar.startOfDay(for: $0.start) })
+        guard !nappedDays.isEmpty else { return 0 }
+
+        let today = calendar.startOfDay(for: day)
+        let yesterday = calendar.date(byAdding: .day, value: -1, to: today)
+        var cursor: Date
+        if nappedDays.contains(today) {
+            cursor = today
+        } else if let yesterday, nappedDays.contains(yesterday) {
+            cursor = yesterday
+        } else {
+            return 0
+        }
+
+        var streak = 0
+        while nappedDays.contains(cursor) {
+            streak += 1
+            guard let prev = calendar.date(byAdding: .day, value: -1, to: cursor) else { break }
+            cursor = prev
+        }
+        return streak
+    }
 }
