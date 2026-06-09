@@ -14,22 +14,27 @@ import os
 import glob
 import subprocess
 
-SEARCH_DIRS = [os.path.expanduser("~/Downloads"), os.path.expanduser("~/Desktop")]
+SEARCH_DIRS = [
+    # iCloud Drive container — SleepBank syncs nap EEG here automatically.
+    os.path.expanduser("~/Library/Mobile Documents/iCloud~com~doctordurant~sleepbank/Documents"),
+    os.path.expanduser("~/Downloads"),   # AirDrop fallback
+    os.path.expanduser("~/Desktop"),
+]
 MUSE_UV_PER_UNIT = 0.48828125   # 12-bit Muse ADC -> microvolts (approx)
 SF = 256
 STAGE_ORDER = {"W": 0, "REM": 1, "N1": 2, "N2": 3, "N3": 4}
 
 
-def find_latest():
+def find_unprocessed():
+    """All eeg-*.csv across the search dirs that don't yet have a hypnogram."""
     if len(sys.argv) > 1 and sys.argv[1].endswith(".csv"):
-        return sys.argv[1]
-    files = []
+        return [sys.argv[1]]
+    found = []
     for d in SEARCH_DIRS:
-        files += glob.glob(os.path.join(d, "eeg-*.csv"))
-    if not files:
-        sys.exit("No eeg-*.csv found in ~/Downloads or ~/Desktop. "
-                 "AirDrop one from SleepBank first (Validation → Export raw EEG).")
-    return max(files, key=os.path.getmtime)
+        for f in glob.glob(os.path.join(d, "eeg-*.csv")):
+            if not os.path.exists(os.path.splitext(f)[0] + "_hypnogram.csv"):
+                found.append(f)
+    return sorted(set(found), key=os.path.getmtime)
 
 
 def main():
@@ -44,18 +49,39 @@ def main():
     except ImportError as e:
         sys.exit(f"Missing dependency ({e.name}). Run ./setup.sh once to install YASA.")
 
-    path = find_latest()
-    print(f"Staging: {path}")
-    df = pd.read_csv(path)
+    pending = find_unprocessed()
+    if not pending:
+        print("No new naps to stage. (Export from SleepBank → Validation, or it "
+              "syncs via iCloud Drive automatically.)")
+        return
+    print(f"Staging {len(pending)} nap(s)…\n")
+    last_png = None
+    for path in pending:
+        png = stage_one(path, np, pd, mne, yasa, plt)
+        if png:
+            last_png = png
+    if last_png:
+        subprocess.run(["open", last_png])   # open the most recent result
+
+
+def stage_one(path, np, pd, mne, yasa, plt):
+    print(f"=== {os.path.basename(path)} ===")
+    try:
+        df = pd.read_csv(path)
+    except Exception as e:
+        print(f"  skip (unreadable: {e})")
+        return None
     if "af7" not in df.columns:
-        sys.exit("CSV has no 'af7' column — is this a SleepBank EEG export?")
+        print("  skip (no 'af7' column — not a SleepBank EEG export)")
+        return None
 
     af7 = df["af7"].to_numpy(dtype=float)
     af7 = (af7 - np.nanmean(af7)) * MUSE_UV_PER_UNIT     # center -> microvolts
     dur_min = len(af7) / SF / 60
     print(f"  {len(af7)} samples (~{dur_min:.1f} min) at {SF} Hz")
     if dur_min < 5:
-        print("  WARNING: <5 min — YASA staging is unreliable on very short naps.")
+        print("  skip (<5 min — too short for reliable YASA staging)")
+        return None
 
     info = mne.create_info(["AF7"], SF, "eeg", verbose=False)
     raw = mne.io.RawArray(af7[np.newaxis, :] * 1e-6, info, verbose=False)  # MNE wants Volts
@@ -98,8 +124,9 @@ def main():
     ax.set_title(os.path.basename(path))
     fig.tight_layout()
     fig.savefig(out_png, dpi=120)
-    print(f"  Hypno   -> {out_png}")
-    subprocess.run(["open", out_png])
+    plt.close(fig)
+    print(f"  Hypno   -> {out_png}\n")
+    return out_png
 
 
 if __name__ == "__main__":

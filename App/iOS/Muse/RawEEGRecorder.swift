@@ -53,11 +53,10 @@ final class RawEEGRecorder {
         guard rows > 0 else { return }
 
         let stamp = Self.stampFormatter.string(from: Date())
-        let url = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("eeg-\(stamp).csv")
 
         DispatchQueue.global(qos: .utility).async { [weak self] in
             guard let self else { return }
+            let url = Self.outputDirectory().appendingPathComponent("eeg-\(stamp).csv")
             var text = self.columns.joined(separator: ",") + "\n"
             text.reserveCapacity(rows * 28)
             for i in 0..<rows {
@@ -66,6 +65,19 @@ final class RawEEGRecorder {
             try? text.write(to: url, atomically: true, encoding: .utf8)
             DispatchQueue.main.async { self.lastFileURL = url }
         }
+    }
+
+    /// The iCloud Documents container (syncs to the Mac automatically) when
+    /// available, else the local Documents directory. Called off the main thread —
+    /// resolving the ubiquity container can block on first access.
+    private static func outputDirectory() -> URL {
+        let fm = FileManager.default
+        if let container = fm.url(forUbiquityContainerIdentifier: "iCloud.com.doctordurant.sleepbank") {
+            let docs = container.appendingPathComponent("Documents")
+            try? fm.createDirectory(at: docs, withIntermediateDirectories: true)
+            return docs
+        }
+        return fm.urls(for: .documentDirectory, in: .userDomainMask)[0]
     }
 
     @ObservationIgnored private static let stampFormatter: DateFormatter = {

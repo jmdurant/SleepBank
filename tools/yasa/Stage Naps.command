@@ -1,5 +1,5 @@
 #!/bin/bash
-# Double-click this to stage the most recent nap's EEG with YASA.
+# Double-click this to stage every new nap's EEG with YASA (batch).
 cd "$(dirname "$0")"
 if [ ! -d ".venv" ]; then
   echo "First run — installing YASA…"

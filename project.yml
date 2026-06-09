@@ -53,6 +53,13 @@ targets:
         UIBackgroundModes:
           - bluetooth-central
           - audio
+        # Make the iCloud Documents container visible in Files / Mac Finder so
+        # exported nap EEG syncs to the Mac automatically.
+        NSUbiquitousContainers:
+          iCloud.com.doctordurant.sleepbank:
+            NSUbiquitousContainerIsDocumentScopePublic: true
+            NSUbiquitousContainerName: SleepBank
+            NSUbiquitousContainerSupportedFolderLevels: Any
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.doctordurant.sleepbank
@@ -62,6 +69,12 @@ targets:
         com.apple.developer.healthkit: true
         com.apple.security.application-groups:
           - group.com.doctordurant.sleepbank
+        com.apple.developer.icloud-services:
+          - CloudDocuments
+        com.apple.developer.icloud-container-identifiers:
+          - iCloud.com.doctordurant.sleepbank
+        com.apple.developer.ubiquity-container-identifiers:
+          - iCloud.com.doctordurant.sleepbank
 
   # -------------------------------------------------------------- watch app
   SleepBankWatch:

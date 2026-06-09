@@ -10,16 +10,20 @@ cd tools/yasa
 ./setup.sh          # creates a venv, installs YASA + MNE + deps (~a few minutes)
 ```
 
-## Each nap (the simple loop)
-1. **On the phone:** Validation → **Export last nap's raw EEG** → AirDrop the
-   `eeg-*.csv` to this Mac (it lands in ~/Downloads).
-2. **On the Mac:** double-click **`Stage Latest Nap.command`**.
-   - It finds the newest `eeg-*.csv`, runs YASA on the AF7 channel, and:
-     - opens a **hypnogram PNG**,
-     - writes **`<name>_hypnogram.csv`** (per-30s-epoch stage + probabilities),
-     - prints onset latency / time asleep / stage counts.
+## The loop (mostly automatic)
+1. **On the phone:** just take naps with the Muse connected. Each nap's raw EEG
+   is written to the app's **iCloud Drive** container and **syncs to this Mac
+   automatically** (Finder → iCloud Drive → SleepBank). No AirDrop needed.
+   *(Fallback: Validation → Export raw EEG → AirDrop to ~/Downloads also works.)*
+2. **On the Mac, whenever:** double-click **`Stage Naps.command`**.
+   - It finds **every** `eeg-*.csv` that hasn't been staged yet (in the iCloud
+     folder, Downloads, or Desktop), runs YASA on each, and for each writes:
+     - **`<name>_hypnogram.csv`** (per-30s-epoch stage + probabilities),
+     - **`<name>_hypnogram.png`** (the hypnogram),
+   - prints onset latency / time asleep / stage counts, and opens the most recent.
+   - Re-running only processes *new* naps (skips ones already staged).
 
-That's it — no Python commands.
+That's it — nap on the phone, batch-process on the Mac later. No Python commands.
 
 ## What you get
 - `eeg-…_hypnogram.png` — the staged hypnogram (W / REM / N1 / N2 / N3 over time).
