@@ -6,8 +6,9 @@
 > Compiled from a fact-checked deep-research pass (2026-06-09): 5 search angles,
 > 18 sources fetched, 78 claims extracted, 25 adversarially verified (3 independent
 > verifier votes each), 24 confirmed / 1 refuted. Confidence and vote tallies are
-> noted per finding. Companion to `EEG_EVIDENCE.md` (EEG staging evidence) and
-> `RATIONALE.md` (clinical rationale).
+> noted per finding. Companion to `EEG_EVIDENCE.md` (EEG staging evidence),
+> `DAYLIGHT_EVIDENCE.md` (morning-light / circadian anchoring), and `RATIONALE.md`
+> (clinical rationale).
 >
 > **Verify every citation against the primary source before any external/clinical/
 > regulatory use.** Small-n studies and commonly-repeated figures are flagged.

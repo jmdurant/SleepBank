@@ -6,8 +6,9 @@
 > 26 sources fetched, 122 claims extracted, 25 adversarially verified (3 independent
 > verifier votes each), 22 confirmed / 3 refuted. Confidence and vote tallies are
 > noted per finding. Companion to `RATIONALE.md` (clinical rationale),
-> `NAP_BENEFIT_EVIDENCE.md` (why short naps work + sleep-debt framing), and the
-> memory note `muse-eeg-sleep-staging-research`.
+> `NAP_BENEFIT_EVIDENCE.md` (why short naps work + sleep-debt framing),
+> `DAYLIGHT_EVIDENCE.md` (morning-light / circadian anchoring), and the memory note
+> `muse-eeg-sleep-staging-research`.
 >
 > **Verify every citation against the primary source before any external/clinical/
 > regulatory use.** Figures from preprints or secondary coverage are flagged.
