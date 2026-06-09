@@ -12,4 +12,7 @@ echo
 echo "── Building labeled training set ──"
 python3 merge_training.py
 echo
+echo "── Building HTML report ──"
+python3 build_report.py
+echo
 read -p "Press Enter to close."

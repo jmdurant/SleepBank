@@ -20,10 +20,16 @@ cd tools/yasa
      folder, Downloads, or Desktop), runs YASA on each, and for each writes:
      - **`<name>_hypnogram.csv`** (per-30s-epoch stage + probabilities),
      - **`<name>_hypnogram.png`** (the hypnogram),
-   - prints onset latency / time asleep / stage counts, and opens the most recent.
-   - Re-running only processes *new* naps (skips ones already staged).
+   - merges YASA stages onto the sensor features → `labeled-*.csv` + a combined
+     `training.csv`,
+   - builds **`report.html`** and opens it — a dashboard with one card per nap:
+     hypnogram, stage breakdown, and **SleepBank's calls vs YASA** (onset latency,
+     deep-sleep timing, asleep/awake agreement %).
+   - Re-running only stages *new* naps; the report always rebuilds from all.
 
 That's it — nap on the phone, batch-process on the Mac later. No Python commands.
+The `report.html` is your validation view: how well the app's detector tracks the
+EEG ground truth, nap by nap.
 
 ## What you get
 - `eeg-…_hypnogram.png` — the staged hypnogram (W / REM / N1 / N2 / N3 over time).

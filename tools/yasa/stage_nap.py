@@ -55,13 +55,8 @@ def main():
               "syncs via iCloud Drive automatically.)")
         return
     print(f"Staging {len(pending)} nap(s)…\n")
-    last_png = None
     for path in pending:
-        png = stage_one(path, np, pd, mne, yasa, plt)
-        if png:
-            last_png = png
-    if last_png:
-        subprocess.run(["open", last_png])   # open the most recent result
+        stage_one(path, np, pd, mne, yasa, plt)   # the HTML report opens the results
 
 
 def stage_one(path, np, pd, mne, yasa, plt):
