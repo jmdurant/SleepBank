@@ -21,7 +21,9 @@ The honest, evidence-weighted picture — and it refines our design:
 - **Strong & well-quantified:** morning light **phase-anchors and advances the
   circadian clock** (Process C). This is the reliable benefit, and it shows up
   *downstream* — a steadier rhythm and better night sleep — more than as an
-  instant morning alertness spike.
+  instant morning alertness spike. Morning light *does* aid morning wakefulness, but
+  chiefly via the **cortisol awakening response** (§3a), not the weak/mixed acute
+  photic-alerting effect.
 - **Real but modest and inconsistent:** **acute daytime alerting** from brighter
   light. Some controlled studies show it (1000 vs 200 lux improves alertness /
   vigilance); several show **null effects up to 2000 lux**. Daytime alerting is
@@ -45,6 +47,13 @@ its curve effect mainly on **Process C stability**, not a large same-moment lift
 - **Dose / magnitude** (Ohashi 2023, n=27 healthy young adults): dim light drifts
   the clock **−0.24 h (~14 min) later**; **1 h of ~8000 lux advances it ~+0.18 h
   (~11 min)**; intensity–response r = −0.62. *(high, 3-0.)*
+- **Real-world corroboration (natural light-dark):** Wright et al. 2013 (*Current
+  Biology*) — a week of **camping with only natural light** advanced melatonin
+  onset and sleep toward sunset and shrank individual differences in timing, with
+  the **largest advances in late chronotypes**; Stothard et al. 2017 showed even a
+  **weekend** of natural light measurably advances the clock. Powerful demonstration
+  that daylight (and the *absence* of electric light) is a dominant entrainment
+  signal. *(corroborating; confirm specifics against the primary papers.)*
 - **Practical translation:** because the effect anchors/advances the clock, the
   value is in **morning** light (after you wake) and in **regularity** — it counters
   the natural drift-later and supports earlier, more consolidated sleep.
@@ -68,6 +77,27 @@ its curve effect mainly on **Process C stability**, not a large same-moment lift
 > **Net:** daytime bright light *can* nudge alertness/vigilance, but the effect is
 > small, condition-dependent, and not guaranteed — **far less reliable than its
 > night-time alerting**. Don't over-claim a same-moment buzz.
+
+## 3a. Morning light & the cortisol awakening response (a better-supported wake pathway)
+
+There *is* a well-supported route by which **morning** light promotes wakefulness —
+but it's **endocrine/circadian, not the acute photic-alerting effect** above.
+Morning bright light **amplifies the cortisol awakening response (CAR)** — the
+healthy cortisol surge that helps you get going:
+
+- **Leproult et al. 2001 (*JCEM*):** morning bright light (5000 lux, 05:00–08:00)
+  raised cortisol **~50%** vs dim light; the **same light at 13:00–16:00 had no
+  effect** — the effect is morning-specific.
+- **Scheer & Buijs 1999 (*JCEM*):** **1 h of 800 lux** in the morning raised
+  cortisol **~35%** (and affected heart rate); evening light did not.
+- **Figueiro & Rea 2012:** short-wavelength morning light enhanced the CAR in
+  sleep-restricted adolescents.
+
+> This is the **defensible "morning light helps you wake up" mechanism** — via the
+> cortisol rhythm — and it's *more* reliable than the mixed acute-alerting story.
+> It's consistent with our "anchoring" framing: morning light acts on the
+> **circadian/endocrine** system, not as an instant light-switch on alertness.
+> *(The CAR persists without light; light modulates its magnitude.)*
 
 ## 4. Threshold & target — evidenced vs popular
 
@@ -153,4 +183,9 @@ warning). See `NAP_BENEFIT_EVIDENCE.md` §4 for the sleep-debt framing.
 13. Daytime light & sleep/health (2022). https://pubmed.ncbi.nlm.nih.gov/36058557/
 14. Apple — *See your time in daylight on Apple Watch.* https://support.apple.com/guide/watch/see-time-in-daylight-apd3ab22534c/watchos
 15. Light exposure & sleep validation work. https://academic.oup.com/sleep/article/48/4/zsae230/7815486 · https://pmc.ncbi.nlm.nih.gov/articles/PMC9541543/ · https://journals.sagepub.com/doi/10.1177/07487304211013995
-16. ⚠️ Popular/blog (flagged, not peer-reviewed): Huberman Lab, *Using light for health.* https://www.hubermanlab.com/newsletter/using-light-for-health
+16. Leproult R et al. *Transition from dim to bright light in the morning induces an immediate elevation of cortisol levels.* JCEM 2001;86(1):151. https://academic.oup.com/jcem/article/86/1/151/2841140
+17. Scheer FAJL, Buijs RM. *Light affects morning salivary cortisol in humans.* JCEM 1999. (≈35% rise, 1 h 800 lux, morning-specific.)
+18. Figueiro MG, Rea MS. *Short-wavelength light enhances cortisol awakening response in sleep-restricted adolescents.* Int J Endocrinol 2012. https://pmc.ncbi.nlm.nih.gov/articles/PMC3413982/
+19. Wright KP et al. *Entrainment of the human circadian clock to the natural light-dark cycle.* Current Biology 2013. https://www.cell.com/current-biology/fulltext/S0960-9822(13)00764-1
+20. Stothard ER, … Wright KP. *Circadian entrainment to the natural light-dark cycle across seasons and the weekend.* Current Biology 2017. https://pmc.ncbi.nlm.nih.gov/articles/PMC5335920/
+21. ⚠️ Popular/blog (flagged, not peer-reviewed): Huberman Lab — *Light Exposure & Circadian Rhythm* topic page (citation-thin; **value is as a pointer to the primary studies above** — the CAR and natural-light entrainment lines verify; the "delay caffeine 90–120 min after waking" protocol is a popular heuristic, not strongly evidenced). https://www.hubermanlab.com/topics/light-exposure-and-circadian-rhythm · *Using light for health* https://www.hubermanlab.com/newsletter/using-light-for-health
