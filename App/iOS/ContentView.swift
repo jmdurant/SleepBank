@@ -20,6 +20,7 @@ struct ContentView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     EnergyRingView()
+                    AlertnessCurveView()
                     NavigationLink {
                         NapView()
                     } label: {
