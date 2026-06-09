@@ -13,3 +13,7 @@ DerivedData/
 
 # IDE
 .vscode/
+
+# YASA tool
+tools/yasa/.venv/
+tools/yasa/__pycache__/
