@@ -65,6 +65,7 @@ class PhoneNapController {
         if GuidedRelaxationService.shared.autoPlayDuringNap {
             GuidedRelaxationService.shared.start(GuidedRelaxationService.shared.guide)
         }
+        RawEEGRecorder.shared.begin()   // capture raw EEG for the YASA pipeline
 
         lastOnset = nil; lastReason = nil; wakeTarget = nil
         onsetDetected = false
@@ -158,6 +159,7 @@ class PhoneNapController {
         motion.stopMonitoring()
         NoiseService.shared.fadeOut()
         GuidedRelaxationService.shared.stop()
+        RawEEGRecorder.shared.finish()   // write the nap's raw EEG to disk
         LiveActivityManager.shared.end()
         SharedStore.napActive = false
         WidgetCenter.shared.reloadAllTimelines()

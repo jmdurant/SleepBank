@@ -43,6 +43,28 @@ struct ValidationView: View {
                 Text("AirDrop the CSV to a Mac → CreateML → Tabular Classifier → set target to 'label' → Train. Filter labelSource to 'eeg'/'apple' for high-quality labels.")
             }
 
+            Section {
+                if let url = RawEEGRecorder.shared.lastFileURL {
+                    Button {
+                        exportURL = url
+                        showShare = true
+                    } label: {
+                        Label("Export last nap's raw EEG", systemImage: "brain.head.profile")
+                    }
+                    Text(url.lastPathComponent).font(.caption2).foregroundStyle(.secondary)
+                } else if RawEEGRecorder.shared.isRecording {
+                    Label("Recording EEG… \(RawEEGRecorder.shared.sampleCount / 256)s", systemImage: "record.circle")
+                        .foregroundStyle(.red)
+                } else {
+                    Text("Take a nap with the Muse connected to capture raw EEG.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            } header: {
+                Text("Raw EEG (for YASA)")
+            } footer: {
+                Text("AirDrop the CSV to a Mac, then stage it offline with YASA (256 Hz, use the AF7 column) to label this nap — the ground truth for training the on-device model.")
+            }
+
             Section("Naps") {
                 if store.records.isEmpty {
                     Text("Take a nap on the watch — its decision and trace sync here.")

@@ -121,6 +121,7 @@ class MuseService: NSObject {
             samples.append(Float(sample))
         }
         eeg.feedSamples(channel: channel, samples: samples)
+        RawEEGRecorder.shared.record(channel: channel, samples: samples)
 
         // Channel 0 drives a processor update (~1/s). Forward the EEG onset signal
         // to the watch nap loop, but only with good contact and throttled.
