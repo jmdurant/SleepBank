@@ -80,6 +80,31 @@ final class AlertnessRhythmTests: XCTestCase {
         XCTAssertEqual(readings.last?.date, at(23))
     }
 
+    func testMorningLightLiftsTheMorningThenFadesByMidday() {
+        let dim = AlertnessRhythm(wakeTime: at(7), sleepDebt: 0.3, morningLightDose: 0, calendar: cal)
+        let bright = AlertnessRhythm(wakeTime: at(7), sleepDebt: 0.3, morningLightDose: 1, calendar: cal)
+        // Morning (~1.5 h after wake): bright sits higher than dim.
+        XCTAssertGreaterThan(bright.level(at: at(8.5)), dim.level(at: at(8.5)))
+        // By mid-afternoon the lift has faded — curves converge.
+        XCTAssertEqual(bright.level(at: at(15.0)), dim.level(at: at(15.0)), accuracy: 0.01)
+    }
+
+    func testMorningLightBoostIsSmall() {
+        let dim = AlertnessRhythm(wakeTime: at(7), sleepDebt: 0.3, morningLightDose: 0, calendar: cal)
+        let bright = AlertnessRhythm(wakeTime: at(7), sleepDebt: 0.3, morningLightDose: 1, calendar: cal)
+        // A full morning-light dose is a modest nudge (< 0.1 on the 0…1 curve),
+        // deliberately smaller than a nap — the evidence is for anchoring, not a jolt.
+        let lift = bright.level(at: at(8.5)) - dim.level(at: at(8.5))
+        XCTAssertGreaterThan(lift, 0.01)
+        XCTAssertLessThan(lift, 0.1)
+    }
+
+    func testMorningLightDoseSaturates() {
+        XCTAssertEqual(AlertnessRhythm.morningLightDose(minutes: 0), 0, accuracy: 0.001)
+        XCTAssertEqual(AlertnessRhythm.morningLightDose(minutes: 10, target: 20), 0.5, accuracy: 0.001)
+        XCTAssertEqual(AlertnessRhythm.morningLightDose(minutes: 40, target: 20), 1.0, accuracy: 0.001)  // capped
+    }
+
     func testShortNightFlagFromSleep() {
         let short = AlertnessRhythm.fromSleep(wakeTime: at(6), sleptHours: 5.0,
                                               typicalHours: 7.5, now: at(9), calendar: cal)

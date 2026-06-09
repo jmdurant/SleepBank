@@ -46,12 +46,35 @@ builder.delegate = self
 // AirPods Pro 3 in-ear → HR arrives in workoutBuilder(_:didCollectDataOf:) as .heartRate
 ```
 
+## The meditation / mind-and-body angle (the clean way in)
+
+Rather than fake a cardio "workout," frame the nap's **guided wind-down as a
+mind-and-body / meditation session** — which is what it genuinely is (our
+`GuidedRelaxationService` already runs 4-7-8 breathing + body relaxation; this is
+NSDR / "non-sleep deep rest"). This is both honest and the technical key:
+
+- **Meditation/yoga ARE workout activity types that stream AirPods HR.** Apple
+  Fitness+ lists **Meditation** and **Yoga** as workout types, and connecting
+  AirPods Pro 3 "adds heart rate" to them — so HR is **not** gated to cardio.
+- **Precedent that de-risks it:** **"Rhythm • Heart Rate Meditation"** (App Store)
+  reads **live AirPods Pro 3 HR during guided meditation** *and plays audio*
+  (you hear your heartbeat). That strongly suggests the two earlier worries are
+  fine: **HR works at near-rest**, and **HR sensing coexists with audio playback**.
+- **Use the right HealthKit construct — and note the trap:**
+  - **`HKWorkoutSession` with `activityType = .mindAndBody`** → IS a workout →
+    **activates AirPods HR.** This is what we run during the nap.
+  - **`mindfulSession` (Mindful Minutes)** is a *category sample*, **NOT** a workout
+    → would **not** activate HR. We can *also* log a `mindfulSession` so the nap
+    earns Mindful Minutes in Health (a nice feature), but it's not the HR trigger.
+
 ## What it means for SleepBank
 
-- **A nap is not a workout**, so to keep AirPods HR streaming we'd run a **quiet
-  `HKWorkoutSession` on the phone during the nap** — exactly the pattern we already
-  use on the **watch** for sensor keepalive. The "workout" is just the mechanism
-  that activates continuous HR sensing.
+- We run the nap as a **`.mindAndBody` `HKWorkoutSession` on the phone** — honest
+  (a guided-relaxation nap really is a mind-and-body session), it **activates
+  AirPods HR**, and it earns the user a gentle Health/Mindful-Minutes entry instead
+  of a bogus "workout." Same session-keepalive pattern we already use on the
+  **watch**; the session just needs to keep running as the user transitions from
+  meditating → asleep.
 - It fuses straight into the existing `HeartRateImmobilityOnsetDetector`
   (HR-drop + immobility). AirPods also have motion sensors → potential **head-
   stillness** immobility signal via `CMHeadphoneMotionManager`.
@@ -60,20 +83,24 @@ builder.delegate = self
 
 ## Open questions for the AirPulse developer (Christian Range)
 
+*(The Fitness+ Meditation/Yoga support and the Rhythm app largely answer #2 and #4
+already — confirm rather than discover.)*
+
 1. **Exact access path:** is live AirPods Pro 3 HR just `HKWorkoutSession` +
    `HKLiveWorkoutDataSource` on iOS 26 with the OS auto-providing AirPods HR, or is
    there a dedicated API / entitlement / extra step?
-2. **HR at rest:** does it report reliable HR while **lying still / nearly
-   motionless** (we need to catch the small HR *drop* at sleep onset), or is it
-   tuned for/only reliable during exercise?
-3. **Update cadence & latency:** how often does HR update (per-second? every 5 s?)
-   — anything ≤5 s works for onset detection.
-4. **Audio coexistence (unique to us):** does HR sensing work while the AirPods are
-   **actively playing audio** (our noise + TTS wind-down)? Any conflict?
-5. **Workout housekeeping:** does the session create a Fitness/Health **workout
-   entry** / affect activity rings, and can that be suppressed or made unobtrusive
-   for a nap?
-6. **Battery** over a 20–90 min session.
+2. **`.mindAndBody` activates HR?** confirm a low-intensity mind-and-body/meditation
+   workout type streams AirPods HR (Fitness+ Meditation suggests yes).
+3. **HR once asleep:** does HR keep streaming after the user stops "meditating" and
+   actually **falls asleep / goes fully still** — or does auto-pause / no-motion
+   stop it? (We'd disable workout auto-pause.) Need the onset HR *drop*.
+4. **Audio coexistence:** confirm HR sensing runs while AirPods play our noise + TTS
+   (Rhythm plays audio, so likely yes).
+5. **Update cadence & latency:** how often HR updates (≤5 s is fine for onset).
+6. **Workout housekeeping:** does the `.mindAndBody` session create a Fitness/Health
+   entry / affect rings, and is that acceptable/suppressible? (We may also log a
+   `mindfulSession` for Mindful Minutes.)
+7. **Battery** over a 20–90 min session.
 
 ## Status
 
@@ -87,6 +114,7 @@ H10/Muse sources.
 - DCRainmaker, AirPods Pro 3 sports/fitness review (Sept 2025) — IR sensor, no BLE-GATT broadcast, iPhone-only, workout-gated. https://www.dcrainmaker.com/2025/09/airpods-pro-3-in-depth-sports-fitness-review.html
 - WWDC25 session 322, *Track workouts with HealthKit on iOS and iPadOS* — iOS workout sessions + live HR API. https://developer.apple.com/videos/play/wwdc2025/322/
 - Strava live AirPods Pro 3 HR support. https://apple.gadgethacks.com/news/strava-adds-airpods-pro-3-support-for-live-heart-rate-on-iphone/
-- Apple Support, *Track your heart rate during workouts with AirPods Pro 3*. https://support.apple.com/guide/airpods/track-heart-rate-workouts-airpods-pro-3-dev1b40fb47d/web
+- Apple Support, *Track your heart rate during workouts with AirPods Pro 3* — lists Fitness+ Meditation/Yoga as HR-tracked workout types. https://support.apple.com/guide/airpods/track-heart-rate-workouts-airpods-pro-3-dev1b40fb47d/web
 - HKLiveWorkoutBuilder. https://developer.apple.com/documentation/healthkit/hkliveworkoutbuilder
+- *Rhythm • Heart Rate Meditation* — third-party app reading live AirPods Pro 3 HR during guided meditation (precedent for at-rest HR + audio coexistence). https://apps.apple.com/us/app/rhythm-heart-rate-meditation/id6752779850
 - AirPulse (Christian Range) — App Store. https://apps.apple.com/es/app/airpulse/id6760625679

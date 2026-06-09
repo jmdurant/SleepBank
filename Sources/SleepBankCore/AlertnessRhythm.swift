@@ -48,14 +48,22 @@ public struct AlertnessRhythm: Sendable {
     /// True when last night was short relative to the user's own normal — drives
     /// the "your curve sits lower today" annotation.
     public let isShortNight: Bool
+    /// 0…1 dose of morning daylight (e.g. an early walk). Drives a small, morning-
+    /// concentrated lift on Process C — justified by the cortisol awakening response
+    /// (`docs/DAYLIGHT_EVIDENCE.md` §3a), NOT the weak acute photic-alerting effect.
+    /// Deliberately small: the larger payoff (anchoring + better sleep tonight) is
+    /// downstream and is carried by messaging, not the curve.
+    public let morningLightDose: Double
     private let calendar: Calendar
 
     public init(wakeTime: Date, sleepDebt: Double, naps: [Nap] = [],
-                isShortNight: Bool = false, calendar: Calendar = .current) {
+                isShortNight: Bool = false, morningLightDose: Double = 0,
+                calendar: Calendar = .current) {
         self.wakeTime = wakeTime
         self.sleepDebt = max(0.05, min(sleepDebt, 0.9))
         self.naps = naps
         self.isShortNight = isShortNight
+        self.morningLightDose = max(0, min(morningLightDose, 1))
         self.calendar = calendar
     }
 
@@ -63,7 +71,7 @@ public struct AlertnessRhythm: Sendable {
     /// is the user's own recent average (the reference for "short"). Falls back to
     /// sensible defaults when Health data is missing.
     public static func fromSleep(wakeTime: Date?, sleptHours: Double, typicalHours: Double,
-                                 naps: [Nap] = [], now: Date,
+                                 naps: [Nap] = [], morningLightDose: Double = 0, now: Date,
                                  calendar: Calendar = .current) -> AlertnessRhythm {
         let need = max(typicalHours > 0 ? typicalHours : 7.5, 6)
         let wake = wakeTime ?? calendar.date(bySettingHour: 7, minute: 0, second: 0, of: now) ?? now
@@ -72,7 +80,17 @@ public struct AlertnessRhythm: Sendable {
         let debt = 1 - (effectiveHours / need)
         let short = sleptHours > 0 && sleptHours < need - 0.75
         return AlertnessRhythm(wakeTime: wake, sleepDebt: debt, naps: naps,
-                               isShortNight: short, calendar: calendar)
+                               isShortNight: short, morningLightDose: morningLightDose,
+                               calendar: calendar)
+    }
+
+    /// Convert morning daylight minutes into a 0…1 dose with diminishing returns.
+    /// `target` is a *heuristic* "got meaningful morning light" amount — the
+    /// evidence supports an illuminance threshold, not a validated minutes dose, so
+    /// this is intentionally soft (see `docs/DAYLIGHT_EVIDENCE.md` §4).
+    public static func morningLightDose(minutes: Double, target: Double = 20) -> Double {
+        guard target > 0 else { return 0 }
+        return max(0, min(minutes / target, 1))
     }
 
     // MARK: - Model constants
@@ -80,6 +98,7 @@ public struct AlertnessRhythm: Sendable {
     private static let omega = 2 * Double.pi / 24
     private static let tauRise: Double = 18.2     // h — Process S build constant (Daan)
     private static let tauRelief: Double = 2.5    // h — nap relief fade (subjective-benefit window)
+    private static let morningLightPeak: Double = 0.12  // raw units (~+0.07 on the 0…1 display)
 
     // MARK: - The two processes
 
@@ -110,6 +129,23 @@ public struct AlertnessRhythm: Sendable {
         return depth * exp(-dt / Self.tauRelief)
     }
 
+    /// Morning-light lift (cortisol-awakening-response pathway): a small bump
+    /// concentrated in the morning, peaking ~1.5 h after waking and effectively gone
+    /// by midday. Scaled by the morning-light dose. Zero before wake.
+    private func morningLift(at date: Date) -> Double {
+        guard morningLightDose > 0 else { return 0 }
+        let awake = date.timeIntervalSince(wakeTime) / 3600
+        guard awake >= 0 else { return 0 }
+        let shape = exp(-pow((awake - 1.5) / 2.5, 2))   // peak ~1.5 h post-wake, fades by ~midday
+        return Self.morningLightPeak * morningLightDose * shape
+    }
+
+    /// Raw (C − S + morning light) before display normalization — the single source
+    /// of truth for every sampling method.
+    private func rawLevel(at date: Date, extraNap: Nap? = nil) -> Double {
+        circadian(hour: hour(of: date)) - pressure(at: date, extraNap: extraNap) + morningLift(at: date)
+    }
+
     private func hour(of date: Date) -> Double {
         let c = calendar.dateComponents([.hour, .minute], from: date)
         return Double(c.hour ?? 0) + Double(c.minute ?? 0) / 60
@@ -126,13 +162,13 @@ public struct AlertnessRhythm: Sendable {
 
     /// Predicted alertness (0…1) at a moment, including naps taken so far.
     public func level(at date: Date) -> Double {
-        normalize(circadian(hour: hour(of: date)) - pressure(at: date))
+        normalize(rawLevel(at: date))
     }
 
     /// Predicted alertness if a hypothetical nap were taken `napAt`.
     public func level(at date: Date, withNapAt napAt: Date, type: NapType) -> Double {
         let nap = Nap(end: napAt.addingTimeInterval(type.targetWakeAfterOnset), type: type, fullness: 1)
-        return normalize(circadian(hour: hour(of: date)) - pressure(at: date, extraNap: nap))
+        return normalize(rawLevel(at: date, extraNap: nap))
     }
 
     /// The baseline curve sampled across a window.
@@ -146,7 +182,7 @@ public struct AlertnessRhythm: Sendable {
         let nap = Nap(end: napAt.addingTimeInterval(napType.targetWakeAfterOnset),
                       type: napType, fullness: 1)
         return stride(from: start, through: end, step: step).map {
-            Reading(date: $0, level: normalize(circadian(hour: hour(of: $0)) - pressure(at: $0, extraNap: nap)))
+            Reading(date: $0, level: normalize(rawLevel(at: $0, extraNap: nap)))
         }
     }
 }

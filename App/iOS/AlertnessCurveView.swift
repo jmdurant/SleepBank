@@ -148,12 +148,14 @@ struct AlertnessCurveView: View {
     }
 
     private func daylightNudge(_ d: DaylightDay, isMorning: Bool) -> String? {
-        // Provisional threshold — refined once the daylight evidence lands.
-        if isMorning && d.morning < 10 {
-            return "A few minutes of morning light outside helps anchor your day."
+        // Framing per DAYLIGHT_EVIDENCE.md: the honest win is circadian anchoring +
+        // better sleep tonight (and a cortisol-mediated morning wake-up), not a big
+        // acute alertness jolt. "20 min" is a soft heuristic, not a validated dose.
+        if d.morning >= 20 {
+            return "☀️ Morning light in — anchors your rhythm and helps you sleep tonight."
         }
-        if d.morning >= 10 {
-            return "Nice — you caught some morning light."
+        if isMorning {
+            return "A morning walk outside anchors your rhythm and helps tonight's sleep."
         }
         return nil
     }
@@ -168,6 +170,7 @@ struct AlertnessCurveView: View {
             sleptHours: summary?.totalHours ?? 0,
             typicalHours: typical,
             naps: napsToday(now: now),
+            morningLightDose: AlertnessRhythm.morningLightDose(minutes: health.daylightToday.morning),
             now: now
         )
     }
