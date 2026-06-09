@@ -130,32 +130,44 @@ struct AlertnessCurveView: View {
         let d = health.daylightToday
         let hour = Calendar.current.component(.hour, from: now)
         let isMorning = hour < 11
+        let streak = health.morningLightStreak
+        let walk = health.morningActivityMinutes
         return VStack(alignment: .leading, spacing: 3) {
             HStack(spacing: 6) {
                 Image(systemName: "sun.max.fill").foregroundStyle(.orange)
                 Text("\(Int(d.total.rounded())) min daylight today")
                     .font(.caption.weight(.medium))
                 if d.morning >= 1 {
-                    Text("· \(Int(d.morning.rounded())) min this morning")
+                    Text("· \(Int(d.morning.rounded())) min AM")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                if walk >= 1 {
+                    Text("· 🚶 \(Int(walk.rounded())) min AM")
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
+                if streak > 0 {
+                    Text("🌅 \(streak)").font(.caption.weight(.semibold))
+                }
             }
-            if let nudge = daylightNudge(d, isMorning: isMorning) {
+            if let nudge = daylightNudge(d, walkMinutes: walk, isMorning: isMorning) {
                 Text(nudge).font(.caption2).foregroundStyle(.secondary)
             }
         }
     }
 
-    private func daylightNudge(_ d: DaylightDay, isMorning: Bool) -> String? {
+    private func daylightNudge(_ d: DaylightDay, walkMinutes: Double, isMorning: Bool) -> String? {
         // Framing per DAYLIGHT_EVIDENCE.md: the honest win is circadian anchoring +
-        // better sleep tonight (and a cortisol-mediated morning wake-up), not a big
-        // acute alertness jolt. "20 min" is a soft heuristic, not a validated dose.
+        // better sleep tonight. A morning walk stacks two levers — light (cortisol)
+        // and movement (exercise zeitgeber). Soft heuristics, not validated doses.
+        if d.morning >= 20 && walkMinutes >= 10 {
+            return "☀️🚶 Morning light + movement — both anchor your rhythm and help you sleep tonight."
+        }
         if d.morning >= 20 {
             return "☀️ Morning light in — anchors your rhythm and helps you sleep tonight."
         }
         if isMorning {
-            return "A morning walk outside anchors your rhythm and helps tonight's sleep."
+            return "A morning walk outside stacks light + movement — anchors your rhythm for tonight's sleep."
         }
         return nil
     }
@@ -171,6 +183,7 @@ struct AlertnessCurveView: View {
             typicalHours: typical,
             naps: napsToday(now: now),
             morningLightDose: AlertnessRhythm.morningLightDose(minutes: health.daylightToday.morning),
+            morningActivityDose: AlertnessRhythm.morningActivityDose(minutes: health.morningActivityMinutes),
             now: now
         )
     }

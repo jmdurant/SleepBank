@@ -44,6 +44,44 @@ public enum Daylight {
         }
         return sum
     }
+
+    /// Daylight minutes in the clock-morning window `[window.lowerBound,
+    /// window.upperBound)` of `day`. Clock-based (not wake-relative) so it works over
+    /// historical days where we don't have each day's wake time.
+    public static func morningMinutes(in intervals: [Interval], on day: Date,
+                                      window: Range<Int> = 5..<11,
+                                      calendar: Calendar = .current) -> Double {
+        let base = calendar.startOfDay(for: day)
+        let from = base.addingTimeInterval(Double(window.lowerBound) * 3600)
+        let to = base.addingTimeInterval(Double(window.upperBound) * 3600)
+        return minutes(in: intervals, from: from, to: to)
+    }
+
+    /// Consecutive days (back from `asOf`) with at least `targetMinutes` of morning
+    /// daylight — the "morning light" habit streak, parallel to the nap streak. A
+    /// streak that ran through yesterday survives not having logged light *yet*
+    /// today (anchored on today or yesterday). Honest: it counts what happened.
+    public static func morningStreak(intervals: [Interval], asOf: Date,
+                                     targetMinutes: Double = 10, window: Range<Int> = 5..<11,
+                                     calendar: Calendar = .current) -> Int {
+        func got(_ day: Date) -> Bool {
+            morningMinutes(in: intervals, on: day, window: window, calendar: calendar) >= targetMinutes
+        }
+        let today = calendar.startOfDay(for: asOf)
+        let yesterday = calendar.date(byAdding: .day, value: -1, to: today)
+        var cursor: Date
+        if got(today) { cursor = today }
+        else if let yesterday, got(yesterday) { cursor = yesterday }
+        else { return 0 }
+
+        var streak = 0
+        while got(cursor) {
+            streak += 1
+            guard let prev = calendar.date(byAdding: .day, value: -1, to: cursor) else { break }
+            cursor = prev
+        }
+        return streak
+    }
 }
 
 /// A day's daylight split into the windows that matter for the alertness curve.

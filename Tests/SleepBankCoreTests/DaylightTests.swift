@@ -68,4 +68,50 @@ final class DaylightTests: XCTestCase {
         let day = DaylightDay.summarize(intervals: [], wakeTime: at(7), calendar: cal)
         XCTAssertEqual(day, .empty)
     }
+
+    // MARK: - Morning-light streak
+
+    /// A daylight interval on the day `dayOffset` (0 = today) at a given clock hour.
+    private func dayInterval(dayOffset: Int, hour: Double, minutes: Double) -> Daylight.Interval {
+        let base = cal.startOfDay(for: Date(timeIntervalSince1970: 1_700_000_000))
+        let day = cal.date(byAdding: .day, value: dayOffset, to: base)!
+        let start = day.addingTimeInterval(hour * 3600)
+        return Daylight.Interval(start: start, end: start.addingTimeInterval(minutes * 60), minutes: minutes)
+    }
+
+    private var today: Date { Date(timeIntervalSince1970: 1_700_000_000) }
+
+    func testMorningStreakCountsConsecutiveDaysWithMorningLight() {
+        let ivs = [
+            dayInterval(dayOffset: 0, hour: 8, minutes: 15),
+            dayInterval(dayOffset: -1, hour: 7.5, minutes: 20),
+            dayInterval(dayOffset: -2, hour: 9, minutes: 12),
+        ]
+        XCTAssertEqual(Daylight.morningStreak(intervals: ivs, asOf: today, targetMinutes: 10, calendar: cal), 3)
+    }
+
+    func testMorningStreakSurvivesNoLightYetToday() {
+        let ivs = [
+            dayInterval(dayOffset: -1, hour: 8, minutes: 15),
+            dayInterval(dayOffset: -2, hour: 8, minutes: 15),
+        ]
+        XCTAssertEqual(Daylight.morningStreak(intervals: ivs, asOf: today, targetMinutes: 10, calendar: cal), 2)
+    }
+
+    func testMorningStreakIgnoresAfternoonLightAndSubThresholdMornings() {
+        let ivs = [
+            dayInterval(dayOffset: 0, hour: 14, minutes: 60),   // afternoon — doesn't count
+            dayInterval(dayOffset: -1, hour: 8, minutes: 4),    // below 10-min target
+        ]
+        XCTAssertEqual(Daylight.morningStreak(intervals: ivs, asOf: today, targetMinutes: 10, calendar: cal), 0)
+    }
+
+    func testMorningStreakBreaksOnAMissedDay() {
+        let ivs = [
+            dayInterval(dayOffset: 0, hour: 8, minutes: 15),
+            // gap at -1
+            dayInterval(dayOffset: -2, hour: 8, minutes: 15),
+        ]
+        XCTAssertEqual(Daylight.morningStreak(intervals: ivs, asOf: today, targetMinutes: 10, calendar: cal), 1)
+    }
 }

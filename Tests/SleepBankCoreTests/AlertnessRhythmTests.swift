@@ -105,6 +105,22 @@ final class AlertnessRhythmTests: XCTestCase {
         XCTAssertEqual(AlertnessRhythm.morningLightDose(minutes: 40, target: 20), 1.0, accuracy: 0.001)  // capped
     }
 
+    func testMorningActivityAddsItsOwnLiftOnTopOfLight() {
+        let lightOnly = AlertnessRhythm(wakeTime: at(7), sleepDebt: 0.3, morningLightDose: 1, calendar: cal)
+        let lightAndWalk = AlertnessRhythm(wakeTime: at(7), sleepDebt: 0.3,
+                                           morningLightDose: 1, morningActivityDose: 1, calendar: cal)
+        // A morning walk earns extra credit on top of light…
+        XCTAssertGreaterThan(lightAndWalk.level(at: at(8.5)), lightOnly.level(at: at(8.5)))
+        // …but the combined morning lift is still capped (stays modest, < 0.12 display).
+        let dim = AlertnessRhythm(wakeTime: at(7), sleepDebt: 0.3, calendar: cal)
+        XCTAssertLessThan(lightAndWalk.level(at: at(8.5)) - dim.level(at: at(8.5)), 0.12)
+    }
+
+    func testMorningActivityDoseSaturates() {
+        XCTAssertEqual(AlertnessRhythm.morningActivityDose(minutes: 0), 0, accuracy: 0.001)
+        XCTAssertEqual(AlertnessRhythm.morningActivityDose(minutes: 30, target: 15), 1.0, accuracy: 0.001)
+    }
+
     func testShortNightFlagFromSleep() {
         let short = AlertnessRhythm.fromSleep(wakeTime: at(6), sleptHours: 5.0,
                                               typicalHours: 7.5, now: at(9), calendar: cal)

@@ -54,16 +54,22 @@ public struct AlertnessRhythm: Sendable {
     /// Deliberately small: the larger payoff (anchoring + better sleep tonight) is
     /// downstream and is carried by messaging, not the curve.
     public let morningLightDose: Double
+    /// 0…1 dose of morning physical activity (e.g. a morning walk). A second,
+    /// independent morning lift — exercise is a non-photic zeitgeber that advances
+    /// the clock (Youngstedt 2019 exercise PRC) plus an acute arousal effect, so it
+    /// stacks with light. Combined morning lift is capped so it stays modest.
+    public let morningActivityDose: Double
     private let calendar: Calendar
 
     public init(wakeTime: Date, sleepDebt: Double, naps: [Nap] = [],
                 isShortNight: Bool = false, morningLightDose: Double = 0,
-                calendar: Calendar = .current) {
+                morningActivityDose: Double = 0, calendar: Calendar = .current) {
         self.wakeTime = wakeTime
         self.sleepDebt = max(0.05, min(sleepDebt, 0.9))
         self.naps = naps
         self.isShortNight = isShortNight
         self.morningLightDose = max(0, min(morningLightDose, 1))
+        self.morningActivityDose = max(0, min(morningActivityDose, 1))
         self.calendar = calendar
     }
 
@@ -71,7 +77,8 @@ public struct AlertnessRhythm: Sendable {
     /// is the user's own recent average (the reference for "short"). Falls back to
     /// sensible defaults when Health data is missing.
     public static func fromSleep(wakeTime: Date?, sleptHours: Double, typicalHours: Double,
-                                 naps: [Nap] = [], morningLightDose: Double = 0, now: Date,
+                                 naps: [Nap] = [], morningLightDose: Double = 0,
+                                 morningActivityDose: Double = 0, now: Date,
                                  calendar: Calendar = .current) -> AlertnessRhythm {
         let need = max(typicalHours > 0 ? typicalHours : 7.5, 6)
         let wake = wakeTime ?? calendar.date(bySettingHour: 7, minute: 0, second: 0, of: now) ?? now
@@ -81,7 +88,7 @@ public struct AlertnessRhythm: Sendable {
         let short = sleptHours > 0 && sleptHours < need - 0.75
         return AlertnessRhythm(wakeTime: wake, sleepDebt: debt, naps: naps,
                                isShortNight: short, morningLightDose: morningLightDose,
-                               calendar: calendar)
+                               morningActivityDose: morningActivityDose, calendar: calendar)
     }
 
     /// Convert morning daylight minutes into a 0…1 dose with diminishing returns.
@@ -93,12 +100,21 @@ public struct AlertnessRhythm: Sendable {
         return max(0, min(minutes / target, 1))
     }
 
+    /// Convert morning exercise minutes into a 0…1 dose (diminishing returns). Same
+    /// soft, heuristic shape as the light dose.
+    public static func morningActivityDose(minutes: Double, target: Double = 15) -> Double {
+        guard target > 0 else { return 0 }
+        return max(0, min(minutes / target, 1))
+    }
+
     // MARK: - Model constants
 
     private static let omega = 2 * Double.pi / 24
     private static let tauRise: Double = 18.2     // h — Process S build constant (Daan)
     private static let tauRelief: Double = 2.5    // h — nap relief fade (subjective-benefit window)
-    private static let morningLightPeak: Double = 0.12  // raw units (~+0.07 on the 0…1 display)
+    private static let morningLightPeak: Double = 0.12     // raw units (~+0.07 on the 0…1 display)
+    private static let morningActivityPeak: Double = 0.10  // a second, independent morning lift
+    private static let morningLiftCap: Double = 0.18        // combined morning lift stays modest
 
     // MARK: - The two processes
 
@@ -129,15 +145,20 @@ public struct AlertnessRhythm: Sendable {
         return depth * exp(-dt / Self.tauRelief)
     }
 
-    /// Morning-light lift (cortisol-awakening-response pathway): a small bump
-    /// concentrated in the morning, peaking ~1.5 h after waking and effectively gone
-    /// by midday. Scaled by the morning-light dose. Zero before wake.
+    /// Morning lift — two stacked, independently-evidenced morning behaviours:
+    /// light (cortisol awakening response) and physical activity (exercise zeitgeber
+    /// + acute arousal). A bump concentrated in the morning, peaking ~1.5 h after
+    /// waking and effectively gone by midday; combined magnitude capped so it stays
+    /// modest. Zero before wake.
     private func morningLift(at date: Date) -> Double {
-        guard morningLightDose > 0 else { return 0 }
+        let combined = min(Self.morningLightPeak * morningLightDose
+                           + Self.morningActivityPeak * morningActivityDose,
+                           Self.morningLiftCap)
+        guard combined > 0 else { return 0 }
         let awake = date.timeIntervalSince(wakeTime) / 3600
         guard awake >= 0 else { return 0 }
         let shape = exp(-pow((awake - 1.5) / 2.5, 2))   // peak ~1.5 h post-wake, fades by ~midday
-        return Self.morningLightPeak * morningLightDose * shape
+        return combined * shape
     }
 
     /// Raw (C − S + morning light) before display normalization — the single source

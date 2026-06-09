@@ -31,6 +31,10 @@ class HealthKitService {
     var hrvAverage: Double = 0                // ms (SDNN)
     /// Today's daylight, split into morning / afternoon / evening windows.
     var daylightToday: DaylightDay = .empty
+    /// Consecutive days with morning daylight — the "morning light" habit streak.
+    var morningLightStreak: Int = 0
+    /// Minutes of exercise in this morning's window (drives the movement credit).
+    var morningActivityMinutes: Double = 0
     var lastRefresh: Date?
 
     struct SleepSummary {
@@ -57,6 +61,7 @@ class HealthKitService {
             HKQuantityType(.heartRateVariabilitySDNN),
             HKQuantityType(.heartRate),
             HKQuantityType(.timeInDaylight),
+            HKQuantityType(.appleExerciseTime),
         ]
         do {
             try await store.requestAuthorization(toShare: [], read: readTypes)
@@ -78,7 +83,7 @@ class HealthKitService {
         async let rhr = fetchLatestQuantity(.restingHeartRate, unit: .count().unitDivided(by: .minute()))
         async let hrv = fetchLatestQuantity(.heartRateVariabilitySDNN, unit: .secondUnit(with: .milli))
         async let trend = fetchRestingHRTrend()
-        async let daylight = fetchDaylightToday()
+        async let daylight = fetchDaylight(days: 14)
 
         let (sleepResult, sampleResult, rhrVal, hrvVal, trendVal, daylightIntervals) =
             await (sleep, samples, rhr, hrv, trend, daylight)
@@ -86,7 +91,11 @@ class HealthKitService {
         // Bucket daylight around today's wake time (default 7:00 if no sleep data).
         let wake = sleepResult?.wakeTime
             ?? Calendar.current.date(bySettingHour: 7, minute: 0, second: 0, of: Date()) ?? Date()
-        let daylightDay = DaylightDay.summarize(intervals: daylightIntervals, wakeTime: wake)
+        let todayStart = Calendar.current.startOfDay(for: Date())
+        let todayIntervals = daylightIntervals.filter { $0.start >= todayStart }
+        let daylightDay = DaylightDay.summarize(intervals: todayIntervals, wakeTime: wake)
+        let streak = Daylight.morningStreak(intervals: daylightIntervals, asOf: Date())
+        let morningExercise = await fetchMorningExerciseMinutes(wake: wake)
 
         await MainActor.run {
             lastNightSleep = sleepResult
@@ -95,16 +104,18 @@ class HealthKitService {
             hrvAverage = hrvVal
             restingHRTrend = trendVal
             daylightToday = daylightDay
+            morningLightStreak = streak
+            morningActivityMinutes = morningExercise
             sleepAverage7Day = sleepResult?.averageLast7Days ?? 0
             lastRefresh = Date()
         }
     }
 
-    /// Today's "Time in Daylight" samples (Apple Watch ambient-light metric, iOS
-    /// 17+), as plain intervals for `DaylightDay` to bucket by time window.
-    func fetchDaylightToday() async -> [Daylight.Interval] {
+    /// "Time in Daylight" samples (Apple Watch ambient-light metric, iOS 17+) over
+    /// the last `days` days, as plain intervals for `Daylight` to bucket and streak.
+    func fetchDaylight(days: Int) async -> [Daylight.Interval] {
         let type = HKQuantityType(.timeInDaylight)
-        let start = Calendar.current.startOfDay(for: Date())
+        let start = Calendar.current.date(byAdding: .day, value: -days, to: Calendar.current.startOfDay(for: Date())) ?? Date()
         let predicate = HKQuery.predicateForSamples(withStart: start, end: Date(), options: .strictStartDate)
         return await withCheckedContinuation { continuation in
             let query = HKSampleQuery(sampleType: type, predicate: predicate, limit: HKObjectQueryNoLimit,
@@ -114,6 +125,22 @@ class HealthKitService {
                                       minutes: $0.quantity.doubleValue(for: .minute()))
                 }
                 continuation.resume(returning: intervals)
+            }
+            store.execute(query)
+        }
+    }
+
+    /// Minutes of Apple "Exercise Time" logged in this morning's window (wake → +4 h,
+    /// capped at now) — the signal behind the morning-movement credit.
+    func fetchMorningExerciseMinutes(wake: Date) async -> Double {
+        let now = Date()
+        let end = min(now, wake.addingTimeInterval(4 * 3600))
+        guard end > wake else { return 0 }
+        let predicate = HKQuery.predicateForSamples(withStart: wake, end: end, options: .strictStartDate)
+        return await withCheckedContinuation { continuation in
+            let query = HKStatisticsQuery(quantityType: HKQuantityType(.appleExerciseTime),
+                                          quantitySamplePredicate: predicate, options: .cumulativeSum) { _, result, _ in
+                continuation.resume(returning: result?.sumQuantity()?.doubleValue(for: .minute()) ?? 0)
             }
             store.execute(query)
         }
