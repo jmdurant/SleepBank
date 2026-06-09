@@ -147,8 +147,14 @@ class PhoneNapController {
             let record = NapRecord(start: engine.sessionStart, end: Date(), type: napType,
                                    onset: lastOnset, wakeReason: lastReason ?? .manual)
             lastCompletedNap = record
+            let decision = recorder.build(record: record, trigger: detector?.onsetTrigger)
             NapHealthWriter.shared.write(record)
-            store.add(recorder.build(record: record, trigger: detector?.onsetTrigger))
+            store.add(decision)
+            // Export the nap's features + raw EEG under one shared stamp so the Mac
+            // merge script can join them by time into a labeled training row set.
+            let stamp = NapFiles.stamp(for: record.start)
+            NapFiles.writeFeatures(decision, stamp: stamp)
+            RawEEGRecorder.shared.finish(stamp: stamp)
             SharedStore.napsToday += record.onset != nil ? 1 : 0
             if let onset = record.onset {
                 SharedStore.minutesToday += Int(max(0, record.end.timeIntervalSince(onset)) / 60)
@@ -159,7 +165,6 @@ class PhoneNapController {
         motion.stopMonitoring()
         NoiseService.shared.fadeOut()
         GuidedRelaxationService.shared.stop()
-        RawEEGRecorder.shared.finish()   // write the nap's raw EEG to disk
         LiveActivityManager.shared.end()
         SharedStore.napActive = false
         WidgetCenter.shared.reloadAllTimelines()

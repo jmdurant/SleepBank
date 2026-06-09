@@ -42,9 +42,9 @@ final class RawEEGRecorder {
         if channel == 1 { sampleCount = channels[1].count }   // AF7 = our reference
     }
 
-    /// Stop and write the CSV (off the main thread). Returns immediately; the file
-    /// URL lands in `lastFileURL` when the write completes.
-    func finish() {
+    /// Stop and write `eeg-<stamp>.csv` (off the main thread), keyed by the same
+    /// stamp as the nap's features file. The URL lands in `lastFileURL` when done.
+    func finish(stamp: String) {
         guard isRecording else { return }
         isRecording = false
         let snapshot = channels
@@ -52,11 +52,9 @@ final class RawEEGRecorder {
         let rows = snapshot.map(\.count).min() ?? 0
         guard rows > 0 else { return }
 
-        let stamp = Self.stampFormatter.string(from: Date())
-
         DispatchQueue.global(qos: .utility).async { [weak self] in
             guard let self else { return }
-            let url = Self.outputDirectory().appendingPathComponent("eeg-\(stamp).csv")
+            let url = NapFiles.documentsDirectory().appendingPathComponent("eeg-\(stamp).csv")
             var text = self.columns.joined(separator: ",") + "\n"
             text.reserveCapacity(rows * 28)
             for i in 0..<rows {
@@ -66,23 +64,4 @@ final class RawEEGRecorder {
             DispatchQueue.main.async { self.lastFileURL = url }
         }
     }
-
-    /// The iCloud Documents container (syncs to the Mac automatically) when
-    /// available, else the local Documents directory. Called off the main thread —
-    /// resolving the ubiquity container can block on first access.
-    private static func outputDirectory() -> URL {
-        let fm = FileManager.default
-        if let container = fm.url(forUbiquityContainerIdentifier: "iCloud.com.doctordurant.sleepbank") {
-            let docs = container.appendingPathComponent("Documents")
-            try? fm.createDirectory(at: docs, withIntermediateDirectories: true)
-            return docs
-        }
-        return fm.urls(for: .documentDirectory, in: .userDomainMask)[0]
-    }
-
-    @ObservationIgnored private static let stampFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.dateFormat = "yyyyMMdd-HHmmss"
-        return f
-    }()
 }
