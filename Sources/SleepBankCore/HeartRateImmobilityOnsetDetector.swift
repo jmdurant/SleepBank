@@ -22,8 +22,10 @@ public final class HeartRateImmobilityOnsetDetector: SleepOnsetDetector {
         /// Required breathing-rate drop (breaths/min) below baseline to count as a
         /// respiratory onset sign (respiration slows at sleep onset).
         public var breathingDropRate: Double = 3
-        /// EEG onset confidence at/above which EEG alone counts as an onset sign.
-        public var eegOnsetThreshold: Double = 0.6
+        /// EEG onset confidence at/above which EEG counts as an onset sign. Set
+        /// high: frontal-EEG onset (N1) is the least reliable stage, so EEG should
+        /// corroborate the cardiac/immobility signals, not drive onset on its own.
+        public var eegOnsetThreshold: Double = 0.75
         /// Required continuous stillness before onset can be declared.
         public var requiredStillSeconds: TimeInterval = 90
         /// Both conditions must hold continuously this long (debounce).

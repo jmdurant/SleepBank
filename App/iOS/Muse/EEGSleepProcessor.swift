@@ -89,9 +89,14 @@ class EEGSleepProcessor {
     private var baselineFrames = 0
     private var alphaBaselineSum: Float = 0
     private var deltaBaselineSum: Float = 0
-    private let baselineTarget = 20
+    private let baselineTarget = 30
     private var onsetHoldFrames = 0
     private var deepHoldFrames = 0
+    // Sleep staging is scored on 30 s epochs (AASM). We make sleep decisions on a
+    // ~30 s rolling average of the per-second band powers, not single 1 s frames —
+    // this matches the standard and removes the frame-to-frame flag flicker.
+    private var epochWindow: [BandPowers] = []
+    private let epochFrames = 30
 
     init() {
         log2n = vDSP_Length(log2(Float(fftSize)))
@@ -118,6 +123,7 @@ class EEGSleepProcessor {
         deltaBaselineSum = 0
         onsetHoldFrames = 0
         deepHoldFrames = 0
+        epochWindow.removeAll()
         onsetIndex = 0
         onsetDetected = false
         deepSleepApproaching = false
@@ -181,12 +187,17 @@ class EEGSleepProcessor {
 
         guard hasGoodSignal else { return }
 
-        // Accumulate an awake baseline over the first ~20 s of good signal before
+        // Roll the ~30 s epoch average that sleep decisions are made on.
+        epochWindow.append(avgPowers)
+        if epochWindow.count > epochFrames { epochWindow.removeFirst() }
+        let epoch = epochAverage()
+
+        // Accumulate an awake baseline over the first ~30 s of good signal before
         // judging any sleep change. No onset/deep flags during calibration.
         if !baselineCaptured {
             baselineFrames += 1
-            alphaBaselineSum += avgPowers.alpha
-            deltaBaselineSum += avgPowers.delta
+            alphaBaselineSum += epoch.alpha
+            deltaBaselineSum += epoch.delta
             if baselineFrames >= baselineTarget {
                 alphaBaseline = max(0.01, alphaBaselineSum / Float(baselineFrames))
                 deltaBaseline = deltaBaselineSum / Float(baselineFrames)
@@ -194,7 +205,7 @@ class EEGSleepProcessor {
             }
             return
         }
-        computeSleepMetrics()
+        computeSleepMetrics(epoch)
     }
 
     private func computeFFT(_ samples: [Float]) -> BandPowers {
@@ -293,29 +304,44 @@ class EEGSleepProcessor {
 
     // MARK: - Sleep metrics
 
-    private func computeSleepMetrics() {
-        // ONSET: alpha attenuated vs the awake baseline AND theta now exceeds alpha.
-        let alphaRatio = avgPowers.alpha / alphaBaseline
+    /// Decisions run on the 30 s epoch average `p`, not single frames.
+    ///
+    /// Per the literature (research memo): N3/slow-wave is frontally reliable, so
+    /// it's the primary EEG trigger. Wake→N1 onset is the *weakest* stage on
+    /// frontal EEG, so `onsetIndex` is reported for corroboration but held to a
+    /// high bar — the nap loop should lean on HR/HRV/immobility for onset.
+    private func computeSleepMetrics(_ p: BandPowers) {
+        // ONSET (corroborating only): alpha attenuated vs awake baseline + theta up.
+        let alphaRatio = p.alpha / alphaBaseline
         let alphaAttenuated = max(0, min(1, (1 - alphaRatio) / 0.6))   // full credit by 60% drop
-        let thetaOverAlpha = avgPowers.alpha > 0.01 ? avgPowers.theta / avgPowers.alpha : 0
+        let thetaOverAlpha = p.alpha > 0.01 ? p.theta / p.alpha : 0
         let thetaEmergent = max(0, min(1, (thetaOverAlpha - 1) / 1.0))  // theta passing alpha
         onsetIndex = min(1, 0.6 * alphaAttenuated + 0.4 * thetaEmergent)
 
-        // Sustained, with a higher bar and asymmetric decay, so brief awake
-        // fluctuations don't trip it.
-        if onsetIndex > 0.7 { onsetHoldFrames += 1 } else { onsetHoldFrames = max(0, onsetHoldFrames - 2) }
-        onsetDetected = onsetHoldFrames >= 6   // ~6 s sustained
+        // High bar (frontal onset is unreliable); the 30 s average already smooths.
+        if onsetIndex > 0.75 { onsetHoldFrames += 1 } else { onsetHoldFrames = max(0, onsetHoldFrames - 2) }
+        onsetDetected = onsetHoldFrames >= 5
 
-        // DEEP SLEEP APPROACH: delta risen well ABOVE the awake baseline (not an
-        // absolute threshold — EEG is 1/f, so delta is high even awake) with a
-        // quiet cortex (low beta), sustained.
-        deltaDominance = avgPowers.delta
-        let deltaRisen = avgPowers.delta >= deltaBaseline + 0.15
-        let calmCortex = avgPowers.beta < 0.18
+        // DEEP SLEEP APPROACH (primary EEG trigger): slow-wave/delta risen well
+        // ABOVE the awake baseline (not an absolute µV/% threshold — those are
+        // defined on central derivations and don't transfer to Muse) with a quiet
+        // cortex (low beta), sustained on the epoch scale.
+        deltaDominance = p.delta
+        let deltaRisen = p.delta >= deltaBaseline + 0.15
+        let calmCortex = p.beta < 0.18
         if deltaRisen && calmCortex { deepHoldFrames += 1 } else { deepHoldFrames = max(0, deepHoldFrames - 2) }
-        deepSleepApproaching = deepHoldFrames >= 8   // ~8 s sustained
+        deepSleepApproaching = deepHoldFrames >= 5
 
         // N2 hint.
-        spindlePower = avgPowers.sigma
+        spindlePower = p.sigma
+    }
+
+    /// Mean band powers across the current ~30 s epoch window.
+    private func epochAverage() -> BandPowers {
+        guard !epochWindow.isEmpty else { return avgPowers }
+        let n = Float(epochWindow.count)
+        func m(_ k: (BandPowers) -> Float) -> Float { epochWindow.reduce(0) { $0 + k($1) } / n }
+        return BandPowers(delta: m(\.delta), theta: m(\.theta), alpha: m(\.alpha),
+                          sigma: m(\.sigma), beta: m(\.beta), gamma: m(\.gamma))
     }
 }
