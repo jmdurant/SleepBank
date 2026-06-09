@@ -240,6 +240,12 @@ diagnostic language.
     / 64% passive < 25 min) — **primary citation to be located and confirmed.**
 11. FDA. *General Wellness: Policy for Low Risk Devices* (guidance).
 
+> **See also** `docs/EEG_EVIDENCE.md` — the durable, citable evidence base for
+> SleepBank's Muse/frontal-EEG sleep detection (per-stage κ vs PSG, AASM scoring
+> criteria, the µV-calibration findings, open-source staging tools, refuted claims,
+> open questions, and a full reference list with URLs). Compiled for a potential
+> future journal write-up.
+
 ---
 
 *Maintained alongside the implementation in `ARCHITECTURE.md`. Corrections welcome
