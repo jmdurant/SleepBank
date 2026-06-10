@@ -127,8 +127,6 @@ struct AlertnessCurveView: View {
                 interventionPicker(markers: markers)
                 if focused?.kind == .nap { napTypeToggle }
                 readout(rhythm: rhythm, markers: markers, projection: projection, isToday: isToday)
-                Divider()
-                daylightRow()
             }
             .padding()
             .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 20))
@@ -219,15 +217,20 @@ struct AlertnessCurveView: View {
     }
 
     /// Replace this day's plan with a template, placed at the day's clock times.
+    /// On today, slots whose time has already passed are skipped (not crammed at now).
     private func applyTemplate(_ t: PlanTemplate) {
         let cal = Calendar.current
-        let dayDate = cal.date(byAdding: .day, value: dayOffset, to: Date()) ?? Date()
-        items = t.items.map { spec in
+        let now = Date()
+        let isToday = dayOffset == 0
+        let dayDate = cal.date(byAdding: .day, value: dayOffset, to: now) ?? now
+        items = t.items.compactMap { spec in
+            let at = cal.date(bySettingHour: spec.hour, minute: spec.minute, second: 0, of: dayDate)
+            if isToday, let at, at <= now { return nil }   // skip already-passed slots
             var item = PlanItem.make(intervention(spec.kind))
             item.napType = spec.napType == "cycle" ? .cycle : .power
             item.minutes = spec.minutes
             item.outdoors = spec.outdoors
-            item.at = cal.date(bySettingHour: spec.hour, minute: spec.minute, second: 0, of: dayDate)
+            item.at = at
             return item
         }
         focusedID = items.first?.id
@@ -666,37 +669,6 @@ struct AlertnessCurveView: View {
             Text("A fully-rested night would sit about **\(gap)% higher** right now. Add a nap, walk, or workout to close the gap.")
                 .font(.caption2).foregroundStyle(.secondary)
         }
-    }
-
-    // MARK: - Daylight
-
-    private func daylightRow() -> some View {
-        let d = health.daylightToday
-        let streak = health.morningLightStreak
-        let walkMin = health.morningActivityMinutes
-        return NavigationLink(value: HomeRoute.daylight) {
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 6) {
-                    Image(systemName: "sun.max.fill").foregroundStyle(.orange)
-                    Text("\(Int(d.total.rounded())) min daylight today").font(.caption.weight(.medium)).foregroundStyle(.primary)
-                    if d.morning >= 1 { Text("· \(Int(d.morning.rounded())) min AM").font(.caption).foregroundStyle(.secondary) }
-                    if walkMin >= 1 { Text("· 🚶 \(Int(walkMin.rounded())) min AM").font(.caption).foregroundStyle(.secondary) }
-                    Spacer()
-                    if streak > 0 { Text("🌅 \(streak)").font(.caption.weight(.semibold)).foregroundStyle(.primary) }
-                    Image(systemName: "chevron.right").font(.caption2).foregroundStyle(.tertiary)
-                }
-                if let nudge = daylightNudge(d, walkMinutes: walkMin) {
-                    Text(nudge).font(.caption2).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading)
-                }
-            }
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func daylightNudge(_ d: DaylightDay, walkMinutes: Double) -> String? {
-        if d.morning >= 20 && walkMinutes >= 10 { return "☀️🚶 Morning light + movement — both anchor your rhythm and help you sleep tonight." }
-        if d.morning >= 20 { return "☀️ Morning light in — anchors your rhythm and helps you sleep tonight." }
-        return nil
     }
 
     // MARK: - Model wiring

@@ -52,10 +52,28 @@ final class DayPlanStore {
     var selectedDate: Date = Calendar.current.startOfDay(for: Date())
     private var byDay: [Date: [PlanItem]] = [:]
 
+    private struct Entry: Codable { var day: Date; var items: [PlanItem] }
+    private static let key = "dayPlans"
+
+    init() {
+        guard let data = UserDefaults.standard.data(forKey: Self.key),
+              let entries = try? JSONDecoder().decode([Entry].self, from: data) else { return }
+        let today = Calendar.current.startOfDay(for: Date())
+        for e in entries where e.day >= today { byDay[key(e.day)] = e.items }   // drop past days
+    }
+
     private func key(_ d: Date) -> Date { Calendar.current.startOfDay(for: d) }
 
     func plan(for date: Date) -> [PlanItem] { byDay[key(date)] ?? [] }
-    func setPlan(_ items: [PlanItem], for date: Date) { byDay[key(date)] = items }
+    func setPlan(_ items: [PlanItem], for date: Date) {
+        byDay[key(date)] = items
+        persist()
+    }
+
+    private func persist() {
+        let entries = byDay.map { Entry(day: $0.key, items: $0.value) }
+        UserDefaults.standard.set(try? JSONEncoder().encode(entries), forKey: Self.key)
+    }
 
     /// Days from today to the selected date (0 = today).
     var selectedOffset: Int {

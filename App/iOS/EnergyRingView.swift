@@ -13,6 +13,8 @@ import SwiftUI
 import SleepBankCore
 
 struct EnergyRingView: View {
+    var health = HealthKitService.shared
+
     var body: some View {
         // Re-evaluate each minute so the battery tracks the day (dip, naps, drain).
         TimelineView(.periodic(from: .now, by: 60)) { context in
@@ -42,12 +44,45 @@ struct EnergyRingView: View {
                     }
                     .buttonStyle(.plain)
                 }
+                Divider().padding(.top, 2)
+                daylightRow()
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 20)
             .padding(.horizontal)
             .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 24))
         }
+    }
+
+    // MARK: - Daylight
+
+    private func daylightRow() -> some View {
+        let d = health.daylightToday
+        let streak = health.morningLightStreak
+        let walkMin = health.morningActivityMinutes
+        return NavigationLink(value: HomeRoute.daylight) {
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 6) {
+                    Image(systemName: "sun.max.fill").foregroundStyle(.orange)
+                    Text("\(Int(d.total.rounded())) min daylight today").font(.caption.weight(.medium)).foregroundStyle(.primary)
+                    if d.morning >= 1 { Text("· \(Int(d.morning.rounded())) min AM").font(.caption).foregroundStyle(.secondary) }
+                    if walkMin >= 1 { Text("· 🚶 \(Int(walkMin.rounded())) min AM").font(.caption).foregroundStyle(.secondary) }
+                    Spacer()
+                    if streak > 0 { Text("🌅 \(streak)").font(.caption.weight(.semibold)).foregroundStyle(.primary) }
+                    Image(systemName: "chevron.right").font(.caption2).foregroundStyle(.tertiary)
+                }
+                if let nudge = daylightNudge(d, walkMinutes: walkMin) {
+                    Text(nudge).font(.caption2).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func daylightNudge(_ d: DaylightDay, walkMinutes: Double) -> String? {
+        if d.morning >= 20 && walkMinutes >= 10 { return "☀️🚶 Morning light + movement — both anchor your rhythm and help you sleep tonight." }
+        if d.morning >= 20 { return "☀️ Morning light in — anchors your rhythm and helps you sleep tonight." }
+        return nil
     }
 
     // MARK: - Ring
