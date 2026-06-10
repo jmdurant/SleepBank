@@ -171,28 +171,33 @@ struct AlertnessCurveView: View {
         let isMorning = hour < 11
         let streak = health.morningLightStreak
         let walk = health.morningActivityMinutes
-        return VStack(alignment: .leading, spacing: 3) {
-            HStack(spacing: 6) {
-                Image(systemName: "sun.max.fill").foregroundStyle(.orange)
-                Text("\(Int(d.total.rounded())) min daylight today")
-                    .font(.caption.weight(.medium))
-                if d.morning >= 1 {
-                    Text("· \(Int(d.morning.rounded())) min AM")
-                        .font(.caption).foregroundStyle(.secondary)
+        return NavigationLink(value: HomeRoute.daylight) {
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 6) {
+                    Image(systemName: "sun.max.fill").foregroundStyle(.orange)
+                    Text("\(Int(d.total.rounded())) min daylight today")
+                        .font(.caption.weight(.medium)).foregroundStyle(.primary)
+                    if d.morning >= 1 {
+                        Text("· \(Int(d.morning.rounded())) min AM")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    if walk >= 1 {
+                        Text("· 🚶 \(Int(walk.rounded())) min AM")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    if streak > 0 {
+                        Text("🌅 \(streak)").font(.caption.weight(.semibold)).foregroundStyle(.primary)
+                    }
+                    Image(systemName: "chevron.right").font(.caption2).foregroundStyle(.tertiary)
                 }
-                if walk >= 1 {
-                    Text("· 🚶 \(Int(walk.rounded())) min AM")
-                        .font(.caption).foregroundStyle(.secondary)
+                if let nudge = daylightNudge(d, walkMinutes: walk, isMorning: isMorning) {
+                    Text(nudge).font(.caption2).foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                Spacer()
-                if streak > 0 {
-                    Text("🌅 \(streak)").font(.caption.weight(.semibold))
-                }
-            }
-            if let nudge = daylightNudge(d, walkMinutes: walk, isMorning: isMorning) {
-                Text(nudge).font(.caption2).foregroundStyle(.secondary)
             }
         }
+        .buttonStyle(.plain)
     }
 
     private func daylightNudge(_ d: DaylightDay, walkMinutes: Double, isMorning: Bool) -> String? {

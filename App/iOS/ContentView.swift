@@ -14,9 +14,10 @@ import SleepChartKit
 
 struct ContentView: View {
     @State private var health = HealthKitService.shared
+    @State private var path: [HomeRoute] = []
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     EnergyRingView()
@@ -85,6 +86,19 @@ struct ContentView: View {
                                    morningLightStreak: health.morningLightStreak,
                                    updated: Date()).save()
                     WidgetCenter.shared.reloadAllTimelines()
+                }
+            }
+            .navigationDestination(for: HomeRoute.self) { route in
+                switch route {
+                case .daylight: DaylightView()
+                case .nap:      NapView()
+                }
+            }
+            .onOpenURL { url in
+                switch url.host {
+                case "daylight": path = [.daylight]
+                case "nap":      path = [.nap]
+                default:         break
                 }
             }
         }
