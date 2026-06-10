@@ -119,6 +119,8 @@ targets:
       - App/WatchWidget
       - path: App/Shared/SharedStore.swift
         buildPhase: sources
+      - path: App/Shared/PlanSummary.swift
+        buildPhase: sources
     info:
       path: App/WatchWidget/Info.plist
       properties:

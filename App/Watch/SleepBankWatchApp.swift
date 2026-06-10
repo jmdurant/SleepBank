@@ -22,6 +22,7 @@ struct WatchRootView: View {
 
     var body: some View {
         NapSessionView()
+            .task { WatchConnectivityService.refreshPlanSummary() }
             .onOpenURL { url in
                 switch url.host {
                 case "daylight": showDaylight = true

@@ -47,4 +47,9 @@ enum SharedStore {
         get { defaults?.data(forKey: "rhythmSnapshot") }
         set { defaults?.set(newValue, forKey: "rhythmSnapshot") }
     }
+    /// Pre-computed `PlanSummary` digest (JSON) for the watch complication.
+    static var planSummary: Data? {
+        get { defaults?.data(forKey: "planSummary") }
+        set { defaults?.set(newValue, forKey: "planSummary") }
+    }
 }

@@ -179,10 +179,123 @@ struct MorningLightComplication: Widget {
     }
 }
 
+// MARK: - Today's Plan complication (next action)
+
+struct PlanComplicationEntry: TimelineEntry {
+    let date: Date
+    let kind: String?
+    let time: Date?
+    let hasPlan: Bool
+}
+
+struct PlanComplicationProvider: TimelineProvider {
+    func placeholder(in context: Context) -> PlanComplicationEntry {
+        PlanComplicationEntry(date: .now, kind: "nap", time: .now, hasPlan: true)
+    }
+    func getSnapshot(in context: Context, completion: @escaping (PlanComplicationEntry) -> Void) {
+        completion(entry(at: .now))
+    }
+    func getTimeline(in context: Context, completion: @escaping (Timeline<PlanComplicationEntry>) -> Void) {
+        // Half-hourly entries so the "next action" advances as each time passes.
+        var entries: [PlanComplicationEntry] = []
+        for step in 0..<32 {
+            let date = Calendar.current.date(byAdding: .minute, value: step * 30, to: .now) ?? .now
+            entries.append(entry(at: date))
+        }
+        let refresh = Calendar.current.date(byAdding: .hour, value: 2, to: .now) ?? .now
+        completion(Timeline(entries: entries, policy: .after(refresh)))
+    }
+    private func entry(at date: Date) -> PlanComplicationEntry {
+        guard let data = SharedStore.planSummary,
+              let plan = try? JSONDecoder().decode(PlanSummary.self, from: data) else {
+            return PlanComplicationEntry(date: date, kind: nil, time: nil, hasPlan: false)
+        }
+        let next = plan.next(at: date)
+        return PlanComplicationEntry(date: date, kind: next?.kind, time: next?.time, hasPlan: true)
+    }
+}
+
+struct PlanComplicationView: View {
+    @Environment(\.widgetFamily) var family
+    let entry: PlanComplicationEntry
+
+    private var info: (icon: String, label: String) {
+        switch entry.kind {
+        case "morningLight":    return ("sun.max.fill", "Light")
+        case "morningMovement": return ("figure.walk", "Move")
+        case "nap":             return ("moon.zzz.fill", "Nap")
+        case "dip":             return ("arrow.down.right", "Dip")
+        case "windDown":        return ("bed.double.fill", "Wind down")
+        default:                return ("list.bullet.clipboard.fill", "Plan")
+        }
+    }
+
+    private var timeText: String {
+        guard entry.hasPlan else { return "—" }
+        guard let t = entry.time else { return "now" }
+        return t.formatted(.dateTime.hour().minute())
+    }
+
+    var body: some View {
+        switch family {
+        case .accessoryCorner:      corner
+        case .accessoryInline:      inline
+        case .accessoryRectangular: rectangular
+        default:                    circular
+        }
+    }
+
+    private var circular: some View {
+        ZStack {
+            AccessoryWidgetBackground()
+            VStack(spacing: 0) {
+                Image(systemName: info.icon).font(.caption2)
+                Text(entry.hasPlan ? timeText : "—").font(.system(.caption, design: .rounded).bold())
+            }
+        }
+        .widgetLabel(entry.hasPlan ? "\(info.label) \(timeText)" : "Open SleepBank")
+    }
+
+    private var corner: some View {
+        Image(systemName: info.icon)
+            .widgetLabel(entry.hasPlan ? "\(info.label) · \(timeText)" : "Plan")
+    }
+
+    private var inline: some View {
+        Label(entry.hasPlan ? "Next: \(info.label) \(timeText)" : "SleepBank plan", systemImage: info.icon)
+    }
+
+    private var rectangular: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 1) {
+                Label("Today's Plan", systemImage: "list.bullet.clipboard.fill")
+                    .font(.caption2).foregroundStyle(.teal)
+                Text(entry.hasPlan ? "Next: \(info.label) · \(timeText)" : "Open SleepBank on iPhone")
+                    .font(.headline)
+            }
+            Spacer()
+        }
+    }
+}
+
+struct PlanComplication: Widget {
+    let kind = "PlanComplication"
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: kind, provider: PlanComplicationProvider()) { entry in
+            PlanComplicationView(entry: entry)
+                .widgetURL(URL(string: "sleepbank://plan"))
+        }
+        .configurationDisplayName("Today's Plan")
+        .description("Your next move — get light, nap before the dip, wind down.")
+        .supportedFamilies([.accessoryCircular, .accessoryCorner, .accessoryInline, .accessoryRectangular])
+    }
+}
+
 @main
 struct SleepBankWatchWidgetBundle: WidgetBundle {
     var body: some Widget {
         SleepBankComplication()
         MorningLightComplication()
+        PlanComplication()
     }
 }

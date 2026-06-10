@@ -86,12 +86,27 @@ class WatchConnectivityService: NSObject, WCSessionDelegate {
         }
         if let snapshot = context["rhythmSnapshot"] as? Data {
             SharedStore.rhythmSnapshot = snapshot   // for the watch's Today's Plan
+            Self.refreshPlanSummary()               // digest for the plan complication
         }
         guard let data = context["lastNight"] as? Data,
               let dtos = try? JSONDecoder().decode([SleepSampleDTO].self, from: data) else { return }
         DispatchQueue.main.async {
             self.lastNightSamples = dtos.sleepSamples
         }
+    }
+
+    /// Recompute the compact plan digest the complication reads, from the latest
+    /// synced rhythm snapshot. Safe to call on launch and on each sync.
+    static func refreshPlanSummary() {
+        guard let snapshot = RhythmSnapshot.load() else { return }
+        let plan = DayPlan.build(rhythm: snapshot.rebuild(), now: Date())
+        let summary = PlanSummary(
+            startPct: Int((plan.startingLevel * 100).rounded()),
+            isShortNight: plan.isShortNight,
+            items: plan.items.map { PlanSummary.Item(kind: $0.kind.rawValue, time: $0.time, done: $0.done) }
+        )
+        SharedStore.planSummary = try? JSONEncoder().encode(summary)
+        WidgetCenter.shared.reloadAllTimelines()
     }
 
     // MARK: - WCSessionDelegate
