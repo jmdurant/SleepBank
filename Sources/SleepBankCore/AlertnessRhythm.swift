@@ -168,11 +168,11 @@ public struct AlertnessRhythm: Sendable {
 
     /// Sleep pressure (Process S) at a moment: rises from the start-of-day deficit
     /// toward saturation, minus the relief from naps taken so far.
-    private func pressure(at date: Date, extraNap: Nap? = nil) -> Double {
+    private func pressure(at date: Date, extraNaps: [Nap] = []) -> Double {
         let awake = max(0, date.timeIntervalSince(wakeTime) / 3600)
         var s = 1 - (1 - sleepDebt) * exp(-awake / Self.tauRise)
         for nap in naps { s -= relief(of: nap, at: date) }
-        if let extraNap { s -= relief(of: extraNap, at: date) }
+        for nap in extraNaps { s -= relief(of: nap, at: date) }
         return max(0, s)
     }
 
@@ -227,8 +227,8 @@ public struct AlertnessRhythm: Sendable {
 
     /// Raw (C − S + morning light + activity arousal) before display normalization —
     /// the single source of truth for every sampling method.
-    private func rawLevel(at date: Date, extraNap: Nap? = nil, activities: [Activity] = []) -> Double {
-        circadian(hour: hour(of: date)) - pressure(at: date, extraNap: extraNap) + morningLift(at: date)
+    private func rawLevel(at date: Date, extraNaps: [Nap] = [], activities: [Activity] = []) -> Double {
+        circadian(hour: hour(of: date)) - pressure(at: date, extraNaps: extraNaps) + morningLift(at: date)
             + activities.reduce(0) { $0 + arousal(of: $1, at: date) }
     }
 
@@ -254,7 +254,7 @@ public struct AlertnessRhythm: Sendable {
     /// Predicted alertness if a hypothetical nap were taken `napAt`.
     public func level(at date: Date, withNapAt napAt: Date, type: NapType) -> Double {
         let nap = Nap(end: napAt.addingTimeInterval(type.targetWakeAfterOnset), type: type, fullness: 1)
-        return normalize(rawLevel(at: date, extraNap: nap))
+        return normalize(rawLevel(at: date, extraNaps: [nap]))
     }
 
     /// The baseline curve sampled across a window.
@@ -268,20 +268,20 @@ public struct AlertnessRhythm: Sendable {
         let nap = Nap(end: napAt.addingTimeInterval(napType.targetWakeAfterOnset),
                       type: napType, fullness: 1)
         return stride(from: start, through: end, step: step).map {
-            Reading(date: $0, level: normalize(rawLevel(at: $0, extraNap: nap)))
+            Reading(date: $0, level: normalize(rawLevel(at: $0, extraNaps: [nap])))
         }
     }
 
-    /// Alertness at a moment under a whole plan — an optional nap plus any activities.
-    public func level(at date: Date, nap: Nap?, activities: [Activity]) -> Double {
-        normalize(rawLevel(at: date, extraNap: nap, activities: activities))
+    /// Alertness at a moment under a whole plan — any number of naps plus activities.
+    public func level(at date: Date, naps: [Nap], activities: [Activity]) -> Double {
+        normalize(rawLevel(at: date, extraNaps: naps, activities: activities))
     }
 
-    /// The combined "with your plan" curve: an optional nap stacked with activities.
-    public func planReadings(nap: Nap?, activities: [Activity],
+    /// The combined "with your plan" curve: naps stacked with activities.
+    public func planReadings(naps: [Nap], activities: [Activity],
                              from start: Date, to end: Date, step: TimeInterval = 900) -> [Reading] {
         stride(from: start, through: end, step: step).map {
-            Reading(date: $0, level: normalize(rawLevel(at: $0, extraNap: nap, activities: activities)))
+            Reading(date: $0, level: normalize(rawLevel(at: $0, extraNaps: naps, activities: activities)))
         }
     }
 }

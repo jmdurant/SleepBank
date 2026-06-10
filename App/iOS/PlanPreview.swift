@@ -17,4 +17,7 @@ final class PlanPreview {
     var level: Double?
     /// When that peak occurs.
     var peakTime: Date?
+    /// A time the user is scrubbing to on the bare curve (no plan) — the battery reads
+    /// the level there. Nil = show "now". Tapping the battery clears it.
+    var scrubTime: Date?
 }

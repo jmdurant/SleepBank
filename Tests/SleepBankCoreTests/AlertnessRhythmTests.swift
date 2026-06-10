@@ -80,8 +80,8 @@ final class AlertnessRhythmTests: XCTestCase {
         let soon = at(14.6)   // ~35 min in, near the arousal peak
         let walk = AlertnessRhythm.Activity(intensity: .walk, outdoors: true, start: start, duration: 1800)
         let workout = AlertnessRhythm.Activity(intensity: .workout, outdoors: false, start: start, duration: 3600)
-        let walkLift = r.level(at: soon, nap: nil, activities: [walk]) - r.level(at: soon)
-        let workoutLift = r.level(at: soon, nap: nil, activities: [workout]) - r.level(at: soon)
+        let walkLift = r.level(at: soon, naps: [], activities: [walk]) - r.level(at: soon)
+        let workoutLift = r.level(at: soon, naps: [], activities: [workout]) - r.level(at: soon)
         let napLift = r.level(at: soon, withNapAt: at(14.0), type: .power) - r.level(at: soon)
         XCTAssertGreaterThan(walkLift, 0)
         XCTAssertGreaterThan(workoutLift, walkLift)
@@ -92,8 +92,8 @@ final class AlertnessRhythmTests: XCTestCase {
         let r = rhythm(debt: 0.3)
         let start = at(14.0)
         let workout = AlertnessRhythm.Activity(intensity: .workout, outdoors: false, start: start, duration: 3600)
-        let soon = r.level(at: at(14.6), nap: nil, activities: [workout]) - r.level(at: at(14.6))
-        let later = r.level(at: at(17.5), nap: nil, activities: [workout]) - r.level(at: at(17.5))
+        let soon = r.level(at: at(14.6), naps: [], activities: [workout]) - r.level(at: at(14.6))
+        let later = r.level(at: at(17.5), naps: [], activities: [workout]) - r.level(at: at(17.5))
         XCTAssertGreaterThan(soon, later)
         XCTAssertEqual(later, 0, accuracy: 0.02)   // mostly gone ~3.5 h on
     }
@@ -102,8 +102,8 @@ final class AlertnessRhythmTests: XCTestCase {
         let r = rhythm(debt: 0.3)
         let t = at(15.0)
         let workout = AlertnessRhythm.Activity(intensity: .workout, outdoors: false, start: at(14.5), duration: 3600)
-        let napOnly = r.level(at: t, nap: AlertnessRhythm.Nap(end: at(13.5), type: .power, fullness: 1), activities: [])
-        let napPlus = r.level(at: t, nap: AlertnessRhythm.Nap(end: at(13.5), type: .power, fullness: 1), activities: [workout])
+        let napOnly = r.level(at: t, naps: [AlertnessRhythm.Nap(end: at(13.5), type: .power, fullness: 1)], activities: [])
+        let napPlus = r.level(at: t, naps: [AlertnessRhythm.Nap(end: at(13.5), type: .power, fullness: 1)], activities: [workout])
         XCTAssertGreaterThan(napPlus, napOnly)
     }
 

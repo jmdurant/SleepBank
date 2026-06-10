@@ -2,13 +2,10 @@
 //  AlertnessCurveView.swift
 //  SleepBank
 //
-//  The day's predicted alertness rhythm (two-process model) — a non-linear curve
-//  with the late-morning rise, the post-lunch dip, the evening "second wind," and
-//  the night plunge. Last night's sleep sets where the whole curve sits. On top of
-//  that you can *plan*: drag a nap, a walk, or a workout along the curve and watch
-//  the combined "your plan" line lift in real time — then schedule it. Late or
-//  intense additions turn orange (they'd cost tonight's sleep). Honest companion to
-//  the energy ring: the ring is right-now, this is the whole arc.
+//  The day's predicted alertness rhythm (two-process model), plus an interactive
+//  planner: add any number of naps, walks, and workouts, drag each along the curve,
+//  and watch the combined "your plan" line lift in real time — then schedule them.
+//  Late or bright-evening additions turn orange (they'd cost tonight's sleep).
 //
 
 import SwiftUI
@@ -19,7 +16,6 @@ struct AlertnessCurveView: View {
     var health = HealthKitService.shared
     var store = NapDecisionStore.shared
 
-    /// Which intervention the drag/readout currently edits.
     enum Intervention: String, CaseIterable, Identifiable {
         case nap, walk, workout
         var id: String { rawValue }
@@ -40,24 +36,46 @@ struct AlertnessCurveView: View {
         }
     }
 
-    /// A planned activity bout's editable state.
-    struct ActivityPlan {
-        var on = false
+    /// One planned intervention. Multiples of any kind are allowed.
+    struct PlanItem: Identifiable {
+        let id = UUID()
+        var kind: Intervention
+        var napType: NapType = .power
         var at: Date?
         var minutes: Double
         var outdoors: Bool
+        static func make(_ kind: Intervention) -> PlanItem {
+            PlanItem(kind: kind, minutes: kind == .workout ? 60 : 30, outdoors: kind != .workout)
+        }
     }
 
-    @State private var selected: Intervention = .nap
-    @State private var napOn = true
-    @State private var napType: NapType = .power
-    @State private var scrubNapAt: Date?
-    @State private var walk = ActivityPlan(minutes: 30, outdoors: true)
-    @State private var workout = ActivityPlan(minutes: 60, outdoors: false)
-    /// The intervention + time most recently scheduled, for ✓ feedback.
+    /// A resolved item: its placed span and the model object it produces.
+    struct Resolved {
+        let item: PlanItem
+        let start: Date
+        let end: Date
+        let nap: AlertnessRhythm.Nap?
+        let activity: AlertnessRhythm.Activity?
+    }
+
+    struct Marker: Identifiable {
+        let id: UUID
+        let kind: Intervention
+        let start: Date
+        let level: Double
+        let late: Bool
+        let lightLate: Bool
+    }
+    struct Band: Identifiable { let id: UUID; let start: Date; let end: Date; let late: Bool }
+    struct GainPoint { let date: Date; let bare: Double; let actual: Double }
+
+    @State private var items: [PlanItem] = [.make(.nap)]
+    @State private var focusedID: UUID?
     @State private var scheduledKey: String?
     @State private var editing = false
     @State private var isDragging = false
+
+    private var focused: PlanItem? { items.first { $0.id == focusedID } ?? items.first }
 
     // MARK: - Body
 
@@ -72,52 +90,31 @@ struct AlertnessCurveView: View {
             let idealReadings = ideal.readings(from: window.start, to: window.end, step: 1200)
             let gain = gainReadings(rhythm: rhythm, now: now, window: window)
 
-            // Resolve the plan in order (nap → walk → workout), each auto-placed into the
-            // first free slot so a freshly-added one spreads out instead of stacking.
-            let napRange = napOn ? napScrubRange(rhythm: rhythm, now: now, window: window, type: napType) : nil
-            let napAt: Date? = napRange.map { clampNap(scrubNapAt ?? now, to: $0) }
-            let nap: AlertnessRhythm.Nap? = napAt.map {
-                .init(end: $0.addingTimeInterval(napType.targetWakeAfterOnset), type: napType, fullness: 1)
-            }
-            let napIv = napAt.map { ($0, $0.addingTimeInterval(napType.targetWakeAfterOnset)) }
-            let walkRange = activityRange(plan: walk, now: now, window: window)
-            let walkAct = resolved(walk, .walk, range: walkRange, now: now,
-                                   obstacles: [napIv].compactMap { $0 })
-            let walkIv = walkAct.map { ($0.start, $0.start.addingTimeInterval($0.duration)) }
-            let workoutRange = activityRange(plan: workout, now: now, window: window)
-            let workoutAct = resolved(workout, .workout, range: workoutRange, now: now,
-                                      obstacles: [napIv, walkIv].compactMap { $0 })
-            let workoutIv = workoutAct.map { ($0.start, $0.start.addingTimeInterval($0.duration)) }
-            let activities = [walkAct, workoutAct].compactMap { $0 }
-
-            // The combined "your plan" curve, branching off where the first item starts.
-            let starts = [napAt, walkAct?.start, workoutAct?.start].compactMap { $0 }
-            let planStart = starts.min()
+            let resolved = resolveItems(rhythm: rhythm, now: now, window: window)
+            let naps = resolved.compactMap(\.nap)
+            let activities = resolved.compactMap(\.activity)
+            let planStart = resolved.map(\.start).min()
             let projection: [AlertnessRhythm.Reading] = planStart.map {
-                rhythm.planReadings(nap: nap, activities: activities, from: $0, to: window.end, step: 300)
+                rhythm.planReadings(naps: naps, activities: activities, from: $0, to: window.end, step: 300)
             } ?? []
-
-            let markers = buildMarkers(rhythm: rhythm, now: now, nap: nap, napAt: napAt,
-                                       activities: activities)
-            let bands = buildBands(napAt: napAt, activities: activities, markers: markers)
+            let markers = buildMarkers(resolved: resolved, rhythm: rhythm, now: now, naps: naps, activities: activities)
+            let bands = resolved.map { r in
+                Band(id: r.item.id, start: r.start, end: r.end,
+                     late: markers.first { $0.id == r.item.id }?.late ?? false)
+            }
             let yRange = yDomain(baseline: baseline, ideal: idealReadings, projection: projection, nowLevel: nowLevel)
-            let onDrag = makeDragHandler(napRange: napRange, walkRange: walkRange, workoutRange: workoutRange,
-                                         napIv: napIv, walkIv: walkIv, workoutIv: workoutIv, markers: markers)
-            // The peak the draft plan reaches — drives the home battery's live preview.
-            let planActive = nap != nil || !activities.isEmpty
-            let peak = planActive ? projection.max(by: { $0.level < $1.level }) : nil
+            let onDrag = makeDragHandler(resolved: resolved, markers: markers, rhythm: rhythm, now: now, window: window)
+            let peak = projection.max(by: { $0.level < $1.level })
 
             VStack(alignment: .leading, spacing: 10) {
                 header(rhythm: rhythm, now: now, markers: markers)
                 chart(baseline: baseline, projection: projection, ideal: idealReadings, gain: gain,
-                      now: now, nowLevel: nowLevel, yRange: yRange, markers: markers, bands: bands,
-                      onDrag: onDrag)
+                      now: now, nowLevel: nowLevel, yRange: yRange, markers: markers, bands: bands, onDrag: onDrag)
                     .frame(height: 170)
                 legend(hasPlan: !projection.isEmpty, planLate: markers.contains { $0.late })
-                interventionPicker
-                if selected == .nap, napOn { napTypeToggle }
-                selectedReadout(rhythm: rhythm, now: now, markers: markers,
-                                napAt: napAt, projection: projection)
+                interventionPicker(markers: markers)
+                if focused?.kind == .nap { napTypeToggle }
+                readout(rhythm: rhythm, markers: markers, projection: projection)
                 Divider()
                 daylightRow()
             }
@@ -126,27 +123,24 @@ struct AlertnessCurveView: View {
             .sheet(isPresented: $editing) { activityEditor }
             .onAppear { PlanPreview.shared.level = peak?.level; PlanPreview.shared.peakTime = peak?.date }
             .onChange(of: peak?.level) { _, lvl in
-                PlanPreview.shared.level = lvl
-                PlanPreview.shared.peakTime = peak?.date
+                PlanPreview.shared.level = lvl; PlanPreview.shared.peakTime = peak?.date
             }
             .onDisappear { PlanPreview.shared.level = nil; PlanPreview.shared.peakTime = nil }
         }
     }
 
-    // MARK: - Header
+    // MARK: - Header (live icon + time + schedule)
 
     private func header(rhythm: AlertnessRhythm, now: Date, markers: [Marker]) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
                 Text("Your day · \(AlertnessProvider.phaseLabel(now))").font(.headline)
                 Spacer()
-                if let m = markers.first(where: { $0.kind == selected }) {
+                if let m = focusedMarker(markers) {
                     HStack(spacing: 4) {
-                        Image(systemName: m.late ? "exclamationmark.triangle.fill" : m.kind.icon)
-                            .font(.caption2)
+                        Image(systemName: m.late ? "exclamationmark.triangle.fill" : m.kind.icon).font(.caption2)
                         Text(m.start, format: .dateTime.hour().minute())
-                            .font(.subheadline.weight(.semibold)).monospacedDigit()
-                            .contentTransition(.numericText())
+                            .font(.subheadline.weight(.semibold)).monospacedDigit().contentTransition(.numericText())
                     }
                     .foregroundStyle(m.late ? .orange : m.kind.tint)
                     scheduleButton(m)
@@ -156,61 +150,51 @@ struct AlertnessCurveView: View {
         }
     }
 
-    /// The "+" / "✓" that schedules the selected intervention at its current time.
     private func scheduleButton(_ m: Marker) -> some View {
-        let done = scheduledKey == key(m.kind, m.start)
+        let done = scheduledKey == key(m)
         let tint: Color = done ? .green : (m.late ? .orange : m.kind.tint)
         return Button {
             Task {
                 let ok: Bool
-                switch m.kind {
-                case .nap:
-                    ok = await PlanNotificationService.shared.scheduleNap(at: m.start, type: napType)
-                case .walk, .workout:
+                if m.kind == .nap {
+                    ok = await PlanNotificationService.shared.scheduleNap(at: m.start, type: focused?.napType ?? .power)
+                } else {
                     ok = await PlanNotificationService.shared.scheduleActivity(
-                        at: m.start, title: m.kind.label, outdoors: outdoors(for: m.kind))
+                        at: m.start, title: m.kind.label, outdoors: focused?.outdoors ?? true)
                 }
-                if ok { scheduledKey = key(m.kind, m.start) }
+                if ok { scheduledKey = key(m) }
             }
         } label: {
             Image(systemName: done ? "checkmark.circle.fill" : "plus.circle.fill")
-                .font(.title3).foregroundStyle(tint)
-                .symbolEffect(.bounce, value: done)
+                .font(.title3).foregroundStyle(tint).symbolEffect(.bounce, value: done)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(done ? "Scheduled" : "Schedule \(m.kind.label) at this time")
+        .accessibilityLabel(done ? "Scheduled" : "Schedule \(m.kind.label)")
     }
 
-    // MARK: - Intervention picker + editors
+    // MARK: - Picker + editors
 
-    private var interventionPicker: some View {
+    private func interventionPicker(markers: [Marker]) -> some View {
         HStack(spacing: 8) {
             ForEach(Intervention.allCases) { kind in
-                let on = isOn(kind)
+                let count = items.filter { $0.kind == kind }.count
+                let isFocusedKind = focused?.kind == kind
                 Button {
-                    if selected == kind {
-                        toggle(kind)   // tapping the focused chip removes it from the plan
-                        if !isOn(kind) {   // …and focus jumps to one that's still on the curve
-                            selected = Intervention.allCases.first(where: isOn) ?? kind
-                        }
-                    } else {
-                        selected = kind            // focus it
-                        if !isOn(kind) { toggle(kind) }   // adding it if it wasn't on
-                    }
+                    if let first = items.first(where: { $0.kind == kind }) { focusedID = first.id }
+                    else { addItem(kind) }
                     scheduledKey = nil
                 } label: {
-                    let focused = selected == kind && on   // only an *active* chip shows as focused
                     HStack(spacing: 5) {
                         Image(systemName: kind.icon).font(.caption2)
                         Text(kind.label).font(.caption.weight(.medium))
-                        if on { Image(systemName: "checkmark").font(.system(size: 8, weight: .bold)) }
+                        if count == 1 { Image(systemName: "checkmark").font(.system(size: 8, weight: .bold)) }
+                        else if count > 1 { Text("×\(count)").font(.caption2.weight(.bold)) }
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 6)
-                    .background((focused ? kind.tint.opacity(0.22) : Color.secondary.opacity(0.12)),
-                                in: Capsule())
-                    .foregroundStyle(focused ? kind.tint : .secondary)
-                    .overlay(Capsule().stroke(focused ? kind.tint : .clear, lineWidth: 1))
+                    .background((isFocusedKind ? kind.tint.opacity(0.22) : Color.secondary.opacity(0.12)), in: Capsule())
+                    .foregroundStyle(isFocusedKind ? kind.tint : .secondary)
+                    .overlay(Capsule().stroke(isFocusedKind ? kind.tint : .clear, lineWidth: 1))
                 }
                 .buttonStyle(.plain)
             }
@@ -218,62 +202,71 @@ struct AlertnessCurveView: View {
     }
 
     private var napTypeToggle: some View {
-        Picker("Nap type", selection: $napType) {
+        Picker("Nap type", selection: napTypeBinding) {
             Text("Power · 20 min").tag(NapType.power)
             Text("Cycle · 90 min").tag(NapType.cycle)
         }
         .pickerStyle(.segmented)
     }
 
-    /// Hold-to-edit sheet for the selected activity: duration + indoors/outdoors.
     private var activityEditor: some View {
-        let isWalk = selected == .walk
-        return NavigationStack {
-            Form {
-                Section(selected.label) {
-                    Stepper(value: isWalk ? $walk.minutes : $workout.minutes, in: 10...120, step: 5) {
-                        Text("\(Int(isWalk ? walk.minutes : workout.minutes)) min").monospacedDigit()
+        Group {
+            if let idx = items.firstIndex(where: { $0.id == focusedID }), items[idx].kind != .nap {
+                NavigationStack {
+                    Form {
+                        Section(items[idx].kind.label) {
+                            Stepper(value: $items[idx].minutes, in: 10...120, step: 5) {
+                                Text("\(Int(items[idx].minutes)) min").monospacedDigit()
+                            }
+                            Picker("Where", selection: $items[idx].outdoors) {
+                                Text("Outside ☀️").tag(true)
+                                Text("Inside").tag(false)
+                            }
+                            .pickerStyle(.segmented)
+                            Text(items[idx].outdoors
+                                 ? "Outside adds daylight — anchors your rhythm and helps you sleep tonight."
+                                 : "Indoors gives the movement boost without the light/anchoring benefit.")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
                     }
-                    Picker("Where", selection: isWalk ? $walk.outdoors : $workout.outdoors) {
-                        Text("Outside ☀️").tag(true)
-                        Text("Inside").tag(false)
-                    }
-                    .pickerStyle(.segmented)
-                    Text((isWalk ? walk.outdoors : workout.outdoors)
-                         ? "Outside adds daylight — anchors your rhythm and helps you sleep tonight."
-                         : "Indoors gives the movement boost without the light/anchoring benefit.")
-                        .font(.caption).foregroundStyle(.secondary)
+                    .navigationTitle("Edit \(items[idx].kind.label)")
+                    .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { editing = false } } }
                 }
+                .presentationDetents([.height(260)])
             }
-            .navigationTitle("Edit \(selected.label)")
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { editing = false } } }
         }
-        .presentationDetents([.height(260)])
     }
 
-    // MARK: - Selected readout
+    // MARK: - Readout
 
     @ViewBuilder
-    private func selectedReadout(rhythm: AlertnessRhythm, now: Date, markers: [Marker],
-                                 napAt: Date?, projection: [AlertnessRhythm.Reading]) -> some View {
-        if let m = markers.first(where: { $0.kind == selected }) {
-            HStack(alignment: .top, spacing: 6) {
-                Image(systemName: m.late ? "exclamationmark.triangle.fill" : m.kind.icon)
-                    .font(.caption2).foregroundStyle(m.late ? .orange : m.kind.tint)
-                Text(readoutText(m, rhythm: rhythm, projection: projection))
-                    .font(.caption2).foregroundStyle(m.late ? .orange : .secondary)
-                if selected != .nap {
-                    Spacer()
-                    Button { editing = true } label: {
-                        Image(systemName: "slider.horizontal.3").font(.caption2)
+    private func readout(rhythm: AlertnessRhythm, markers: [Marker], projection: [AlertnessRhythm.Reading]) -> some View {
+        if let m = focusedMarker(markers), let f = focused {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .top, spacing: 6) {
+                    Image(systemName: m.late ? "exclamationmark.triangle.fill" : m.kind.icon)
+                        .font(.caption2).foregroundStyle(m.late ? .orange : m.kind.tint)
+                    Text(readoutText(m, rhythm: rhythm, projection: projection))
+                        .font(.caption2).foregroundStyle(m.late ? .orange : .secondary)
+                }
+                HStack(spacing: 14) {
+                    Button { addItem(f.kind) } label: {
+                        Label("Add another \(f.kind.label.lowercased())", systemImage: "plus")
+                            .font(.caption2)
                     }
-                    .buttonStyle(.plain).foregroundStyle(.secondary)
-                    .accessibilityLabel("Edit duration and location")
+                    .buttonStyle(.plain).foregroundStyle(f.kind.tint)
+                    if f.kind != .nap {
+                        Button { editing = true } label: { Label("Edit", systemImage: "slider.horizontal.3").font(.caption2) }
+                            .buttonStyle(.plain).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button { removeFocused() } label: { Label("Remove", systemImage: "xmark").font(.caption2) }
+                        .buttonStyle(.plain).foregroundStyle(.secondary)
                 }
             }
-        } else if let g = gainNowPct(rhythm: rhythm, now: now), hasInterventions(rhythm) {
+        } else if let g = gainNowPct(rhythm: rhythm, now: .now), hasInterventions(rhythm) {
             gainCallout(g, rhythm: rhythm)
-        } else if let gap = idealGap(rhythm: rhythm, now: now) {
+        } else if let gap = idealGap(rhythm: rhythm, now: .now) {
             idealCallout(gap)
         }
     }
@@ -282,32 +275,29 @@ struct AlertnessCurveView: View {
                              projection: [AlertnessRhythm.Reading]) -> LocalizedStringKey {
         let t = m.start.formatted(.dateTime.hour().minute())
         if m.kind == .nap {
-            if m.late {
-                return "A nap at **\(t)** is late — it keeps you alert near bedtime and may delay tonight's sleep. Earlier is better."
-            }
+            if m.late { return "A nap at **\(t)** is late — it keeps you alert near bedtime and may delay tonight's sleep." }
             let boost = peakBoost(projection: projection, rhythm: rhythm)
             return "Nap at **\(t)** → up by ~**\(boost)%** through the afternoon. Tap + to schedule."
         }
-        // Activity
         let what = m.kind.label.lowercased()
         if m.late {
             return m.lightLate
-                ? "A \(what) outside at **\(t)** is in bright evening light — this close to bed it can delay your sleep. Earlier, or after dark, is kinder to your night."
+                ? "A \(what) outside at **\(t)** is in bright evening light — this close to bed it can delay your sleep."
                 : "A \(what) at **\(t)** is late — the arousal lingers and may delay tonight's sleep."
         }
         let morning = Calendar.current.component(.hour, from: m.start) < 11
-        if outdoors(for: m.kind) && morning {
-            return "A \(what) outside at **\(t)** → a lift now, **plus** it anchors your rhythm and helps you sleep tonight. Tap + to schedule."
+        if (focused?.outdoors ?? false) && morning {
+            return "A \(what) outside at **\(t)** → a lift now, **plus** it anchors your rhythm and helps you sleep tonight."
         }
-        if outdoors(for: m.kind) {
-            return "A \(what) outside at **\(t)** → a modest lift, plus daylight to steady your rhythm. Tap + to schedule."
+        if focused?.outdoors ?? false {
+            return "A \(what) outside at **\(t)** → a modest lift, plus daylight to steady your rhythm."
         }
         return "A \(what) at **\(t)** → a modest, ~1–2 h lift. Tap + to schedule."
     }
 
     private func peakBoost(projection: [AlertnessRhythm.Reading], rhythm: AlertnessRhythm) -> Int {
-        guard let peak = projection.max(by: { $0.level < $1.level }) else { return 0 }
-        return max(0, Int(((peak.level - rhythm.level(at: peak.date)) * 100).rounded()))
+        guard let p = projection.max(by: { $0.level < $1.level }) else { return 0 }
+        return max(0, Int(((p.level - rhythm.level(at: p.date)) * 100).rounded()))
     }
 
     private func whyLine(_ rhythm: AlertnessRhythm) -> String {
@@ -320,32 +310,15 @@ struct AlertnessCurveView: View {
 
     // MARK: - Chart
 
-    /// A point on the plan curve the user can drag.
-    struct Marker: Identifiable {
-        let kind: Intervention
-        let start: Date
-        let level: Double
-        let late: Bool
-        let lightLate: Bool   // late specifically because of bright evening light (outdoors, before sunset)
-        var id: String { kind.rawValue }
-    }
-    /// A shaded duration span (nap or activity bout).
-    struct Band: Identifiable { let id: String; let start: Date; let end: Date; let late: Bool }
-    struct GainPoint { let date: Date; let bare: Double; let actual: Double }
-
-    private func chart(baseline: [AlertnessRhythm.Reading],
-                       projection: [AlertnessRhythm.Reading],
-                       ideal: [AlertnessRhythm.Reading],
-                       gain: [GainPoint],
+    private func chart(baseline: [AlertnessRhythm.Reading], projection: [AlertnessRhythm.Reading],
+                       ideal: [AlertnessRhythm.Reading], gain: [GainPoint],
                        now: Date, nowLevel: Double, yRange: ClosedRange<Double>,
-                       markers: [Marker], bands: [Band],
-                       onDrag: @escaping (Date, Bool) -> Void) -> some View {
+                       markers: [Marker], bands: [Band], onDrag: @escaping (Date, Bool) -> Void) -> some View {
         Chart {
             ForEach(baseline, id: \.date) { r in
                 AreaMark(x: .value("Time", r.date), y: .value("Alertness", r.level))
-                    .foregroundStyle(.linearGradient(
-                        colors: [.indigo.opacity(0.16), .indigo.opacity(0.01)],
-                        startPoint: .top, endPoint: .bottom))
+                    .foregroundStyle(.linearGradient(colors: [.indigo.opacity(0.16), .indigo.opacity(0.01)],
+                                                     startPoint: .top, endPoint: .bottom))
             }
             ForEach(bands) { b in
                 RectangleMark(xStart: .value("From", b.start), xEnd: .value("To", b.end),
@@ -353,52 +326,39 @@ struct AlertnessCurveView: View {
                     .foregroundStyle((b.late ? Color.orange : .mint).opacity(0.10))
             }
             ForEach(gain, id: \.date) { g in
-                AreaMark(x: .value("Time", g.date),
-                         yStart: .value("Floor", g.bare), yEnd: .value("You", g.actual))
+                AreaMark(x: .value("Time", g.date), yStart: .value("Floor", g.bare), yEnd: .value("You", g.actual))
                     .foregroundStyle(.green.opacity(0.22))
             }
             ForEach(gain, id: \.date) { g in
-                LineMark(x: .value("Time", g.date), y: .value("Alertness", g.bare),
-                         series: .value("S", "floor"))
+                LineMark(x: .value("Time", g.date), y: .value("Alertness", g.bare), series: .value("S", "floor"))
                     .foregroundStyle(.green.opacity(0.55))
-                    .lineStyle(StrokeStyle(lineWidth: 1, dash: [2, 3]))
-                    .interpolationMethod(.catmullRom)
+                    .lineStyle(StrokeStyle(lineWidth: 1, dash: [2, 3])).interpolationMethod(.catmullRom)
             }
             ForEach(ideal, id: \.date) { r in
-                LineMark(x: .value("Time", r.date), y: .value("Alertness", r.level),
-                         series: .value("S", "ideal"))
+                LineMark(x: .value("Time", r.date), y: .value("Alertness", r.level), series: .value("S", "ideal"))
                     .foregroundStyle(.teal.opacity(0.6))
-                    .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [4, 4]))
-                    .interpolationMethod(.catmullRom)
+                    .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [4, 4])).interpolationMethod(.catmullRom)
             }
             ForEach(baseline, id: \.date) { r in
-                LineMark(x: .value("Time", r.date), y: .value("Alertness", r.level),
-                         series: .value("S", "you"))
-                    .foregroundStyle(.indigo)
-                    .interpolationMethod(.catmullRom)
+                LineMark(x: .value("Time", r.date), y: .value("Alertness", r.level), series: .value("S", "you"))
+                    .foregroundStyle(.indigo).interpolationMethod(.catmullRom)
             }
             let planLate = markers.contains { $0.late }
             ForEach(projection, id: \.date) { r in
-                LineMark(x: .value("Time", r.date), y: .value("Alertness", r.level),
-                         series: .value("S", "plan"))
+                LineMark(x: .value("Time", r.date), y: .value("Alertness", r.level), series: .value("S", "plan"))
                     .foregroundStyle(planLate ? .orange : .mint)
-                    .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 4]))
-                    .interpolationMethod(.catmullRom)
+                    .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 4])).interpolationMethod(.catmullRom)
             }
             RuleMark(x: .value("Now", now))
-                .foregroundStyle(.secondary.opacity(0.4))
-                .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
-            PointMark(x: .value("Now", now), y: .value("Alertness", nowLevel))
-                .foregroundStyle(.white).symbolSize(120)
-            PointMark(x: .value("Now", now), y: .value("Alertness", nowLevel))
-                .foregroundStyle(.indigo).symbolSize(60)
+                .foregroundStyle(.secondary.opacity(0.4)).lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
+            PointMark(x: .value("Now", now), y: .value("Alertness", nowLevel)).foregroundStyle(.white).symbolSize(120)
+            PointMark(x: .value("Now", now), y: .value("Alertness", nowLevel)).foregroundStyle(.indigo).symbolSize(60)
             ForEach(markers) { m in
+                let isFocused = m.id == focused?.id
                 PointMark(x: .value("At", m.start), y: .value("Alertness", m.level))
-                    .foregroundStyle(.white)
-                    .symbolSize(m.kind == selected ? 200 : 150)
+                    .foregroundStyle(.white).symbolSize(isFocused ? 200 : 150)
                 PointMark(x: .value("At", m.start), y: .value("Alertness", m.level))
-                    .foregroundStyle(m.late ? .orange : m.kind.tint)
-                    .symbolSize(m.kind == selected ? 120 : 80)
+                    .foregroundStyle(m.late ? .orange : m.kind.tint).symbolSize(isFocused ? 120 : 80)
                     .annotation(position: .top, spacing: 2) {
                         Image(systemName: m.late ? "exclamationmark.triangle.fill" : m.kind.icon)
                             .font(.system(size: 9)).foregroundStyle(m.late ? .orange : m.kind.tint)
@@ -407,11 +367,7 @@ struct AlertnessCurveView: View {
         }
         .chartYScale(domain: yRange)
         .chartYAxis(.hidden)
-        .chartXAxis {
-            AxisMarks(values: .stride(by: .hour, count: 3)) { _ in
-                AxisGridLine(); AxisValueLabel(format: .dateTime.hour())
-            }
-        }
+        .chartXAxis { AxisMarks(values: .stride(by: .hour, count: 3)) { _ in AxisGridLine(); AxisValueLabel(format: .dateTime.hour()) } }
         .chartOverlay { proxy in
             GeometryReader { geo in
                 if let plot = proxy.plotFrame {
@@ -421,12 +377,11 @@ struct AlertnessCurveView: View {
                             .onChanged { v in
                                 let x = v.location.x - rect.minX
                                 if let date: Date = proxy.value(atX: x, as: Date.self) {
-                                    onDrag(date, !isDragging)   // first touch grabs the nearest marker
-                                    isDragging = true
+                                    onDrag(date, !isDragging); isDragging = true
                                 }
                             }
                             .onEnded { _ in isDragging = false })
-                        .onLongPressGesture { if selected != .nap { editing = true } }
+                        .onLongPressGesture { if focused?.kind != .nap { editing = true } }
                 }
             }
         }
@@ -446,145 +401,115 @@ struct AlertnessCurveView: View {
         HStack(spacing: 4) { Circle().fill(color).frame(width: 7, height: 7); Text(text) }
     }
 
-    // MARK: - Plan assembly
+    // MARK: - Plan resolution
 
-    private func buildMarkers(rhythm: AlertnessRhythm, now: Date, nap: AlertnessRhythm.Nap?,
-                              napAt: Date?, activities: [AlertnessRhythm.Activity]) -> [Marker] {
+    private func resolveItems(rhythm: AlertnessRhythm, now: Date, window: (start: Date, end: Date)) -> [Resolved] {
+        var out: [Resolved] = []
+        var occupied: [(Date, Date)] = []
+        for item in items {
+            let dur = item.kind == .nap ? item.napType.targetWakeAfterOnset : item.minutes * 60
+            guard let range = itemRange(kind: item.kind, dur: dur, now: now, wake: rhythm.wakeTime, window: window) else { continue }
+            let start: Date = item.at.map { snap(min(max($0, range.earliest), range.latest), dur: dur, range: range, obstacles: occupied) }
+                              ?? firstFreeSlot(range: range, dur: dur, obstacles: occupied)
+            let end = start.addingTimeInterval(dur)
+            occupied.append((start, end))
+            let nap = item.kind == .nap ? AlertnessRhythm.Nap(end: end, type: item.napType, fullness: 1) : nil
+            let act = item.kind != .nap
+                ? AlertnessRhythm.Activity(id: item.id.uuidString, intensity: item.kind == .walk ? .walk : .workout,
+                                           outdoors: item.outdoors, start: start, duration: dur)
+                : nil
+            out.append(Resolved(item: item, start: start, end: end, nap: nap, activity: act))
+        }
+        return out
+    }
+
+    private func buildMarkers(resolved: [Resolved], rhythm: AlertnessRhythm, now: Date,
+                              naps: [AlertnessRhythm.Nap], activities: [AlertnessRhythm.Activity]) -> [Marker] {
         let bedtime = rhythm.wakeTime.addingTimeInterval(16 * 3600)
         let sunset = localSunset(now: now)
         let preBed = bedtime.addingTimeInterval(-3 * 3600)
-        var out: [Marker] = []
-        if let napAt {
-            let lvl = rhythm.level(at: napAt, nap: nap, activities: activities)
-            let cost = rhythm.level(at: bedtime, nap: nap, activities: activities)
-                     - rhythm.level(at: bedtime, nap: nil, activities: activities)
-            out.append(Marker(kind: .nap, start: napAt, level: lvl, late: cost >= 0.065, lightLate: false))
+        let allAtBed = rhythm.level(at: bedtime, naps: naps, activities: activities)
+        return resolved.map { r in
+            let lvl = rhythm.level(at: r.start, naps: naps, activities: activities)
+            let napsW = resolved.filter { $0.item.id != r.item.id }.compactMap(\.nap)
+            let actsW = resolved.filter { $0.item.id != r.item.id }.compactMap(\.activity)
+            let marginal = allAtBed - rhythm.level(at: bedtime, naps: napsW, activities: actsW)
+            if r.item.kind == .nap {
+                return Marker(id: r.item.id, kind: .nap, start: r.start, level: lvl, late: marginal >= 0.065, lightLate: false)
+            }
+            let lightLate = r.item.outdoors && r.start < sunset && r.start >= preBed
+            return Marker(id: r.item.id, kind: r.item.kind, start: r.start, level: lvl,
+                          late: marginal >= 0.035 || lightLate, lightLate: lightLate)
         }
-        for a in activities {
-            let lvl = rhythm.level(at: a.start, nap: nap, activities: activities)
-            let costAtBed = rhythm.level(at: bedtime, nap: nap, activities: [a])
-                          - rhythm.level(at: bedtime, nap: nap, activities: [])
-            // Bright-light caution only when it's *actually* light out — an outdoor
-            // bout before sunset and within ~3 h of bed. After dark it's just movement.
-            let lightLate = a.outdoors && a.start < sunset && a.start >= preBed
-            let late = costAtBed >= 0.035 || lightLate
-            out.append(Marker(kind: a.intensity == .walk ? .walk : .workout,
-                              start: a.start, level: lvl, late: late, lightLate: lightLate))
-        }
-        return out
     }
 
-    private func buildBands(napAt: Date?, activities: [AlertnessRhythm.Activity], markers: [Marker]) -> [Band] {
-        var out: [Band] = []
-        if let napAt {
-            let late = markers.first { $0.kind == .nap }?.late ?? false
-            out.append(Band(id: "nap", start: napAt,
-                            end: napAt.addingTimeInterval(napType.targetWakeAfterOnset), late: late))
-        }
-        for a in activities {
-            let kind: Intervention = a.intensity == .walk ? .walk : .workout
-            let late = markers.first { $0.kind == kind }?.late ?? false
-            out.append(Band(id: kind.rawValue, start: a.start,
-                            end: a.start.addingTimeInterval(a.duration), late: late))
-        }
-        return out
-    }
-
-    private func resolved(_ plan: ActivityPlan, _ intensity: AlertnessRhythm.Activity.Intensity,
-                          range: (earliest: Date, latest: Date)?, now: Date,
-                          obstacles: [(Date, Date)]) -> AlertnessRhythm.Activity? {
-        guard plan.on, let range else { return nil }
-        // A user-set time is honoured; an unplaced one drops into the first free slot.
-        let at = plan.at.map { min(max($0, range.earliest), range.latest) }
-                 ?? firstFreeSlot(range: range, dur: plan.minutes * 60, obstacles: obstacles)
-        return AlertnessRhythm.Activity(id: intensity.rawValue, intensity: intensity,
-                                        outdoors: plan.outdoors, start: at, duration: plan.minutes * 60)
-    }
-
-    /// The earliest start at-or-after `now` whose span clears every obstacle, hopping
-    /// past each occupied bout in turn. Falls back to the range end if the day's full.
-    private func firstFreeSlot(range: (earliest: Date, latest: Date), dur: TimeInterval,
-                               obstacles: [(Date, Date)]) -> Date {
-        var t = range.earliest
-        for ob in obstacles.sorted(by: { $0.0 < $1.0 }) where t < ob.1 && t.addingTimeInterval(dur) > ob.0 {
-            t = ob.1
-        }
-        return min(t, range.latest)
-    }
-
-    private func makeDragHandler(napRange: (earliest: Date, latest: Date)?,
-                                 walkRange: (earliest: Date, latest: Date)?,
-                                 workoutRange: (earliest: Date, latest: Date)?,
-                                 napIv: (Date, Date)?, walkIv: (Date, Date)?,
-                                 workoutIv: (Date, Date)?, markers: [Marker]) -> (Date, Bool) -> Void {
+    private func makeDragHandler(resolved: [Resolved], markers: [Marker], rhythm: AlertnessRhythm,
+                                 now: Date, window: (start: Date, end: Date)) -> (Date, Bool) -> Void {
         { raw, isFirstTouch in
-            // First touch of a drag grabs whichever marker is nearest — so tapping the
-            // walk's icon takes control of the walk, not whatever was selected before.
-            if isFirstTouch, let near = nearestMarker(to: raw, markers: markers) {
-                selected = near.kind
-                scheduledKey = nil
-            }
-            switch selected {
-            case .nap:
-                if let r = napRange {
-                    scrubNapAt = snap(raw, dur: napType.targetWakeAfterOnset, range: r,
-                                      obstacles: [walkIv, workoutIv].compactMap { $0 })
-                }
-            case .walk:
-                if let r = walkRange {
-                    walk.at = snap(raw, dur: walk.minutes * 60, range: r,
-                                   obstacles: [napIv, workoutIv].compactMap { $0 })
-                }
-            case .workout:
-                if let r = workoutRange {
-                    workout.at = snap(raw, dur: workout.minutes * 60, range: r,
-                                      obstacles: [napIv, walkIv].compactMap { $0 })
-                }
-            }
+            if isFirstTouch, let near = nearestMarker(to: raw, markers: markers) { focusedID = near.id; scheduledKey = nil }
+            guard let fid = focusedID ?? items.first?.id, let idx = items.firstIndex(where: { $0.id == fid }) else { return }
+            let item = items[idx]
+            let dur = item.kind == .nap ? item.napType.targetWakeAfterOnset : item.minutes * 60
+            guard let range = itemRange(kind: item.kind, dur: dur, now: now, wake: rhythm.wakeTime, window: window) else { return }
+            let obstacles = resolved.filter { $0.item.id != fid }.map { ($0.start, $0.end) }
+            items[idx].at = snap(raw, dur: dur, range: range, obstacles: obstacles)
             scheduledKey = nil
         }
     }
 
-    /// The active marker nearest a touch point in time, within a grab radius.
     private func nearestMarker(to date: Date, markers: [Marker]) -> Marker? {
         markers.filter { abs($0.start.timeIntervalSince(date)) <= 35 * 60 }
                .min { abs($0.start.timeIntervalSince(date)) < abs($1.start.timeIntervalSince(date)) }
     }
 
-    /// Clamp a dragged start into range AND out of every occupied span — snapping to
-    /// just before or just after whichever obstacle it hits (the side nearer the drag),
-    /// so a nap, walk, and workout can't overlap in time.
+    // MARK: - Item mutation
+
+    private func addItem(_ kind: Intervention) {
+        let item = PlanItem.make(kind)
+        items.append(item); focusedID = item.id; scheduledKey = nil
+    }
+    private func removeFocused() {
+        if let id = focusedID ?? items.first?.id { items.removeAll { $0.id == id } }
+        focusedID = items.first?.id; scheduledKey = nil
+    }
+    private func focusedMarker(_ markers: [Marker]) -> Marker? {
+        markers.first { $0.id == focused?.id } ?? markers.first
+    }
+    private var napTypeBinding: Binding<NapType> {
+        Binding(get: { focused?.napType ?? .power },
+                set: { v in if let idx = items.firstIndex(where: { $0.id == focusedID }) { items[idx].napType = v } })
+    }
+    private func key(_ m: Marker) -> String { "\(m.kind.rawValue)-\(Int(m.start.timeIntervalSinceReferenceDate / 60))" }
+
+    // MARK: - Geometry helpers
+
+    private func itemRange(kind: Intervention, dur: TimeInterval, now: Date, wake: Date,
+                           window: (start: Date, end: Date)) -> (earliest: Date, latest: Date)? {
+        let earliest = max(now, wake)
+        let buffer: TimeInterval = kind == .nap ? 3600 : 1800
+        let latest = window.end.addingTimeInterval(-(dur + buffer))
+        return latest > earliest ? (earliest, latest) : nil
+    }
+
     private func snap(_ raw: Date, dur: TimeInterval, range: (earliest: Date, latest: Date),
                       obstacles: [(Date, Date)]) -> Date {
         var start = min(max(raw, range.earliest), range.latest)
         for _ in 0..<6 {
-            guard let ob = obstacles.first(where: { start < $0.1 && start.addingTimeInterval(dur) > $0.0 })
-            else { break }
-            let before = ob.0.addingTimeInterval(-dur)
-            let after = ob.1
+            guard let ob = obstacles.first(where: { start < $0.1 && start.addingTimeInterval(dur) > $0.0 }) else { break }
+            let before = ob.0.addingTimeInterval(-dur), after = ob.1
             let beforeOK = before >= range.earliest, afterOK = after <= range.latest
             if beforeOK && afterOK {
                 start = abs(before.timeIntervalSince(raw)) <= abs(after.timeIntervalSince(raw)) ? before : after
-            } else if beforeOK { start = before }
-            else if afterOK { start = after }
-            else { break }
+            } else if beforeOK { start = before } else if afterOK { start = after } else { break }
         }
         return min(max(start, range.earliest), range.latest)
     }
 
-    // MARK: - Small helpers
-
-    private func isOn(_ kind: Intervention) -> Bool {
-        switch kind { case .nap: return napOn; case .walk: return walk.on; case .workout: return workout.on }
-    }
-    private func toggle(_ kind: Intervention) {
-        switch kind { case .nap: napOn.toggle(); case .walk: walk.on.toggle(); case .workout: workout.on.toggle() }
-    }
-    private func outdoors(for kind: Intervention) -> Bool {
-        kind == .walk ? walk.outdoors : workout.outdoors
-    }
-    private func key(_ kind: Intervention, _ date: Date) -> String {
-        "\(kind.rawValue)-\(Int(date.timeIntervalSinceReferenceDate / 60))"
+    private func firstFreeSlot(range: (earliest: Date, latest: Date), dur: TimeInterval,
+                               obstacles: [(Date, Date)]) -> Date {
+        var t = range.earliest
+        for ob in obstacles.sorted(by: { $0.0 < $1.0 }) where t < ob.1 && t.addingTimeInterval(dur) > ob.0 { t = ob.1 }
+        return min(t, range.latest)
     }
 
     // MARK: - Callouts
@@ -629,23 +554,15 @@ struct AlertnessCurveView: View {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Image(systemName: "sun.max.fill").foregroundStyle(.orange)
-                    Text("\(Int(d.total.rounded())) min daylight today")
-                        .font(.caption.weight(.medium)).foregroundStyle(.primary)
-                    if d.morning >= 1 {
-                        Text("· \(Int(d.morning.rounded())) min AM").font(.caption).foregroundStyle(.secondary)
-                    }
-                    if walkMin >= 1 {
-                        Text("· 🚶 \(Int(walkMin.rounded())) min AM").font(.caption).foregroundStyle(.secondary)
-                    }
+                    Text("\(Int(d.total.rounded())) min daylight today").font(.caption.weight(.medium)).foregroundStyle(.primary)
+                    if d.morning >= 1 { Text("· \(Int(d.morning.rounded())) min AM").font(.caption).foregroundStyle(.secondary) }
+                    if walkMin >= 1 { Text("· 🚶 \(Int(walkMin.rounded())) min AM").font(.caption).foregroundStyle(.secondary) }
                     Spacer()
-                    if streak > 0 {
-                        Text("🌅 \(streak)").font(.caption.weight(.semibold)).foregroundStyle(.primary)
-                    }
+                    if streak > 0 { Text("🌅 \(streak)").font(.caption.weight(.semibold)).foregroundStyle(.primary) }
                     Image(systemName: "chevron.right").font(.caption2).foregroundStyle(.tertiary)
                 }
                 if let nudge = daylightNudge(d, walkMinutes: walkMin) {
-                    Text(nudge).font(.caption2).foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Text(nudge).font(.caption2).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
         }
@@ -653,23 +570,15 @@ struct AlertnessCurveView: View {
     }
 
     private func daylightNudge(_ d: DaylightDay, walkMinutes: Double) -> String? {
-        if d.morning >= 20 && walkMinutes >= 10 {
-            return "☀️🚶 Morning light + movement — both anchor your rhythm and help you sleep tonight."
-        }
-        if d.morning >= 20 {
-            return "☀️ Morning light in — anchors your rhythm and helps you sleep tonight."
-        }
+        if d.morning >= 20 && walkMinutes >= 10 { return "☀️🚶 Morning light + movement — both anchor your rhythm and help you sleep tonight." }
+        if d.morning >= 20 { return "☀️ Morning light in — anchors your rhythm and helps you sleep tonight." }
         return nil
     }
 
     // MARK: - Model wiring
 
-    private func makeRhythm(now: Date) -> AlertnessRhythm {
-        AlertnessProvider.rhythm(health: health, store: store, now: now)
-    }
+    private func makeRhythm(now: Date) -> AlertnessRhythm { AlertnessProvider.rhythm(health: health, store: store, now: now) }
 
-    /// Local sunset from the user's coarse location; a conservative ~7:30 PM fallback
-    /// when location isn't available (still well before a typical late-evening walk).
     private func localSunset(now: Date) -> Date {
         LocationService.shared.solarToday(now)?.sunset
             ?? Calendar.current.date(bySettingHour: 19, minute: 30, second: 0, of: now) ?? now
@@ -695,18 +604,14 @@ struct AlertnessCurveView: View {
     private func hasInterventions(_ r: AlertnessRhythm) -> Bool {
         !r.naps.isEmpty || r.morningLightDose > 0.1 || r.morningActivityDose > 0.1
     }
-    private func gainReadings(rhythm: AlertnessRhythm, now: Date,
-                              window: (start: Date, end: Date)) -> [GainPoint] {
+    private func gainReadings(rhythm: AlertnessRhythm, now: Date, window: (start: Date, end: Date)) -> [GainPoint] {
         guard hasInterventions(rhythm) else { return [] }
         let bare = bareRhythm(rhythm)
         let end = min(now, window.end)
         guard end > window.start else { return [] }
         var pts: [GainPoint] = []
         var t = window.start
-        while t < end {
-            pts.append(GainPoint(date: t, bare: bare.level(at: t), actual: rhythm.level(at: t)))
-            t = t.addingTimeInterval(1200)
-        }
+        while t < end { pts.append(GainPoint(date: t, bare: bare.level(at: t), actual: rhythm.level(at: t))); t = t.addingTimeInterval(1200) }
         pts.append(GainPoint(date: end, bare: bare.level(at: end), actual: rhythm.level(at: end)))
         return (pts.map { $0.actual - $0.bare }.max() ?? 0) >= 0.015 ? pts : []
     }
@@ -718,24 +623,5 @@ struct AlertnessCurveView: View {
 
     private func curveWindow(wake: Date, now: Date) -> (start: Date, end: Date) {
         (wake, max(wake.addingTimeInterval(17 * 3600), now.addingTimeInterval(3600)))
-    }
-
-    private func napScrubRange(rhythm: AlertnessRhythm, now: Date,
-                               window: (start: Date, end: Date), type: NapType) -> (earliest: Date, latest: Date)? {
-        let earliest = max(now, rhythm.wakeTime.addingTimeInterval(1800))
-        let latest = window.end.addingTimeInterval(-(type.targetWakeAfterOnset + 3600))
-        return latest > earliest ? (earliest, latest) : nil
-    }
-
-    private func activityRange(plan: ActivityPlan, now: Date,
-                               window: (start: Date, end: Date)) -> (earliest: Date, latest: Date)? {
-        guard plan.on else { return nil }
-        let earliest = max(now, window.start)
-        let latest = window.end.addingTimeInterval(-(plan.minutes * 60 + 1800))
-        return latest > earliest ? (earliest, latest) : nil
-    }
-
-    private func clampNap(_ d: Date, to r: (earliest: Date, latest: Date)) -> Date {
-        min(max(d, r.earliest), r.latest)
     }
 }
