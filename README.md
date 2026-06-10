@@ -44,25 +44,49 @@ score can even feed it.)
 - Wakes on the earliest of: your target, a safety ceiling, **deep-sleep approach**,
   or a **spontaneous awakening** — tiered haptic → audible.
 
-### ⚡ "You are here" — your daily alertness curve
-- A predicted **two-process** curve (circadian rhythm − sleep pressure) for the
-  whole day: the late-morning peak, the **post-lunch dip**, the evening **second
-  wind**, and the night plunge.
-- A **"you are here"** marker with your current % and a plain-words phase, plus the
-  single most-relevant move (a nap when it would help, morning light when it's early).
-- **Last night's sleep sets the curve's height** — a short night visibly lowers it
-  all day, and a dashed branch shows where a nap *now* could take you.
+### ⚡ The interactive alertness curve — *plan your day*
+- A predicted **two-process** curve (circadian rhythm − sleep pressure) for the whole
+  day: the late-morning peak, the **post-lunch dip**, the evening **second wind**, and
+  the night plunge. **Last night's sleep sets its height** — a short night visibly
+  lowers it all day.
+- **Drag naps, walks, and workouts onto the curve** (as many as you like — a morning
+  *and* an afternoon walk) and watch a combined "your plan" line lift in real time.
+  Each shows its duration, snaps clear of the others, and the home **battery previews
+  the peak your plan would reach and "charges" as you drag**.
+- **Honest, evidence-weighted effects:** a nap discharges real sleep pressure; a
+  workout gives a modest acute bump; an outdoor walk adds daylight anchoring. A **deep
+  or late nap, or a bright-evening outdoor bout, turns orange** — it would steal
+  tonight's sleep (the light warning is gated on your **real local sunset**).
+- Tap **+** to **schedule** any of them to Today's Plan + a reminder. With nothing
+  planned, the curve becomes a **scrubber** — drag the dot to read your Alert Score at
+  any time of day.
 
-### 🔋 Energy ring & the (honest) sleep bank
-- An Apple-Activity-style **charge ring** that fills when you wake from a nap and
-  **drains over the benefit window** — because nap alertness is genuinely transient.
-- A **descriptive** sleep bank: naps today, minutes this week, streaks. Deliberately
-  **not** a ledger — naps restore alertness, they don't mathematically repay sleep
-  debt, and the app says so.
+### 😴 Sleep Score — matched to Apple's
+- Our own 0–100 score, **reverse-engineered to Apple's watchOS 26.2 Sleep Score**
+  (Duration + Bedtime Consistency + Interruptions), since HealthKit gives the raw
+  samples but not Apple's number. Validated against a real night: 5h50m → **Apple 71,
+  ours 72**.
+- It works with an Apple Watch, **Oura, a manual log, or no tracker at all**, and it
+  sets where the day's alertness curve starts — *your sleep is your ceiling*.
+
+### 📉 The recovery recap — *how much of the gap did you fill?*
+- A short night opens a **gap** between your curve and a fully-rested one. The Today-tab
+  recap **draws that gap** — grey for what's lost, **green for what your naps, light,
+  and movement actually recovered** — and sums it to a single number: *"recovered X% of
+  the alertness your short night cost."* Forward-looking by day, a retrospective by
+  evening.
+
+### 🔋 Energy ring — your Alert Score, at a glance
+- An Apple-Activity-style **battery ring** showing your overall predicted alertness
+  right now — last night's sleep, the circadian dip, naps, and morning light all
+  rolled into one **Alert Score**, branded like Apple's Sleep Score. Tap through for
+  the full curve.
 
 ### 🗓️ Today's Plan — the response layer
 - Turns the curve into an **agenda**: get morning light, **nap before your predicted
-  dip**, wind down in time — with a readiness header ("how your day starts").
+  dip**, wind down in time — topped by the **alertness recap** and the day's
+  highest-leverage move. **Naps, walks, and workouts you schedule from the curve land
+  here** with one-tap cancel.
 - **Calendar-aware**: it suggests a nap in a *free* slot, not on top of a meeting
   (reads only busy times, never event details). Add **"always OK to nap" windows**
   in Settings that override the calendar (e.g., a quiet stretch in a long appointment).

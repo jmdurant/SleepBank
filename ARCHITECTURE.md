@@ -3,9 +3,12 @@
 SleepBank began as a power-nap app and grew into a **daytime alertness manager**:
 take short naps when a full night isn't possible and wake at the right moment (in
 light sleep, before deep-sleep grogginess) via a smart, onset-relative alarm — and,
-around that, help you *time* rest and light through the day (the alertness curve,
-the day's plan, morning light, wind-down). iOS app + companion watchOS app, optional
-paired sensors (Muse EEG, Polar H10), and HomeKit/calendar integrations.
+around that, help you *plan* a day that makes the most of imperfect sleep. The heart
+of it is an **interactive alertness curve**: last night's sleep (scored to match
+Apple's) sets the day's ceiling, and you drag **naps, walks, and workouts** onto the
+curve to see — and schedule — how they lift you back toward a rested day, with an
+end-of-day recap of how much of that gap you filled. iOS app + companion watchOS app,
+optional paired sensors (Muse EEG, Polar H10), and HomeKit/calendar integrations.
 
 ## Two layers
 
@@ -31,7 +34,8 @@ Sources/SleepBankCore/
   Nap loop:    NapType · NapPhase · OnsetSignal · NapEngine · NapRecord · NapBank
                HeartRateImmobilityOnsetDetector · DeepeningDetector · AwakeningDetector
                SleepOnsetDetector (protocol) · NapTrace
-  Alertness:   AlertnessRhythm (two-process curve) · AlertnessCharge (nap "charge")
+  Alertness:   AlertnessRhythm (two-process curve; stacks naps + walk/workout activity)
+               SleepScore (reverse-engineered to Apple watchOS 26.2) · AlertnessCharge
                DayPlan (the day's agenda) · Daylight · CircadianLighting + Solar
                Streaks · Intervals
 
@@ -39,9 +43,13 @@ App/
   Shared/      SharedStore (App Group) · RhythmSnapshot · PlanSummary · WindDownShield
                NoiseService · GuidedRelaxationService · MotionService
                NapHealthWriter · NapSessionRecorder · NapChart · NapFiles · …
-  iOS/         SleepBankApp · ContentView · SettingsView · HealthKitService
-               AlertnessProvider · EnergyRingView · AlertnessCurveView · AlertnessDetailView
-               DayPlanView · DaylightView · WindDownView
+  iOS/         SleepBankApp · ContentView (5-tab: Home/Today/Nap/History/Settings)
+               SettingsView · HealthKitService · AlertnessProvider
+               EnergyRingView (battery + plan/scrub preview) · AlertnessCurveView (planner)
+               AlertnessRecapView (gap-recovery analysis) · AlertnessDetailView
+               PlanPreview · DayPlanView · DaylightView · WindDownView
+               SleepScore wiring: BedtimeHistoryStore · ManualSleepStore · SleepBasis
+               LocationService (sunset via Solar) · AppearanceMode
                PlanNotificationService · CalendarService · NapWindowsStore
                WindDownShieldService · HomeLightingService
                AlertnessIntent · SleepBankPhoneShortcuts
@@ -72,12 +80,36 @@ App/
 ## The alertness / response layer
 
 - **`AlertnessRhythm`** — a two-process model (circadian − sleep pressure) for the
-  day. Last night's sleep sets the curve height; naps discharge pressure; morning
-  light (cortisol pathway) and morning movement (exercise zeitgeber) add small,
-  capped lifts. `AlertnessProvider` assembles it from HealthKit + nap history;
+  day. Last night's sleep sets the curve height; **naps** discharge pressure (a
+  smooth impulse: fast subjective + slow homeostatic component, so a deep/late nap
+  lingers and can steal tonight's sleep); **activities** (walk/workout) add a modest
+  acute-arousal bump; morning light/movement add small capped lifts. It stacks any
+  number of naps + activities (`level(at:naps:activities:)`, `planReadings`).
+  `AlertnessProvider` assembles the *actual* rhythm from HealthKit + nap history;
   `RhythmSnapshot` (App Group) shares it with the widgets and the watch.
+- **`SleepScore`** — reverse-engineered to Apple's **watchOS 26.2** Sleep Score
+  (Duration 50 + Bedtime Consistency 30 + Interruptions 20): an absolute 7h50m
+  duration curve + low-Deep/REM penalty, efficiency-based interruptions, and a
+  consistency factor that grades schedule *regularity*. `BedtimeHistoryStore`
+  backfills the last 14 HealthKit nights so consistency works on day one;
+  `ManualSleepStore` + `SleepBasis` cover Oura/manual/no-watch users. The score sets
+  the curve's start-of-day pressure (validated 5h50m → Apple 71 / ours 72).
+- **The interactive planner (`AlertnessCurveView`)** — the product's centrepiece.
+  Drag **naps / walks / workouts** onto the curve (a list of plan items, any number
+  of each); each shows a duration band and a draggable marker, snaps clear of the
+  others, and stacks into one combined "your plan" curve. Late/intense additions turn
+  orange (a deep late nap or bright-evening outdoor bout would cost tonight's sleep —
+  the bright-light caution is gated on real local sunset via `LocationService`/`Solar`).
+  The **+** schedules each to Today's Plan + a reminder; the home **battery
+  (`EnergyRingView`/`PlanPreview`)** previews the plan's peak and "charges" as you
+  drag. With no plan, the curve becomes a **scrubber** — drag the dot to read the
+  Alert Score at any time of day.
+- **The recap (`AlertnessRecapView`, Today tab)** — draws the gap a short night opens
+  between your curve and a rested one, fills green what your logged + scheduled
+  naps/light/movement recovered, and quantifies it ("recovered X% of what your short
+  night cost"). Forward-looking by day, retrospective by evening.
 - **`AlertnessCharge`** — the energy-ring "nap charge" that fills on waking and
-  fades over the benefit window (`EnergyRingView`).
+  fades over the benefit window.
 - **`DayPlan`** — turns the rhythm into an agenda: morning light/movement, a nap
   *before* the predicted dip, wind-down. It avoids **calendar** conflicts
   (`CalendarService` → busy intervals) and respects user **"OK to nap" windows**
@@ -118,8 +150,13 @@ xcodebuild -project SleepBank.xcodeproj -scheme SleepBank \
 Targets: **SleepBank** (iOS), **SleepBankWatch** (watchOS), **SleepBankWidget**
 (iOS widgets + Live Activity), **SleepBankWatchWidget** (complications),
 **SleepBankDeviceMonitor** (Wind-Down auto-shield). iOS 17+. Live HR/motion/EEG,
-HomeKit, Family Controls, and calendar need a real device; simulators compile and
-exercise the UI, and `SleepBankCore` is fully unit-tested without hardware.
+HomeKit, Family Controls, calendar, and **Core Location** (coarse, for local sunset)
+need a real device; simulators compile and exercise the UI, and `SleepBankCore` is
+fully unit-tested without hardware.
+
+> **Charts gotcha:** multiple `AreaMark` groups in one `Chart` must each carry a
+> distinct `series:` value, or Swift Charts welds them into one self-intersecting
+> polygon (stray "shards"). The curve and recap fills tag every area as its own series.
 
 > **Always `xcodegen generate` after adding files** — XcodeGen builds a static file
 > list at generation time, so new files are excluded from the build until you
