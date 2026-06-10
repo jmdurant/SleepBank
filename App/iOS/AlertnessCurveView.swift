@@ -160,7 +160,8 @@ struct AlertnessCurveView: View {
                     ok = await PlanNotificationService.shared.scheduleNap(at: m.start, type: focused?.napType ?? .power)
                 } else {
                     ok = await PlanNotificationService.shared.scheduleActivity(
-                        at: m.start, title: m.kind.label, outdoors: focused?.outdoors ?? true)
+                        at: m.start, title: m.kind.label, outdoors: focused?.outdoors ?? true,
+                        minutes: focused?.minutes ?? 30)
                 }
                 if ok { scheduledKey = key(m) }
             }

@@ -39,6 +39,12 @@ final class PlanNotificationService: NSObject, UNUserNotificationCenterDelegate 
         }
     }
 
+    /// The scheduled nap's type, so the Recap can rebuild its curve effect.
+    static var scheduledNapType: NapType {
+        get { NapType(rawValue: UserDefaults.standard.string(forKey: "scheduledNapType") ?? "") ?? .power }
+        set { UserDefaults.standard.set(newValue.rawValue, forKey: "scheduledNapType") }
+    }
+
     /// Set whenever a notification is tapped, so a cold-started ContentView can route
     /// even if it missed the live post.
     private(set) var pendingRoute: HomeRoute?
@@ -93,6 +99,7 @@ final class PlanNotificationService: NSObject, UNUserNotificationCenterDelegate 
     func scheduleNap(at date: Date, type: NapType) async -> Bool {
         let interval = date.timeIntervalSinceNow
         guard interval > 60 else { return false }
+        Self.scheduledNapType = type
         let granted = (try? await center.requestAuthorization(options: [.alert, .sound])) ?? false
         guard granted else { return false }
 
@@ -114,6 +121,7 @@ final class PlanNotificationService: NSObject, UNUserNotificationCenterDelegate 
         var kind: String       // "Walk" / "Workout"
         var at: Date
         var outdoors: Bool
+        var minutes: Double = 30
         var id: String { kind }
     }
 
@@ -136,7 +144,7 @@ final class PlanNotificationService: NSObject, UNUserNotificationCenterDelegate 
     /// Schedule a one-shot reminder for a planned walk/workout from the curve, and
     /// record it for Today's Plan.
     @discardableResult
-    func scheduleActivity(at date: Date, title: String, outdoors: Bool) async -> Bool {
+    func scheduleActivity(at date: Date, title: String, outdoors: Bool, minutes: Double = 30) async -> Bool {
         let interval = date.timeIntervalSinceNow
         guard interval > 60 else { return false }
         let granted = (try? await center.requestAuthorization(options: [.alert, .sound])) ?? false
@@ -155,7 +163,7 @@ final class PlanNotificationService: NSObject, UNUserNotificationCenterDelegate 
         try? await center.add(UNNotificationRequest(identifier: activityId(title), content: content, trigger: trigger))
 
         var items = Self.scheduledActivities.filter { $0.kind.caseInsensitiveCompare(title) != .orderedSame }
-        items.append(ScheduledActivity(kind: title, at: date, outdoors: outdoors))
+        items.append(ScheduledActivity(kind: title, at: date, outdoors: outdoors, minutes: minutes))
         Self.scheduledActivities = items
         return true
     }

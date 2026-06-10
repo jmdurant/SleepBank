@@ -2,19 +2,23 @@
 //  AlertnessRecapView.swift
 //  SleepBank
 //
-//  The day's alertness analysis — the honest "where the day's ceiling came from"
-//  story. Last night's sleep sets the ceiling; naps/light/movement claw you back
-//  toward it; a better night would lift the whole curve. Reads live during the day
-//  ("today so far") and flips to a retrospective in the evening, where the highest-
-//  leverage move becomes protecting tonight's sleep.
+//  The day's alertness analysis, in two phases. *Before* the day's peak it looks
+//  forward: last night set a ceiling; here's the highest-leverage way to make the
+//  most of it. *After* the peak — once the day has largely played out — it becomes a
+//  retrospective: it draws the gap a short night opened between your curve and a
+//  rested one, fills in green what your naps/light/movement actually recovered, and
+//  quantifies it as a single "% recovered."
 //
 
 import SwiftUI
+import Charts
 import SleepBankCore
 
 struct AlertnessRecapView: View {
     var health = HealthKitService.shared
     var store = NapDecisionStore.shared
+
+    private struct P: Identifiable { let id = UUID(); let t: Date; let bare, actual, ideal: Double }
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 600)) { context in
@@ -22,33 +26,18 @@ struct AlertnessRecapView: View {
             let r = AlertnessProvider.rhythm(health: health, store: store, now: now)
             let wake = r.wakeTime
             let dayEnd = wake.addingTimeInterval(17 * 3600)
-            let evening = now > wake.addingTimeInterval(13 * 3600)
-
-            // Your sleep sets the ceiling; a rested night is the reference; a nap is
-            // the biggest same-day lever still on the table.
             let bare = AlertnessRhythm(wakeTime: wake, sleepDebt: r.sleepDebt)
             let rested = AlertnessRhythm(wakeTime: wake, sleepDebt: 0.05)
-            let ceiling = peak(bare, from: wake, to: dayEnd)
-            let restedPeak = peak(rested, from: wake, to: dayEnd)
-            let reached = peak(r, from: wake, to: min(now, dayEnd))
-            let napLevel = napPotential(r, now: now, dayEnd: dayEnd, evening: evening)
-            let potential = max(ceiling, napLevel ?? 0)
+            let postPeak = now >= peakTime(bare, from: wake, to: dayEnd)
 
-            VStack(alignment: .leading, spacing: 12) {
-                Text(evening ? "Today's Alertness" : "Today's Alertness, so far")
-                    .font(.headline)
-
-                bar(reached: reached, ceiling: ceiling, potential: potential, rested: restedPeak)
-                legend(hasNap: napLevel != nil)
-
-                VStack(alignment: .leading, spacing: 6) {
-                    line(icon: "bed.double.fill", tint: .indigo, text: ceilingLine(score: sleepScore(), ceiling: ceiling))
-                    line(icon: "arrow.up.forward", tint: .teal, text: restedLine(ceiling: ceiling, rested: restedPeak))
-                    line(icon: evening ? "flag.checkered" : "location.fill", tint: .secondary,
-                         text: reachedLine(reached: reached, evening: evening))
+            VStack(alignment: .leading, spacing: 10) {
+                if postPeak {
+                    Text("Today's Alertness — recap").font(.headline)
+                    recap(r: r, bare: bare, rested: rested, wake: wake, now: now)
+                } else {
+                    Text("Making the most of today").font(.headline)
+                    forward(r: r, bare: bare, rested: rested, wake: wake, now: now, dayEnd: dayEnd)
                 }
-
-                leverChip(napPeak: napLevel.map(pct), evening: evening)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding()
@@ -56,65 +45,120 @@ struct AlertnessRecapView: View {
         }
     }
 
-    // MARK: - Bar
+    // MARK: - Forward (daytime)
 
-    /// A zoomed potential bar: filled to where you've reached, a brighter band for what
-    /// a nap would add, and a teal tick for the rested-night ceiling.
-    private func bar(reached: Double, ceiling: Double, potential: Double, rested: Double) -> some View {
-        let lo = 0.35, hi = min(1.0, max(rested, potential) + 0.06)
-        func f(_ v: Double) -> Double { min(max((v - lo) / (hi - lo), 0), 1) }
-        return GeometryReader { geo in
-            let w = geo.size.width
-            ZStack(alignment: .leading) {
-                Capsule().fill(.quaternary).frame(height: 16)
-                Capsule().fill(.mint.opacity(0.35)).frame(width: w * f(potential), height: 16)   // + a nap
-                Capsule().fill(.linearGradient(colors: [.indigo, .blue], startPoint: .leading, endPoint: .trailing))
-                    .frame(width: w * f(reached), height: 16)                                     // reached
-                Rectangle().fill(.teal).frame(width: 2.5, height: 24)
-                    .offset(x: max(0, w * f(rested) - 1.25))                                      // rested ceiling
+    @ViewBuilder
+    private func forward(r: AlertnessRhythm, bare: AlertnessRhythm, rested: AlertnessRhythm,
+                         wake: Date, now: Date, dayEnd: Date) -> some View {
+        let ceiling = peakLevel(bare, from: wake, to: dayEnd)
+        let restedPeak = peakLevel(rested, from: wake, to: dayEnd)
+        let napLevel = napPotential(r, now: now, dayEnd: dayEnd)
+        let gap = max(0, pct(restedPeak) - pct(ceiling))
+        VStack(alignment: .leading, spacing: 8) {
+            line("bed.double.fill", .indigo, ceilingText(score: sleepScore(), ceiling: ceiling))
+            if gap >= 2 {
+                line("arrow.up.forward", .teal,
+                     "A rested night would reach ~\(pct(restedPeak))%. Naps, light & movement close the gap — plan them, then check back this evening to see how much you filled.")
+            } else {
+                line("checkmark.seal.fill", .green, "You're near a fully-rested ceiling — last night did its job.")
             }
+            leverChip(napPeak: napLevel.map(pct), evening: false)
         }
-        .frame(height: 24)
     }
 
-    private func legend(hasNap: Bool) -> some View {
+    private func ceilingText(score: Int?, ceiling: Double) -> String {
+        if let score { return "Last night (Sleep Score \(score)) set today's ceiling near \(pct(ceiling))%." }
+        return "Last night set today's ceiling near \(pct(ceiling))%."
+    }
+
+    // MARK: - Retrospective (post-peak)
+
+    @ViewBuilder
+    private func recap(r: AlertnessRhythm, bare: AlertnessRhythm, rested: AlertnessRhythm,
+                       wake: Date, now: Date) -> some View {
+        // What actually happened, up to now.
+        let pts = samples(actual: r, bare: bare, rested: rested, from: wake, to: now)
+        let gapArea = pts.reduce(0.0) { $0 + max(0, $1.ideal - $1.bare) }
+        let fillArea = pts.reduce(0.0) { $0 + max(0, min($1.actual, $1.ideal) - $1.bare) }
+        let recovered = gapArea > 0.001 ? Int((fillArea / gapArea * 100).rounded()) : 100
+        VStack(alignment: .leading, spacing: 10) {
+            headline(recovered: recovered, gapArea: gapArea)
+            gapChart(pts)
+            legend(hasGain: fillArea > 0.001)
+            line("bed.double.fill", .indigo, recapLine(score: sleepScore(), gapArea: gapArea))
+            leverChip(napPeak: nil, evening: true)
+        }
+    }
+
+    private func headline(recovered: Int, gapArea: Double) -> some View {
+        let text: String
+        if gapArea < 0.6 { text = "Last night did its job — you stayed near a fully-rested ceiling today." }
+        else if recovered < 2 { text = "A short night cost you alertness today (the grey), and little got recovered. Naps, light, and movement are the levers." }
+        else { text = "Naps, light & movement recovered **\(recovered)%** of the alertness your short night cost today." }
+        return Text(.init(text)).font(.subheadline).foregroundStyle(.primary)
+    }
+
+    private func recapLine(score: Int?, gapArea: Double) -> String {
+        if gapArea < 0.6 { return "The grey is what a short night would cost — yours was small." }
+        let lost = "The grey that's left is the part only a better night fixes — tonight's wind-down is the lever."
+        if let score { return "Last night scored \(score). \(lost)" }
+        return lost
+    }
+
+    // MARK: - The gap image
+
+    private func gapChart(_ pts: [P]) -> some View {
+        let lo = max(0, (pts.map(\.bare).min() ?? 0) - 0.03)
+        let hi = min(1, (pts.map(\.ideal).max() ?? 1) + 0.03)
+        return Chart {
+            ForEach(pts) { p in
+                AreaMark(x: .value("t", p.t), yStart: .value("lo", p.bare), yEnd: .value("hi", max(p.bare, p.ideal)),
+                         series: .value("s", "gap"))
+                    .foregroundStyle(.gray.opacity(0.16))
+            }
+            ForEach(pts) { p in
+                AreaMark(x: .value("t", p.t), yStart: .value("lo", p.bare),
+                         yEnd: .value("hi", max(p.bare, min(p.actual, p.ideal))),
+                         series: .value("s", "fill"))
+                    .foregroundStyle(.green.opacity(0.32))
+            }
+            ForEach(pts) { p in
+                LineMark(x: .value("t", p.t), y: .value("v", p.actual), series: .value("s", "you"))
+                    .foregroundStyle(.indigo).interpolationMethod(.catmullRom)
+            }
+            ForEach(pts) { p in
+                LineMark(x: .value("t", p.t), y: .value("v", p.ideal), series: .value("s", "ideal"))
+                    .foregroundStyle(.teal.opacity(0.7))
+                    .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [4, 4])).interpolationMethod(.catmullRom)
+            }
+        }
+        .chartYScale(domain: lo...hi)
+        .chartYAxis(.hidden)
+        .chartXAxis { AxisMarks(values: .stride(by: .hour, count: 3)) { _ in AxisGridLine(); AxisValueLabel(format: .dateTime.hour()) } }
+        .frame(height: 130)
+    }
+
+    private func legend(hasGain: Bool) -> some View {
         HStack(spacing: 12) {
-            swatch(.blue, "Reached")
-            if hasNap { swatch(.mint.opacity(0.6), "+ a nap") }
-            swatch(.teal, "Rested night")
+            if hasGain { swatch(.green.opacity(0.5), "Recovered") }
+            swatch(.gray.opacity(0.35), "Still lost")
+            HStack(spacing: 4) { Capsule().fill(.teal).frame(width: 10, height: 2); Text("Rested night") }
             Spacer()
         }
         .font(.caption2).foregroundStyle(.secondary)
     }
 
     private func swatch(_ c: Color, _ t: String) -> some View {
-        HStack(spacing: 4) { Capsule().fill(c).frame(width: 10, height: 6); Text(t) }
+        HStack(spacing: 4) { RoundedRectangle(cornerRadius: 2).fill(c).frame(width: 10, height: 8); Text(t) }
     }
 
-    // MARK: - Lines
+    // MARK: - Shared bits
 
-    private func line(icon: String, tint: Color, text: String) -> some View {
+    private func line(_ icon: String, _ tint: Color, _ text: String) -> some View {
         HStack(alignment: .top, spacing: 7) {
             Image(systemName: icon).font(.caption2).foregroundStyle(tint).frame(width: 14)
             Text(text).font(.caption).foregroundStyle(.secondary)
         }
-    }
-
-    private func ceilingLine(score: Int?, ceiling: Double) -> String {
-        if let score {
-            return "Last night (Sleep Score \(score)) set today's ceiling near \(pct(ceiling))%."
-        }
-        return "Last night set today's ceiling near \(pct(ceiling))%."
-    }
-
-    private func restedLine(ceiling: Double, rested: Double) -> String {
-        let gap = max(0, pct(rested) - pct(ceiling))
-        if gap < 2 { return "You're near a fully-rested ceiling — last night did its job." }
-        return "A fully-rested night would lift the whole curve to ~\(pct(rested))% — about \(gap) points higher."
-    }
-
-    private func reachedLine(reached: Double, evening: Bool) -> String {
-        evening ? "Today peaked at \(pct(reached))%." : "You've reached \(pct(reached))% so far."
     }
 
     private func leverChip(napPeak: Int?, evening: Bool) -> some View {
@@ -135,18 +179,30 @@ struct AlertnessRecapView: View {
 
     // MARK: - Model helpers
 
-    private func peak(_ rhythm: AlertnessRhythm, from: Date, to: Date) -> Double {
-        guard to > from else { return rhythm.level(at: from) }
-        return rhythm.readings(from: from, to: to, step: 1200).map(\.level).max() ?? rhythm.level(at: from)
+    private func samples(actual: AlertnessRhythm, bare: AlertnessRhythm, rested: AlertnessRhythm,
+                         from: Date, to: Date) -> [P] {
+        guard to > from else { return [] }
+        var out: [P] = []
+        var t = from
+        while t <= to {
+            out.append(P(t: t, bare: bare.level(at: t), actual: actual.level(at: t), ideal: rested.level(at: t)))
+            t = t.addingTimeInterval(1200)
+        }
+        return out
     }
 
-    /// The best peak a power nap *now* could still reach today, or nil in the evening /
-    /// when there's no useful day left to nap into.
-    private func napPotential(_ r: AlertnessRhythm, now: Date, dayEnd: Date, evening: Bool) -> Double? {
-        guard !evening, now < dayEnd.addingTimeInterval(-2 * 3600) else { return nil }
+    private func peakLevel(_ rhythm: AlertnessRhythm, from: Date, to: Date) -> Double {
+        rhythm.readings(from: from, to: to, step: 1200).map(\.level).max() ?? rhythm.level(at: from)
+    }
+
+    private func peakTime(_ rhythm: AlertnessRhythm, from: Date, to: Date) -> Date {
+        rhythm.readings(from: from, to: to, step: 1200).max(by: { $0.level < $1.level })?.date ?? to
+    }
+
+    private func napPotential(_ r: AlertnessRhythm, now: Date, dayEnd: Date) -> Double? {
+        guard now < dayEnd.addingTimeInterval(-2 * 3600) else { return nil }
         let from = now.addingTimeInterval(NapType.power.targetWakeAfterOnset)
-        let proj = r.projectedReadings(napType: .power, napAt: now, from: from, to: dayEnd, step: 1200)
-        return proj.map(\.level).max()
+        return r.projectedReadings(napType: .power, napAt: now, from: from, to: dayEnd, step: 1200).map(\.level).max()
     }
 
     private func sleepScore() -> Int? {
