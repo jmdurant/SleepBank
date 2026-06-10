@@ -104,13 +104,17 @@ struct EnergyRingView: View {
     private func alertnessNow(at now: Date) -> some View {
         let rhythm = AlertnessProvider.rhythm(now: now)
         let level = rhythm.level(at: now)
-        return HStack(spacing: 6) {
-            Image(systemName: "bolt.fill").font(.caption2).foregroundStyle(.yellow)
-            Text("\(AlertnessProvider.pct(level))% alert")
-                .font(.subheadline.weight(.semibold)).monospacedDigit()
-            Text("· \(AlertnessProvider.phaseLabel(now))")
-                .font(.subheadline).foregroundStyle(.secondary)
+        return NavigationLink(value: HomeRoute.alertness) {
+            HStack(spacing: 6) {
+                Image(systemName: "bolt.fill").font(.caption2).foregroundStyle(.yellow)
+                Text("\(AlertnessProvider.pct(level))% alert")
+                    .font(.subheadline.weight(.semibold)).monospacedDigit().foregroundStyle(.primary)
+                Text("· \(AlertnessProvider.phaseLabel(now))")
+                    .font(.subheadline).foregroundStyle(.secondary)
+                Image(systemName: "chevron.right").font(.caption2).foregroundStyle(.tertiary)
+            }
         }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Descriptive bank

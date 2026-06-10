@@ -90,15 +90,17 @@ struct ContentView: View {
             }
             .navigationDestination(for: HomeRoute.self) { route in
                 switch route {
-                case .daylight: DaylightView()
-                case .nap:      NapView()
+                case .daylight:  DaylightView()
+                case .alertness: AlertnessDetailView()
+                case .nap:       NapView()
                 }
             }
             .onOpenURL { url in
                 switch url.host {
-                case "daylight": path = [.daylight]
-                case "nap":      path = [.nap]
-                default:         break
+                case "daylight":  path = [.daylight]
+                case "alertness": path = [.alertness]
+                case "nap":       path = [.nap]
+                default:          break
                 }
             }
         }

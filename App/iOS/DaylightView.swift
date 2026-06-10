@@ -15,6 +15,7 @@ import SleepBankCore
 /// Home-stack navigation routes used by deep links and in-app links.
 enum HomeRoute: Hashable {
     case daylight
+    case alertness
     case nap
 }
 

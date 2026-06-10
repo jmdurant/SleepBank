@@ -140,6 +140,7 @@ struct AlertnessWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: kind, provider: AlertnessProviderWidget()) { entry in
             AlertnessWidgetView(entry: entry)
+                .widgetURL(URL(string: "sleepbank://alertness"))
         }
         .configurationDisplayName("Alertness")
         .description("Your predicted alertness right now and your morning-light streak.")
