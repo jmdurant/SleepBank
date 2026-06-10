@@ -60,6 +60,25 @@ score can even feed it.)
   **not** a ledger — naps restore alertness, they don't mathematically repay sleep
   debt, and the app says so.
 
+### 🗓️ Today's Plan — the response layer
+- Turns the curve into an **agenda**: get morning light, **nap before your predicted
+  dip**, wind down in time — with a readiness header ("how your day starts").
+- **Calendar-aware**: it suggests a nap in a *free* slot, not on top of a meeting
+  (reads only busy times, never event details). Add **"always OK to nap" windows**
+  in Settings that override the calendar (e.g., a quiet stretch in a long appointment).
+- Delivered by a **morning notification**, shown on the **phone and watch**, and
+  speakable via Siri ("How alert am I?" / "Should I nap?").
+
+### 🌙 Wind Down — bring alertness *down* to protect sleep
+- A guided routine (paced breathing + relaxing sounds), evening-light/screens-off
+  guidance, and a self-reported **"screens off" streak**.
+- **Block distracting apps** during wind-down (FamilyControls/ManagedSettings) —
+  a blocklist or a **"Bare Necessities"** allow-only mode — manually or on a nightly
+  schedule (a `DeviceActivityMonitor` automation on a Home hub). *iOS won't let apps
+  **read** Screen Time, so we **enforce** instead of track.*
+- **Warm your HomeKit lights** at wind-down (color temperature, via one Home scene);
+  the all-day curve is left to Apple Adaptive Lighting.
+
 ### ☀️ Morning light & movement — circadian anchoring
 - Reads Apple Watch **Time in Daylight**, **sub-segmented by window** — morning
   light is weighted because that's what anchors your body clock.
@@ -82,17 +101,18 @@ score can even feed it.)
 ### 📲 Everywhere you look
 - **Home / Lock-screen widgets** — a live "you are here" alertness % + morning-light
   streak, and banked naps.
-- **Apple Watch app & complications** — start/stop naps, nap totals, and a
-  morning-light streak complication.
+- **Apple Watch app & complications** — start/stop naps, nap totals, a morning-light
+  streak, and your **next plan action** one tap from the watch face.
 - **Siri / Shortcuts** — *"How alert am I?"* / *"Should I nap?"* answered without
   opening the app, plus *"Start a nap."*
-- **Live Activity** during a nap, and **deep links** (`sleepbank://alertness`,
-  `sleepbank://daylight`, `sleepbank://nap`).
+- **Notifications** — a morning plan nudge and an evening wind-down reminder (both
+  toggleable in **Settings**), a nap **Live Activity**, and **deep links**
+  (`sleepbank://{plan,alertness,daylight,winddown,nap,settings}`).
 
-### 🎧 Wind-down
+### 🎧 Sounds & guided relaxation
 - Procedural **white / pink / brown noise** and a **guided TTS relaxation** (paced
   4-7-8 breathing + body relaxation), with smooth audio ducking and AirPlay route
-  control.
+  control — for naps and the evening wind-down.
 
 ### 🍏 Health & data pipeline
 - Writes naps to **Apple Health**.
@@ -109,6 +129,8 @@ verified against primary sources, with what is *not* supported flagged:
 - [`docs/NAP_BENEFIT_EVIDENCE.md`](docs/NAP_BENEFIT_EVIDENCE.md) — why short naps work + the honest sleep-debt framing
 - [`docs/DAYLIGHT_EVIDENCE.md`](docs/DAYLIGHT_EVIDENCE.md) — morning light, circadian anchoring & the cortisol awakening response
 - [`docs/EEG_EVIDENCE.md`](docs/EEG_EVIDENCE.md) — Muse / frontal-EEG sleep staging
+- [`docs/WIND_DOWN_MODE.md`](docs/WIND_DOWN_MODE.md) — evening app-shielding (enforce, not measure — the Screen Time API reality)
+- [`docs/AIRPODS_HR_SENSOR.md`](docs/AIRPODS_HR_SENSOR.md) — AirPods Pro 3 heart-rate access research
 - [`docs/AIRPODS_HR_SENSOR.md`](docs/AIRPODS_HR_SENSOR.md) — AirPods Pro 3 heart-rate access research
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) — app design
 
