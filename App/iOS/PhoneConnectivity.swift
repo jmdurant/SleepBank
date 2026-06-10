@@ -26,12 +26,16 @@ class PhoneConnectivity: NSObject, WCSessionDelegate {
         WCSession.default.activate()
     }
 
-    /// Send last-night samples to the watch. Safe to call repeatedly; only the
-    /// latest context is retained by the system.
-    func sendLastNight(_ samples: [SleepSample]) {
-        guard WCSession.default.activationState == .activated, !samples.isEmpty else { return }
-        guard let data = try? JSONEncoder().encode(samples.dtos) else { return }
-        try? WCSession.default.updateApplicationContext(["lastNight": data])
+    /// Send the daily summary to the watch — last-night samples plus the morning-
+    /// light streak (for the watch complication). One application context, since the
+    /// system keeps only the latest. Safe to call repeatedly.
+    func sendDailySummary(samples: [SleepSample], morningLightStreak: Int) {
+        guard WCSession.default.activationState == .activated else { return }
+        var context: [String: Any] = ["morningLightStreak": morningLightStreak]
+        if !samples.isEmpty, let data = try? JSONEncoder().encode(samples.dtos) {
+            context["lastNight"] = data
+        }
+        try? WCSession.default.updateApplicationContext(context)
     }
 
     /// Forward a live H10 reading to the watch's nap loop. Best-effort: only sent

@@ -8,6 +8,7 @@
 
 import Foundation
 import WatchConnectivity
+import WidgetKit
 import SleepChartKit
 import SleepBankCore
 
@@ -79,6 +80,10 @@ class WatchConnectivityService: NSObject, WCSessionDelegate {
     }
 
     private func decode(_ context: [String: Any]) {
+        if let streak = context["morningLightStreak"] as? Int {
+            SharedStore.morningLightStreak = streak
+            WidgetCenter.shared.reloadAllTimelines()
+        }
         guard let data = context["lastNight"] as? Data,
               let dtos = try? JSONDecoder().decode([SleepSampleDTO].self, from: data) else { return }
         DispatchQueue.main.async {

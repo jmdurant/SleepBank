@@ -73,8 +73,9 @@ struct ContentView: View {
             .task {
                 if await health.requestAuthorization() {
                     await health.refreshAll()
-                    // Push the real last-night timeline to the watch.
-                    PhoneConnectivity.shared.sendLastNight(health.lastNightSamples)
+                    // Push last-night timeline + the morning-light streak to the watch.
+                    PhoneConnectivity.shared.sendDailySummary(samples: health.lastNightSamples,
+                                                              morningLightStreak: health.morningLightStreak)
                     // Update the home widget's health summary.
                     SharedStore.lastNightHours = health.lastNightSleep?.totalHours ?? 0
                     SharedStore.restingHR = Int(health.restingHeartRate)

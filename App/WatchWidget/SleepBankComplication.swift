@@ -98,9 +98,91 @@ struct SleepBankComplication: Widget {
     }
 }
 
+// MARK: - Morning-light streak complication
+
+struct MorningLightEntry: TimelineEntry {
+    let date: Date
+    let streak: Int
+}
+
+struct MorningLightProvider: TimelineProvider {
+    func placeholder(in context: Context) -> MorningLightEntry {
+        MorningLightEntry(date: .now, streak: 4)
+    }
+    func getSnapshot(in context: Context, completion: @escaping (MorningLightEntry) -> Void) {
+        completion(current())
+    }
+    func getTimeline(in context: Context, completion: @escaping (Timeline<MorningLightEntry>) -> Void) {
+        let next = Calendar.current.date(byAdding: .hour, value: 2, to: .now) ?? .now
+        completion(Timeline(entries: [current()], policy: .after(next)))
+    }
+    private func current() -> MorningLightEntry {
+        MorningLightEntry(date: .now, streak: SharedStore.morningLightStreak)
+    }
+}
+
+struct MorningLightView: View {
+    @Environment(\.widgetFamily) var family
+    let entry: MorningLightEntry
+
+    var body: some View {
+        switch family {
+        case .accessoryCorner:      corner
+        case .accessoryInline:      inline
+        case .accessoryRectangular: rectangular
+        default:                    circular
+        }
+    }
+
+    private var circular: some View {
+        ZStack {
+            AccessoryWidgetBackground()
+            VStack(spacing: 0) {
+                Image(systemName: "sun.max.fill").font(.caption2)
+                Text("\(entry.streak)").font(.system(.headline, design: .rounded).bold())
+            }
+        }
+        .widgetLabel("\(entry.streak)-day morning light")
+    }
+
+    private var corner: some View {
+        Image(systemName: "sun.max.fill")
+            .widgetLabel("\(entry.streak)-day 🌅")
+    }
+
+    private var inline: some View {
+        Label("\(entry.streak)-day morning light", systemImage: "sun.max.fill")
+    }
+
+    private var rectangular: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 1) {
+                Label("Morning Light", systemImage: "sun.max.fill").font(.caption2).foregroundStyle(.orange)
+                Text(entry.streak > 0 ? "🌅 \(entry.streak)-day streak" : "Get morning light")
+                    .font(.headline)
+            }
+            Spacer()
+        }
+    }
+}
+
+struct MorningLightComplication: Widget {
+    let kind = "MorningLightComplication"
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: kind, provider: MorningLightProvider()) { entry in
+            MorningLightView(entry: entry)
+                .widgetURL(URL(string: "sleepbank://daylight"))
+        }
+        .configurationDisplayName("Morning Light")
+        .description("Your morning-light streak — consecutive days you got daylight early.")
+        .supportedFamilies([.accessoryCircular, .accessoryCorner, .accessoryInline, .accessoryRectangular])
+    }
+}
+
 @main
 struct SleepBankWatchWidgetBundle: WidgetBundle {
     var body: some Widget {
         SleepBankComplication()
+        MorningLightComplication()
     }
 }
