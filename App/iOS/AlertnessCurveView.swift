@@ -125,7 +125,6 @@ struct AlertnessCurveView: View {
                     .frame(height: 170)
                 legend(hasPlan: !projection.isEmpty, planLate: markers.contains { $0.late })
                 interventionPicker(markers: markers)
-                if focused?.kind == .nap { napTypeToggle }
                 readout(rhythm: rhythm, markers: markers, projection: projection, isToday: isToday)
             }
             .padding()
@@ -186,6 +185,12 @@ struct AlertnessCurveView: View {
                     }
                     .foregroundStyle(m.late ? .orange : m.kind.tint)
                     scheduleButton(m)
+                } else if items.isEmpty, PlanPreview.shared.scrubTime != nil {
+                    // Scrubbing the bare curve, dot moved — offer a reset to now.
+                    Button { PlanPreview.shared.scrubTime = nil } label: {
+                        Label("Now", systemImage: "arrow.uturn.backward").font(.caption.weight(.semibold))
+                    }
+                    .buttonStyle(.plain).foregroundStyle(.indigo)
                 }
             }
             Text(isToday ? whyLine(rhythm) : "Planning ahead — assuming a typical night.")
@@ -311,13 +316,6 @@ struct AlertnessCurveView: View {
         else { focusedID = mine.first?.id }
     }
 
-    private var napTypeToggle: some View {
-        Picker("Nap type", selection: napTypeBinding) {
-            Text("Power · 20 min").tag(NapType.power)
-            Text("Cycle · 90 min").tag(NapType.cycle)
-        }
-        .pickerStyle(.segmented)
-    }
 
     private var activityEditor: some View {
         Group {
@@ -602,10 +600,6 @@ struct AlertnessCurveView: View {
     }
     private func focusedMarker(_ markers: [Marker]) -> Marker? {
         markers.first { $0.id == focused?.id } ?? markers.first
-    }
-    private var napTypeBinding: Binding<NapType> {
-        Binding(get: { focused?.napType ?? .power },
-                set: { v in if let idx = items.firstIndex(where: { $0.id == focusedID }) { items[idx].napType = v } })
     }
     private func key(_ m: Marker) -> String { "\(m.kind.rawValue)-\(Int(m.start.timeIntervalSinceReferenceDate / 60))" }
 
