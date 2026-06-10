@@ -74,23 +74,64 @@ struct AlertnessCurveView: View {
     @State private var scheduledKey: String?
     @State private var editing = false
     @State private var isDragging = false
+    /// 0 = today, 1 = tomorrow, … Each day keeps its own plan in `savedPlans`.
+    @State private var dayOffset = 0
+    @State private var savedPlans: [Int: [PlanItem]] = [:]
+    @State private var savingTemplate = false
+    @State private var templateName = ""
+    @State private var pendingSpecs: [PlanTemplate.Spec] = []
+    private var templateStore = PlanTemplateStore.shared
 
     private var focused: PlanItem? { items.first { $0.id == focusedID } ?? items.first }
+
+    /// Move to another day, stashing the current day's plan and restoring the target's.
+    private func changeDay(_ delta: Int) {
+        let next = min(max(dayOffset + delta, 0), 6)
+        guard next != dayOffset else { return }
+        savedPlans[dayOffset] = items
+        dayOffset = next
+        items = savedPlans[next] ?? []
+        focusedID = items.first?.id
+        scheduledKey = nil
+        PlanPreview.shared.scrubTime = nil
+    }
+
+    /// A future day's curve, assuming a typical night for the user (7-day average),
+    /// with no interventions — the canvas to plan onto.
+    private func futureRhythm(dayOffset: Int, now: Date) -> AlertnessRhythm {
+        let today = makeRhythm(now: now)
+        let wake = Calendar.current.date(byAdding: .day, value: dayOffset, to: today.wakeTime) ?? today.wakeTime
+        let avg = health.sleepAverage7Day
+        let need = max(avg > 0 ? avg : 7.5, 6)
+        let debt = avg > 0 ? SleepScore.debt(asleepHours: avg, needHours: need) : 0.25
+        return AlertnessRhythm(wakeTime: wake, sleepDebt: debt)
+    }
+
+    private func dayTitle(now: Date, isToday: Bool) -> String {
+        if isToday { return "Today · \(AlertnessProvider.phaseLabel(now))" }
+        if dayOffset == 1 { return "Tomorrow" }
+        let date = Calendar.current.date(byAdding: .day, value: dayOffset, to: now) ?? now
+        return date.formatted(.dateTime.weekday(.wide))
+    }
 
     // MARK: - Body
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 300)) { context in
             let now = context.date
-            let rhythm = makeRhythm(now: now)
-            let window = curveWindow(wake: rhythm.wakeTime, now: now)
+            let isToday = dayOffset == 0
+            let rhythm = isToday ? makeRhythm(now: now) : futureRhythm(dayOffset: dayOffset, now: now)
+            let window = isToday ? curveWindow(wake: rhythm.wakeTime, now: now)
+                                 : (start: rhythm.wakeTime, end: rhythm.wakeTime.addingTimeInterval(17 * 3600))
+            // Where new/dragged interventions may start: after "now" today, anywhere on a future day.
+            let earliest = isToday ? max(now, rhythm.wakeTime) : rhythm.wakeTime
             let baseline = rhythm.readings(from: window.start, to: window.end, step: 1200)
             let nowLevel = rhythm.level(at: now)
             let ideal = AlertnessRhythm(wakeTime: rhythm.wakeTime, sleepDebt: 0.05)
             let idealReadings = ideal.readings(from: window.start, to: window.end, step: 1200)
-            let gain = gainReadings(rhythm: rhythm, now: now, window: window)
+            let gain = isToday ? gainReadings(rhythm: rhythm, now: now, window: window) : []
 
-            let resolved = resolveItems(rhythm: rhythm, now: now, window: window)
+            let resolved = resolveItems(rhythm: rhythm, earliest: earliest, window: window)
             let naps = resolved.compactMap(\.nap)
             let activities = resolved.compactMap(\.activity)
             let planStart = resolved.map(\.start).min()
@@ -103,9 +144,8 @@ struct AlertnessCurveView: View {
                      late: markers.first { $0.id == r.item.id }?.late ?? false)
             }
             let yRange = yDomain(baseline: baseline, ideal: idealReadings, projection: projection, nowLevel: nowLevel)
-            // With no plan, the chart becomes a scrubber: drag the dot to read any time.
-            let scrubbing = items.isEmpty
-            // The single draggable dot when scrubbing — defaults to "now" until dragged.
+            // On today with no plan, the chart becomes a scrubber: drag to read any time.
+            let scrubbing = isToday && items.isEmpty
             let scrubDot: (date: Date, level: Double)? = {
                 guard scrubbing else { return nil }
                 let d = min(max(PlanPreview.shared.scrubTime ?? now, window.start), window.end)
@@ -113,25 +153,33 @@ struct AlertnessCurveView: View {
             }()
             let onDrag: (Date, Bool) -> Void = scrubbing
                 ? { (raw: Date, _: Bool) in PlanPreview.shared.scrubTime = min(max(raw, window.start), window.end) }
-                : makeDragHandler(resolved: resolved, markers: markers, rhythm: rhythm, now: now, window: window)
-            let peak = projection.max(by: { $0.level < $1.level })
+                : makeDragHandler(resolved: resolved, markers: markers, rhythm: rhythm, earliest: earliest, window: window)
+            let peak = isToday ? projection.max(by: { $0.level < $1.level }) : nil
+            let resolvedTimes = Dictionary(resolved.map { ($0.item.id, $0.start) }, uniquingKeysWith: { a, _ in a })
 
             VStack(alignment: .leading, spacing: 10) {
-                header(rhythm: rhythm, now: now, markers: markers)
+                header(rhythm: rhythm, now: now, markers: markers, isToday: isToday, resolvedTimes: resolvedTimes)
                 chart(baseline: baseline, projection: projection, ideal: idealReadings, gain: gain,
                       now: now, nowLevel: nowLevel, yRange: yRange, markers: markers, bands: bands,
-                      scrub: scrubDot, onDrag: onDrag)
+                      showNow: isToday, scrub: scrubDot, onDrag: onDrag)
                     .frame(height: 170)
                 legend(hasPlan: !projection.isEmpty, planLate: markers.contains { $0.late })
                 interventionPicker(markers: markers)
                 if focused?.kind == .nap { napTypeToggle }
-                readout(rhythm: rhythm, markers: markers, projection: projection)
+                readout(rhythm: rhythm, markers: markers, projection: projection, isToday: isToday)
                 Divider()
                 daylightRow()
             }
             .padding()
             .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 20))
             .sheet(isPresented: $editing) { activityEditor }
+            .alert("Name this template", isPresented: $savingTemplate) {
+                TextField("e.g. Full day", text: $templateName)
+                Button("Save") {
+                    templateStore.add(PlanTemplate(name: templateName.isEmpty ? "My plan" : templateName, items: pendingSpecs))
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: { Text("Save this day's naps, walks, and workouts to re-apply later.") }
             .onAppear { PlanPreview.shared.level = peak?.level; PlanPreview.shared.peakTime = peak?.date }
             .onChange(of: peak?.level) { _, lvl in
                 PlanPreview.shared.level = lvl; PlanPreview.shared.peakTime = peak?.date
@@ -143,10 +191,16 @@ struct AlertnessCurveView: View {
 
     // MARK: - Header (live icon + time + schedule)
 
-    private func header(rhythm: AlertnessRhythm, now: Date, markers: [Marker]) -> some View {
+    private func header(rhythm: AlertnessRhythm, now: Date, markers: [Marker], isToday: Bool,
+                        resolvedTimes: [UUID: Date]) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 8) {
-                Text("Your day · \(AlertnessProvider.phaseLabel(now))").font(.headline)
+            HStack(spacing: 6) {
+                Button { changeDay(-1) } label: { Image(systemName: "chevron.left").font(.subheadline.weight(.bold)) }
+                    .buttonStyle(.plain).foregroundStyle(.indigo).disabled(dayOffset == 0)
+                Text(dayTitle(now: now, isToday: isToday)).font(.headline)
+                Button { changeDay(1) } label: { Image(systemName: "chevron.right").font(.subheadline.weight(.bold)) }
+                    .buttonStyle(.plain).foregroundStyle(.indigo).disabled(dayOffset >= 6)
+                templatesMenu(resolvedTimes: resolvedTimes)
                 Spacer()
                 if let m = focusedMarker(markers) {
                     HStack(spacing: 4) {
@@ -158,8 +212,63 @@ struct AlertnessCurveView: View {
                     scheduleButton(m)
                 }
             }
-            Text(whyLine(rhythm)).font(.caption).foregroundStyle(.secondary)
+            Text(isToday ? whyLine(rhythm) : "Planning ahead — assuming a typical night.")
+                .font(.caption).foregroundStyle(.secondary)
         }
+    }
+
+    /// Saved-template dropdown: apply one to this day, or save the current plan.
+    private func templatesMenu(resolvedTimes: [UUID: Date]) -> some View {
+        Menu {
+            if !templateStore.templates.isEmpty {
+                Section("Apply a template") {
+                    ForEach(templateStore.templates) { t in
+                        Button { applyTemplate(t) } label: { Label(t.name, systemImage: "calendar.badge.plus") }
+                    }
+                }
+            }
+            if !items.isEmpty {
+                Button {
+                    pendingSpecs = specs(from: items, resolvedTimes: resolvedTimes)
+                    templateName = ""
+                    savingTemplate = true
+                } label: { Label("Save this plan as template…", systemImage: "square.and.arrow.down") }
+            }
+        } label: {
+            Image(systemName: "rectangle.stack.badge.plus").font(.subheadline).foregroundStyle(.indigo)
+        }
+        .menuStyle(.button).buttonStyle(.plain)
+    }
+
+    /// Replace this day's plan with a template, placed at the day's clock times.
+    private func applyTemplate(_ t: PlanTemplate) {
+        let cal = Calendar.current
+        let dayDate = cal.date(byAdding: .day, value: dayOffset, to: Date()) ?? Date()
+        items = t.items.map { spec in
+            var item = PlanItem.make(intervention(spec.kind))
+            item.napType = spec.napType == "cycle" ? .cycle : .power
+            item.minutes = spec.minutes
+            item.outdoors = spec.outdoors
+            item.at = cal.date(bySettingHour: spec.hour, minute: spec.minute, second: 0, of: dayDate)
+            return item
+        }
+        focusedID = items.first?.id
+        scheduledKey = nil
+    }
+
+    private func specs(from items: [PlanItem], resolvedTimes: [UUID: Date]) -> [PlanTemplate.Spec] {
+        let cal = Calendar.current
+        return items.compactMap { item in
+            guard let at = resolvedTimes[item.id] ?? item.at else { return nil }
+            let c = cal.dateComponents([.hour, .minute], from: at)
+            return .init(kind: item.kind.rawValue, hour: c.hour ?? 0, minute: c.minute ?? 0,
+                         minutes: item.minutes, outdoors: item.outdoors,
+                         napType: item.napType == .cycle ? "cycle" : "power")
+        }
+    }
+
+    private func intervention(_ s: String) -> Intervention {
+        Intervention(rawValue: s) ?? .nap
     }
 
     private func scheduleButton(_ m: Marker) -> some View {
@@ -191,27 +300,34 @@ struct AlertnessCurveView: View {
         HStack(spacing: 8) {
             ForEach(Intervention.allCases) { kind in
                 let count = items.filter { $0.kind == kind }.count
-                let isFocusedKind = focused?.kind == kind
-                Button {
-                    if let first = items.first(where: { $0.kind == kind }) { focusedID = first.id }
-                    else { addItem(kind) }
-                    scheduledKey = nil
-                } label: {
-                    HStack(spacing: 5) {
-                        Image(systemName: kind.icon).font(.caption2)
-                        Text(kind.label).font(.caption.weight(.medium))
-                        if count == 1 { Image(systemName: "checkmark").font(.system(size: 8, weight: .bold)) }
-                        else if count > 1 { Text("×\(count)").font(.caption2.weight(.bold)) }
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 6)
-                    .background((isFocusedKind ? kind.tint.opacity(0.22) : Color.secondary.opacity(0.12)), in: Capsule())
-                    .foregroundStyle(isFocusedKind ? kind.tint : .secondary)
-                    .overlay(Capsule().stroke(isFocusedKind ? kind.tint : .clear, lineWidth: 1))
+                let isFocusedKind = count > 0 && focused?.kind == kind
+                HStack(spacing: 5) {
+                    Image(systemName: kind.icon).font(.caption2)
+                    Text(kind.label).font(.caption.weight(.medium))
+                    if count == 1 { Image(systemName: "checkmark").font(.system(size: 8, weight: .bold)) }
+                    else if count > 1 { Text("×\(count)").font(.caption2.weight(.bold)) }
                 }
-                .buttonStyle(.plain)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 6)
+                .background((isFocusedKind ? kind.tint.opacity(0.22) : Color.secondary.opacity(0.12)), in: Capsule())
+                .foregroundStyle(isFocusedKind ? kind.tint : .secondary)
+                .overlay(Capsule().stroke(isFocusedKind ? kind.tint : .clear, lineWidth: 1))
+                .contentShape(Capsule())
+                .onTapGesture { tapChip(kind) }            // toggle this kind on/off
+                .onLongPressGesture { addItem(kind) }      // hold → add another of this kind
             }
         }
+    }
+
+    /// Tap = the simple toggle: add+focus the first of a kind, remove it if it's
+    /// already the focused one, or just focus it if it exists unfocused. Long-press
+    /// (addItem) stacks extras.
+    private func tapChip(_ kind: Intervention) {
+        scheduledKey = nil
+        let mine = items.filter { $0.kind == kind }
+        if mine.isEmpty { addItem(kind) }
+        else if focused?.kind == kind { removeFocused() }
+        else { focusedID = mine.first?.id }
     }
 
     private var napTypeToggle: some View {
@@ -253,7 +369,8 @@ struct AlertnessCurveView: View {
     // MARK: - Readout
 
     @ViewBuilder
-    private func readout(rhythm: AlertnessRhythm, markers: [Marker], projection: [AlertnessRhythm.Reading]) -> some View {
+    private func readout(rhythm: AlertnessRhythm, markers: [Marker], projection: [AlertnessRhythm.Reading],
+                         isToday: Bool) -> some View {
         if let m = focusedMarker(markers), let f = focused {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(alignment: .top, spacing: 6) {
@@ -262,21 +379,20 @@ struct AlertnessCurveView: View {
                     Text(readoutText(m, rhythm: rhythm, projection: projection))
                         .font(.caption2).foregroundStyle(m.late ? .orange : .secondary)
                 }
-                HStack(spacing: 14) {
-                    Button { addItem(f.kind) } label: {
-                        Label("Add another \(f.kind.label.lowercased())", systemImage: "plus")
-                            .font(.caption2)
-                    }
-                    .buttonStyle(.plain).foregroundStyle(f.kind.tint)
+                HStack(spacing: 12) {
                     if f.kind != .nap {
                         Button { editing = true } label: { Label("Edit", systemImage: "slider.horizontal.3").font(.caption2) }
                             .buttonStyle(.plain).foregroundStyle(.secondary)
                     }
+                    Text("Tap chip to remove · hold to add another")
+                        .font(.caption2).foregroundStyle(.tertiary)
                     Spacer()
-                    Button { removeFocused() } label: { Label("Remove", systemImage: "xmark").font(.caption2) }
-                        .buttonStyle(.plain).foregroundStyle(.secondary)
                 }
             }
+        } else if !isToday {
+            Label("Plan ahead — tap a chip to add a nap, walk, or workout for \(dayOffset == 1 ? "tomorrow" : "this day").",
+                  systemImage: "calendar")
+                .font(.caption2).foregroundStyle(.secondary)
         } else if let g = gainNowPct(rhythm: rhythm, now: .now), hasInterventions(rhythm) {
             gainCallout(g, rhythm: rhythm)
         } else if let gap = idealGap(rhythm: rhythm, now: .now) {
@@ -326,7 +442,7 @@ struct AlertnessCurveView: View {
     private func chart(baseline: [AlertnessRhythm.Reading], projection: [AlertnessRhythm.Reading],
                        ideal: [AlertnessRhythm.Reading], gain: [GainPoint],
                        now: Date, nowLevel: Double, yRange: ClosedRange<Double>,
-                       markers: [Marker], bands: [Band],
+                       markers: [Marker], bands: [Band], showNow: Bool,
                        scrub: (date: Date, level: Double)?, onDrag: @escaping (Date, Bool) -> Void) -> some View {
         Chart {
             ForEach(baseline, id: \.date) { r in
@@ -364,11 +480,13 @@ struct AlertnessCurveView: View {
                     .foregroundStyle(planLate ? .orange : .mint)
                     .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 4])).interpolationMethod(.catmullRom)
             }
-            RuleMark(x: .value("Now", now))
-                .foregroundStyle(.secondary.opacity(0.4)).lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
-            if scrub == nil {   // when scrubbing, the scrub dot *is* the now dot (moved)
-                PointMark(x: .value("Now", now), y: .value("Alertness", nowLevel)).foregroundStyle(.white).symbolSize(120)
-                PointMark(x: .value("Now", now), y: .value("Alertness", nowLevel)).foregroundStyle(.indigo).symbolSize(60)
+            if showNow {
+                RuleMark(x: .value("Now", now))
+                    .foregroundStyle(.secondary.opacity(0.4)).lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
+                if scrub == nil {   // when scrubbing, the scrub dot *is* the now dot (moved)
+                    PointMark(x: .value("Now", now), y: .value("Alertness", nowLevel)).foregroundStyle(.white).symbolSize(120)
+                    PointMark(x: .value("Now", now), y: .value("Alertness", nowLevel)).foregroundStyle(.indigo).symbolSize(60)
+                }
             }
             if let s = scrub {
                 RuleMark(x: .value("Scrub", s.date))
@@ -432,12 +550,12 @@ struct AlertnessCurveView: View {
 
     // MARK: - Plan resolution
 
-    private func resolveItems(rhythm: AlertnessRhythm, now: Date, window: (start: Date, end: Date)) -> [Resolved] {
+    private func resolveItems(rhythm: AlertnessRhythm, earliest: Date, window: (start: Date, end: Date)) -> [Resolved] {
         var out: [Resolved] = []
         var occupied: [(Date, Date)] = []
         for item in items {
             let dur = item.kind == .nap ? item.napType.targetWakeAfterOnset : item.minutes * 60
-            guard let range = itemRange(kind: item.kind, dur: dur, now: now, wake: rhythm.wakeTime, window: window) else { continue }
+            guard let range = itemRange(kind: item.kind, dur: dur, earliest: earliest, window: window) else { continue }
             let start: Date = item.at.map { snap(min(max($0, range.earliest), range.latest), dur: dur, range: range, obstacles: occupied) }
                               ?? firstFreeSlot(range: range, dur: dur, obstacles: occupied)
             let end = start.addingTimeInterval(dur)
@@ -473,13 +591,13 @@ struct AlertnessCurveView: View {
     }
 
     private func makeDragHandler(resolved: [Resolved], markers: [Marker], rhythm: AlertnessRhythm,
-                                 now: Date, window: (start: Date, end: Date)) -> (Date, Bool) -> Void {
+                                 earliest: Date, window: (start: Date, end: Date)) -> (Date, Bool) -> Void {
         { raw, isFirstTouch in
             if isFirstTouch, let near = nearestMarker(to: raw, markers: markers) { focusedID = near.id; scheduledKey = nil }
             guard let fid = focusedID ?? items.first?.id, let idx = items.firstIndex(where: { $0.id == fid }) else { return }
             let item = items[idx]
             let dur = item.kind == .nap ? item.napType.targetWakeAfterOnset : item.minutes * 60
-            guard let range = itemRange(kind: item.kind, dur: dur, now: now, wake: rhythm.wakeTime, window: window) else { return }
+            guard let range = itemRange(kind: item.kind, dur: dur, earliest: earliest, window: window) else { return }
             let obstacles = resolved.filter { $0.item.id != fid }.map { ($0.start, $0.end) }
             items[idx].at = snap(raw, dur: dur, range: range, obstacles: obstacles)
             scheduledKey = nil
@@ -512,9 +630,8 @@ struct AlertnessCurveView: View {
 
     // MARK: - Geometry helpers
 
-    private func itemRange(kind: Intervention, dur: TimeInterval, now: Date, wake: Date,
+    private func itemRange(kind: Intervention, dur: TimeInterval, earliest: Date,
                            window: (start: Date, end: Date)) -> (earliest: Date, latest: Date)? {
-        let earliest = max(now, wake)
         let buffer: TimeInterval = kind == .nap ? 3600 : 1800
         let latest = window.end.addingTimeInterval(-(dur + buffer))
         return latest > earliest ? (earliest, latest) : nil
