@@ -21,39 +21,52 @@ final class PlanNotificationService: NSObject, UNUserNotificationCenterDelegate 
     private let center = UNUserNotificationCenter.current()
     private let id = "dailyPlan"
 
-    /// Set whenever a plan notification is tapped, so a cold-started ContentView can
-    /// route to the plan even if it missed the live post.
-    private(set) var pendingPlan = false
+    private let windDownId = "windDown"
+
+    /// Set whenever a notification is tapped, so a cold-started ContentView can route
+    /// even if it missed the live post.
+    private(set) var pendingRoute: HomeRoute?
 
     /// Call once at launch so taps route correctly even on cold start.
     func configure() { center.delegate = self }
 
-    /// Ask for permission (once) and schedule the daily morning notification,
-    /// timed ~20 min after the user's recent wake time when we know it.
+    /// Ask for permission (once) and schedule the morning plan + evening wind-down
+    /// notifications, timed off the user's recent wake time when known.
     func requestAndSchedule() async {
         let granted = (try? await center.requestAuthorization(options: [.alert, .sound])) ?? false
         guard granted else { return }
-        schedule()
+        scheduleMorningPlan()
+        scheduleWindDown()
     }
 
-    func schedule() {
-        center.removePendingNotificationRequests(withIdentifiers: [id])
-
+    func scheduleMorningPlan() {
         let content = UNMutableNotificationContent()
         content.title = "☀️ Today's Plan"
         content.body = teaser()
         content.sound = .default
         content.userInfo = ["route": "plan"]
+        schedule(id: id, content: content, fire: morningFireTime())
+    }
 
-        let (hour, minute) = fireTime()
+    func scheduleWindDown() {
+        let content = UNMutableNotificationContent()
+        content.title = "🌙 Time to wind down"
+        content.body = "Dim the lights, screens off soon — protect tonight's sleep so tomorrow starts higher."
+        content.sound = .default
+        content.userInfo = ["route": "winddown"]
+        schedule(id: windDownId, content: content, fire: windDownFireTime())
+    }
+
+    private func schedule(id: String, content: UNMutableNotificationContent, fire: (Int, Int)) {
+        center.removePendingNotificationRequests(withIdentifiers: [id])
         var comps = DateComponents()
-        comps.hour = hour
-        comps.minute = minute
+        comps.hour = fire.0
+        comps.minute = fire.1
         let trigger = UNCalendarNotificationTrigger(dateMatching: comps, repeats: true)
         center.add(UNNotificationRequest(identifier: id, content: content, trigger: trigger))
     }
 
-    func clearPending() { pendingPlan = false }
+    func clearPending() { pendingRoute = nil }
 
     // MARK: - Content
 
@@ -67,11 +80,19 @@ final class PlanNotificationService: NSObject, UNUserNotificationCenterDelegate 
     }
 
     /// ~20 min after the most recent wake time, else 7:30.
-    private func fireTime() -> (Int, Int) {
+    private func morningFireTime() -> (Int, Int) {
         guard let snap = RhythmSnapshot.load() else { return (7, 30) }
         let fire = snap.wakeTime.addingTimeInterval(20 * 60)
         let c = Calendar.current.dateComponents([.hour, .minute], from: fire)
         return (c.hour ?? 7, c.minute ?? 30)
+    }
+
+    /// ~15.5 h after the recent wake time (the plan's wind-down marker), else 22:00.
+    private func windDownFireTime() -> (Int, Int) {
+        guard let snap = RhythmSnapshot.load() else { return (22, 0) }
+        let fire = snap.wakeTime.addingTimeInterval(15.5 * 3600)
+        let c = Calendar.current.dateComponents([.hour, .minute], from: fire)
+        return (c.hour ?? 22, c.minute ?? 0)
     }
 
     // MARK: - UNUserNotificationCenterDelegate
@@ -83,8 +104,13 @@ final class PlanNotificationService: NSObject, UNUserNotificationCenterDelegate 
 
     func userNotificationCenter(_ center: UNUserNotificationCenter,
                                 didReceive response: UNNotificationResponse) async {
-        guard response.notification.request.content.userInfo["route"] as? String == "plan" else { return }
-        pendingPlan = true
-        await MainActor.run { NotificationCenter.default.post(name: .openPlan, object: nil) }
+        let route: HomeRoute
+        switch response.notification.request.content.userInfo["route"] as? String {
+        case "plan":     route = .plan
+        case "winddown": route = .windDown
+        default:         return
+        }
+        pendingRoute = route
+        await MainActor.run { NotificationCenter.default.post(name: .openPlan, object: route) }
     }
 }

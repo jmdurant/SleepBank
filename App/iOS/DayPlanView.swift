@@ -24,6 +24,18 @@ struct DayPlanView: View {
                 VStack(alignment: .leading, spacing: 16) {
                     readinessCard(plan)
                     agendaCard(plan)
+                    NavigationLink(value: HomeRoute.windDown) {
+                        HStack {
+                            Image(systemName: "moon.stars.fill")
+                            Text("Tonight's wind-down").font(.subheadline.weight(.semibold))
+                            Spacer()
+                            Image(systemName: "chevron.right").font(.caption)
+                        }
+                        .padding()
+                        .background(.purple.opacity(0.15), in: RoundedRectangle(cornerRadius: 16))
+                        .foregroundStyle(.purple)
+                    }
+                    .buttonStyle(.plain)
                     Text("A plan to get through the day well — it helps you cope with a short night, not replace the sleep you need.")
                         .font(.caption2).foregroundStyle(.secondary)
                 }

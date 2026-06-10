@@ -84,9 +84,9 @@ struct ContentView: View {
             }
             .navigationTitle("SleepBank")
             .task {
-                // Cold-started from a plan notification tap.
-                if PlanNotificationService.shared.pendingPlan {
-                    path = [.plan]
+                // Cold-started from a notification tap.
+                if let route = PlanNotificationService.shared.pendingRoute {
+                    path = [route]
                     PlanNotificationService.shared.clearPending()
                 }
                 if await health.requestAuthorization() {
@@ -116,6 +116,7 @@ struct ContentView: View {
                 case .plan:      DayPlanView()
                 case .daylight:  DaylightView()
                 case .alertness: AlertnessDetailView()
+                case .windDown:  WindDownView()
                 case .nap:       NapView()
                 }
             }
@@ -124,12 +125,13 @@ struct ContentView: View {
                 case "plan":      path = [.plan]
                 case "daylight":  path = [.daylight]
                 case "alertness": path = [.alertness]
+                case "winddown":  path = [.windDown]
                 case "nap":       path = [.nap]
                 default:          break
                 }
             }
-            .onReceive(NotificationCenter.default.publisher(for: .openPlan)) { _ in
-                path = [.plan]
+            .onReceive(NotificationCenter.default.publisher(for: .openPlan)) { note in
+                path = [(note.object as? HomeRoute) ?? .plan]
                 PlanNotificationService.shared.clearPending()
             }
         }
