@@ -118,6 +118,14 @@ struct ContentView: View {
                 case .alertness: AlertnessDetailView()
                 case .windDown:  WindDownView()
                 case .nap:       NapView()
+                case .settings:  SettingsView()
+                }
+            }
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    NavigationLink(value: HomeRoute.settings) {
+                        Image(systemName: "gearshape.fill")
+                    }
                 }
             }
             .onOpenURL { url in
@@ -127,6 +135,7 @@ struct ContentView: View {
                 case "alertness": path = [.alertness]
                 case "winddown":  path = [.windDown]
                 case "nap":       path = [.nap]
+                case "settings":  path = [.settings]
                 default:          break
                 }
             }

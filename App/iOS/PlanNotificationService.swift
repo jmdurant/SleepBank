@@ -35,8 +35,21 @@ final class PlanNotificationService: NSObject, UNUserNotificationCenterDelegate 
     func requestAndSchedule() async {
         let granted = (try? await center.requestAuthorization(options: [.alert, .sound])) ?? false
         guard granted else { return }
-        scheduleMorningPlan()
-        scheduleWindDown()
+        if Self.morningPlanEnabled { scheduleMorningPlan() }
+        else { center.removePendingNotificationRequests(withIdentifiers: [id]) }
+        if Self.windDownReminderEnabled { scheduleWindDown() }
+        else { center.removePendingNotificationRequests(withIdentifiers: [windDownId]) }
+    }
+
+    /// Per-notification on/off (default on). Toggled from Settings; call
+    /// requestAndSchedule() after changing.
+    static var morningPlanEnabled: Bool {
+        get { UserDefaults.standard.object(forKey: "notifMorningPlan") as? Bool ?? true }
+        set { UserDefaults.standard.set(newValue, forKey: "notifMorningPlan") }
+    }
+    static var windDownReminderEnabled: Bool {
+        get { UserDefaults.standard.object(forKey: "notifWindDown") as? Bool ?? true }
+        set { UserDefaults.standard.set(newValue, forKey: "notifWindDown") }
     }
 
     func scheduleMorningPlan() {

@@ -19,6 +19,7 @@ enum HomeRoute: Hashable {
     case alertness
     case windDown
     case nap
+    case settings
 }
 
 struct DaylightView: View {
