@@ -16,39 +16,6 @@ struct AlertnessCurveView: View {
     var health = HealthKitService.shared
     var store = NapDecisionStore.shared
 
-    enum Intervention: String, CaseIterable, Identifiable {
-        case nap, walk, workout
-        var id: String { rawValue }
-        var label: String { self == .nap ? "Nap" : (self == .walk ? "Walk" : "Workout") }
-        var icon: String {
-            switch self {
-            case .nap:     return "moon.zzz.fill"
-            case .walk:    return "figure.walk"
-            case .workout: return "figure.run"
-            }
-        }
-        var tint: Color {
-            switch self {
-            case .nap:     return .mint
-            case .walk:    return .orange
-            case .workout: return .pink
-            }
-        }
-    }
-
-    /// One planned intervention. Multiples of any kind are allowed.
-    struct PlanItem: Identifiable {
-        let id = UUID()
-        var kind: Intervention
-        var napType: NapType = .power
-        var at: Date?
-        var minutes: Double
-        var outdoors: Bool
-        static func make(_ kind: Intervention) -> PlanItem {
-            PlanItem(kind: kind, minutes: kind == .workout ? 60 : 30, outdoors: kind != .workout)
-        }
-    }
-
     /// A resolved item: its placed span and the model object it produces.
     struct Resolved {
         let item: PlanItem
@@ -74,27 +41,20 @@ struct AlertnessCurveView: View {
     @State private var scheduledKey: String?
     @State private var editing = false
     @State private var isDragging = false
-    /// 0 = today, 1 = tomorrow, … Each day keeps its own plan in `savedPlans`.
-    @State private var dayOffset = 0
-    @State private var savedPlans: [Int: [PlanItem]] = [:]
+    @State private var showCalendar = false
     @State private var savingTemplate = false
     @State private var templateName = ""
     @State private var pendingSpecs: [PlanTemplate.Spec] = []
     private var templateStore = PlanTemplateStore.shared
+    private var dayStore = DayPlanStore.shared
+
+    /// 0 = today, 1 = tomorrow, … driven by the shared store (also drives Today's Plan).
+    private var dayOffset: Int { dayStore.selectedOffset }
 
     private var focused: PlanItem? { items.first { $0.id == focusedID } ?? items.first }
 
-    /// Move to another day, stashing the current day's plan and restoring the target's.
-    private func changeDay(_ delta: Int) {
-        let next = min(max(dayOffset + delta, 0), 6)
-        guard next != dayOffset else { return }
-        savedPlans[dayOffset] = items
-        dayOffset = next
-        items = savedPlans[next] ?? []
-        focusedID = items.first?.id
-        scheduledKey = nil
-        PlanPreview.shared.scrubTime = nil
-    }
+    /// Move days via the shared store; `.onChange(of:)` reloads this day's plan.
+    private func changeDay(_ delta: Int) { dayStore.shift(by: delta) }
 
     /// A future day's curve, assuming a typical night for the user (7-day average),
     /// with no interventions — the canvas to plan onto.
@@ -185,8 +145,19 @@ struct AlertnessCurveView: View {
                 PlanPreview.shared.level = lvl; PlanPreview.shared.peakTime = peak?.date
             }
             .onChange(of: scrubbing) { _, s in if !s { PlanPreview.shared.scrubTime = nil } }
+            // Keep this day's plan synced with the shared store (Today's Plan reads it).
+            .onAppear { items = dayStore.plan(for: dayStore.selectedDate); focusedID = items.first?.id }
+            .onChange(of: items) { _, v in dayStore.setPlan(v, for: dayStore.selectedDate) }
+            .onChange(of: dayStore.selectedDate) { _, d in
+                items = dayStore.plan(for: d); focusedID = items.first?.id
+                scheduledKey = nil; PlanPreview.shared.scrubTime = nil
+            }
             .onDisappear { PlanPreview.shared.level = nil; PlanPreview.shared.peakTime = nil; PlanPreview.shared.scrubTime = nil }
         }
+    }
+
+    private var dateBinding: Binding<Date> {
+        Binding(get: { dayStore.selectedDate }, set: { dayStore.select($0); showCalendar = false })
     }
 
     // MARK: - Header (live icon + time + schedule)
@@ -198,8 +169,15 @@ struct AlertnessCurveView: View {
                 Button { changeDay(-1) } label: { Image(systemName: "chevron.left").font(.subheadline.weight(.bold)) }
                     .buttonStyle(.plain).foregroundStyle(.indigo).disabled(dayOffset == 0)
                 Text(dayTitle(now: now, isToday: isToday)).font(.headline)
+                    .onTapGesture { showCalendar = true }
+                    .popover(isPresented: $showCalendar) {
+                        DatePicker("Day", selection: dateBinding, in: Date()..., displayedComponents: .date)
+                            .datePickerStyle(.graphical).padding()
+                            .frame(minWidth: 300, minHeight: 320)
+                            .presentationCompactAdaptation(.popover)
+                    }
                 Button { changeDay(1) } label: { Image(systemName: "chevron.right").font(.subheadline.weight(.bold)) }
-                    .buttonStyle(.plain).foregroundStyle(.indigo).disabled(dayOffset >= 6)
+                    .buttonStyle(.plain).foregroundStyle(.indigo).disabled(dayOffset >= 14)
                 templatesMenu(resolvedTimes: resolvedTimes)
                 Spacer()
                 if let m = focusedMarker(markers) {

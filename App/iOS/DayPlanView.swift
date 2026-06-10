@@ -14,24 +14,33 @@ import SleepBankCore
 struct DayPlanView: View {
     var health = HealthKitService.shared
     var store = NapDecisionStore.shared
+    var dayStore = DayPlanStore.shared
     @State private var scheduledNap: Date? = PlanNotificationService.scheduledNapAt
     @State private var scheduledActivities = PlanNotificationService.scheduledActivities
+    @State private var showCalendar = false
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 600)) { context in
             let now = context.date
-            let rhythm = AlertnessProvider.rhythm(health: health, store: store, now: now)
+            let isToday = dayStore.selectedOffset == 0
+            let rhythm = isToday ? AlertnessProvider.rhythm(health: health, store: store, now: now)
+                                 : futureRhythm(now: now)
             // User's "always OK to nap" windows override the calendar's busy times.
-            let busy = Intervals.subtract(NapWindowsStore.shared.todayIntervals(now: now),
-                                          from: CalendarService.shared.busyToday(now: now))
-            let plan = DayPlan.build(rhythm: rhythm, now: now, busy: busy)
+            let busy = isToday ? Intervals.subtract(NapWindowsStore.shared.todayIntervals(now: now),
+                                                    from: CalendarService.shared.busyToday(now: now)) : []
+            let plan = DayPlan.build(rhythm: rhythm, now: isToday ? now : rhythm.wakeTime, busy: busy)
+            let planned = dayStore.plan(for: dayStore.selectedDate)
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    AlertnessRecapView()
-                    if let napAt = scheduledNap { scheduledNapCard(napAt) }
-                    ForEach(scheduledActivities) { scheduledActivityCard($0) }
+                    dayNav(now: now, isToday: isToday)
+                    if isToday {
+                        AlertnessRecapView()
+                        if let napAt = scheduledNap { scheduledNapCard(napAt) }
+                        ForEach(scheduledActivities) { scheduledActivityCard($0) }
+                    }
+                    if !planned.isEmpty { plannedCard(planned) }
                     agendaCard(plan)
-                    if plan.napBlockedByCalendar {
+                    if isToday && plan.napBlockedByCalendar {
                         Label("Your calendar's booked through your dip — grab even 10 min if a gap opens.",
                               systemImage: "calendar.badge.exclamationmark")
                             .font(.caption).foregroundStyle(.orange)
@@ -55,7 +64,7 @@ struct DayPlanView: View {
                 .padding()
             }
         }
-        .navigationTitle("Today's Plan")
+        .navigationTitle("Plan")
         .task {
             await CalendarService.shared.requestAccess()
             if await health.requestAuthorization() { await health.refreshAll() }
@@ -64,6 +73,75 @@ struct DayPlanView: View {
             scheduledNap = PlanNotificationService.scheduledNapAt
             scheduledActivities = PlanNotificationService.scheduledActivities
         }
+    }
+
+    // MARK: - Day navigation
+
+    private func dayNav(now: Date, isToday: Bool) -> some View {
+        HStack(spacing: 8) {
+            Button { dayStore.shift(by: -1) } label: { Image(systemName: "chevron.left").font(.headline) }
+                .buttonStyle(.plain).foregroundStyle(.indigo).disabled(dayStore.selectedOffset == 0)
+            Spacer()
+            Text(dayLabel(now: now, isToday: isToday)).font(.headline)
+                .onTapGesture { showCalendar = true }
+                .popover(isPresented: $showCalendar) {
+                    DatePicker("Day", selection: Binding(get: { dayStore.selectedDate },
+                                                         set: { dayStore.select($0); showCalendar = false }),
+                               in: Date()..., displayedComponents: .date)
+                        .datePickerStyle(.graphical).padding()
+                        .frame(minWidth: 300, minHeight: 320).presentationCompactAdaptation(.popover)
+                }
+            Spacer()
+            Button { dayStore.shift(by: 1) } label: { Image(systemName: "chevron.right").font(.headline) }
+                .buttonStyle(.plain).foregroundStyle(.indigo).disabled(dayStore.selectedOffset >= 14)
+        }
+        .padding(.horizontal, 4)
+    }
+
+    private func dayLabel(now: Date, isToday: Bool) -> String {
+        if isToday { return "Today" }
+        if dayStore.selectedOffset == 1 { return "Tomorrow" }
+        return dayStore.selectedDate.formatted(.dateTime.weekday(.wide).month().day())
+    }
+
+    private func futureRhythm(now: Date) -> AlertnessRhythm {
+        let today = AlertnessProvider.rhythm(health: health, store: store, now: now)
+        let wake = Calendar.current.date(byAdding: .day, value: dayStore.selectedOffset, to: today.wakeTime) ?? today.wakeTime
+        let avg = health.sleepAverage7Day
+        let need = max(avg > 0 ? avg : 7.5, 6)
+        let debt = avg > 0 ? SleepScore.debt(asleepHours: avg, needHours: need) : 0.25
+        return AlertnessRhythm(wakeTime: wake, sleepDebt: debt)
+    }
+
+    /// The naps/walks/workouts planned on the curve for the selected day.
+    private func plannedCard(_ planned: [PlanItem]) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Your plan").font(.headline)
+            ForEach(planned.sorted { ($0.at ?? .distantFuture) < ($1.at ?? .distantFuture) }) { item in
+                HStack(spacing: 10) {
+                    ZStack {
+                        Circle().fill(item.kind.tint.opacity(0.18)).frame(width: 30, height: 30)
+                        Image(systemName: item.kind.icon).font(.caption).foregroundStyle(item.kind.tint)
+                    }
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(item.kind.label).font(.subheadline.weight(.semibold))
+                        Text(plannedDetail(item)).font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    if let at = item.at {
+                        Text(at, format: .dateTime.hour().minute()).font(.caption.weight(.medium)).foregroundStyle(item.kind.tint)
+                    }
+                }
+            }
+            Text("Edit on the alertness curve (Home).").font(.caption2).foregroundStyle(.tertiary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading).padding()
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 16))
+    }
+
+    private func plannedDetail(_ item: PlanItem) -> String {
+        if item.kind == .nap { return item.napType == .cycle ? "Cycle · ~90 min" : "Power · ~20 min" }
+        return "\(Int(item.minutes)) min · \(item.outdoors ? "outside ☀️" : "inside")"
     }
 
     /// A scheduled walk/workout from the alertness curve, with a one-tap cancel.
