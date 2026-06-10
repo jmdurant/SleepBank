@@ -33,6 +33,15 @@ this document: it helps users **cope with and optimize** a short-sleep day; it d
 **not** replace the sleep they need, and the app states that plainly (e.g., the
 predicted alertness curve sits lower on a short night rather than papering over it).
 
+This also distinguishes SleepBank from the **readiness / recovery scores** that
+wearables now report (Oura Readiness, Whoop Recovery, Garmin Body Battery, Apple
+Vitals) — a retrospective number the user *receives*. SleepBank is the **response
+layer**: it converts that depletion into *timed, actionable levers* across the day
+(a forward-looking, hour-by-hour alertness prediction with "nap now / get light
+now" guidance). The two are complementary rather than competing — SleepBank already
+ingests the same physiological inputs (sleep, HRV, resting HR), so a readiness score
+could set the starting height of the day's curve.
+
 ---
 
 ## 2. Why short naps (homeostatic basis)

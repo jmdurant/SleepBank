@@ -23,6 +23,13 @@ morning daylight, morning movement). It's honest by design: it shows you *when* 
 act, not a pseudo-scientific score — and it's clear that this helps you **cope with
 and optimize** a short-sleep day, not *replace* the sleep you actually need.
 
+**Most wearables tell you your *readiness* for the day — a score you receive.
+SleepBank is the *response*:** it turns that depletion into a forward-looking,
+hour-by-hour plan (when you'll dip, when to nap, when to get light) so you can act
+on the day instead of just rating it. Readiness is the diagnosis; SleepBank is the
+levers. (It reads the same signals — sleep, HRV, resting heart rate — so a readiness
+score can even feed it.)
+
 > **Status:** investigational / pre-validation **wellness prototype** — **not** a
 > medical device and makes no diagnostic claim. See [`RATIONALE.md`](RATIONALE.md).
 
