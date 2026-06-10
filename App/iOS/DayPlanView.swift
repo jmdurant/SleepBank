@@ -15,6 +15,7 @@ struct DayPlanView: View {
     var health = HealthKitService.shared
     var store = NapDecisionStore.shared
     @State private var scheduledNap: Date? = PlanNotificationService.scheduledNapAt
+    @State private var scheduledActivities = PlanNotificationService.scheduledActivities
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 600)) { context in
@@ -28,6 +29,7 @@ struct DayPlanView: View {
                 VStack(alignment: .leading, spacing: 16) {
                     readinessCard(plan)
                     if let napAt = scheduledNap { scheduledNapCard(napAt) }
+                    ForEach(scheduledActivities) { scheduledActivityCard($0) }
                     agendaCard(plan)
                     if plan.napBlockedByCalendar {
                         Label("Your calendar's booked through your dip — grab even 10 min if a gap opens.",
@@ -58,7 +60,40 @@ struct DayPlanView: View {
             await CalendarService.shared.requestAccess()
             if await health.requestAuthorization() { await health.refreshAll() }
         }
-        .onAppear { scheduledNap = PlanNotificationService.scheduledNapAt }
+        .onAppear {
+            scheduledNap = PlanNotificationService.scheduledNapAt
+            scheduledActivities = PlanNotificationService.scheduledActivities
+        }
+    }
+
+    /// A scheduled walk/workout from the alertness curve, with a one-tap cancel.
+    private func scheduledActivityCard(_ item: PlanNotificationService.ScheduledActivity) -> some View {
+        let isWalk = item.kind.caseInsensitiveCompare("Walk") == .orderedSame
+        let tint: Color = isWalk ? .orange : .pink
+        return HStack(spacing: 12) {
+            ZStack {
+                Circle().fill(tint.opacity(0.18)).frame(width: 32, height: 32)
+                Image(systemName: isWalk ? "figure.walk" : "figure.run").font(.caption).foregroundStyle(tint)
+            }
+            VStack(alignment: .leading, spacing: 1) {
+                Text("\(item.kind) scheduled for \(clock(item.at))").font(.subheadline.weight(.semibold))
+                Text(item.outdoors ? "Outside — movement + daylight to anchor tonight's sleep."
+                                    : "Indoors — a movement lift to stay sharp.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer()
+            Button {
+                PlanNotificationService.shared.cancelActivity(kind: item.kind)
+                scheduledActivities = PlanNotificationService.scheduledActivities
+            } label: {
+                Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Cancel scheduled \(item.kind)")
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 16))
     }
 
     /// The nap the user scheduled off the alertness curve, with a one-tap cancel.

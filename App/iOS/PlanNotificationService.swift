@@ -109,6 +109,62 @@ final class PlanNotificationService: NSObject, UNUserNotificationCenterDelegate 
         return true
     }
 
+    /// A walk/workout the user scheduled off the curve, surfaced on Today's Plan.
+    struct ScheduledActivity: Codable, Identifiable {
+        var kind: String       // "Walk" / "Workout"
+        var at: Date
+        var outdoors: Bool
+        var id: String { kind }
+    }
+
+    private static let activitiesKey = "scheduledActivities"
+
+    /// Today's scheduled activities (auto-prunes anything not from today).
+    static var scheduledActivities: [ScheduledActivity] {
+        get {
+            guard let data = UserDefaults.standard.data(forKey: activitiesKey),
+                  let all = try? JSONDecoder().decode([ScheduledActivity].self, from: data) else { return [] }
+            return all.filter { Calendar.current.isDateInToday($0.at) }
+        }
+        set {
+            UserDefaults.standard.set(try? JSONEncoder().encode(newValue), forKey: activitiesKey)
+        }
+    }
+
+    private func activityId(_ kind: String) -> String { "scheduledActivity-\(kind.lowercased())" }
+
+    /// Schedule a one-shot reminder for a planned walk/workout from the curve, and
+    /// record it for Today's Plan.
+    @discardableResult
+    func scheduleActivity(at date: Date, title: String, outdoors: Bool) async -> Bool {
+        let interval = date.timeIntervalSinceNow
+        guard interval > 60 else { return false }
+        let granted = (try? await center.requestAuthorization(options: [.alert, .sound])) ?? false
+        guard granted else { return false }
+
+        let content = UNMutableNotificationContent()
+        content.title = "\(outdoors ? "☀️" : "💪") Time for your \(title.lowercased())"
+        content.body = outdoors
+            ? "Get outside — the movement lifts you now and the daylight steadies tonight's sleep."
+            : "A bit of movement now keeps you sharp through the rest of the day."
+        content.sound = .default
+        content.userInfo = ["route": "plan"]
+
+        center.removePendingNotificationRequests(withIdentifiers: [activityId(title)])
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: interval, repeats: false)
+        try? await center.add(UNNotificationRequest(identifier: activityId(title), content: content, trigger: trigger))
+
+        var items = Self.scheduledActivities.filter { $0.kind.caseInsensitiveCompare(title) != .orderedSame }
+        items.append(ScheduledActivity(kind: title, at: date, outdoors: outdoors))
+        Self.scheduledActivities = items
+        return true
+    }
+
+    func cancelActivity(kind: String) {
+        center.removePendingNotificationRequests(withIdentifiers: [activityId(kind)])
+        Self.scheduledActivities = Self.scheduledActivities.filter { $0.kind.caseInsensitiveCompare(kind) != .orderedSame }
+    }
+
     func cancelScheduledNap() {
         center.removePendingNotificationRequests(withIdentifiers: [napId])
         Self.scheduledNapAt = nil

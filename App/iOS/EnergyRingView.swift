@@ -13,27 +13,25 @@ import SwiftUI
 import SleepBankCore
 
 struct EnergyRingView: View {
-    var store = NapDecisionStore.shared
-
     var body: some View {
         // Re-evaluate each minute so the battery tracks the day (dip, naps, drain).
         TimelineView(.periodic(from: .now, by: 60)) { context in
             let now = context.date
             let rhythm = AlertnessProvider.rhythm(now: now)
-            let level = rhythm.level(at: now)
+            let nowLevel = rhythm.level(at: now)
+            // While a plan is being built on the curve, preview the peak it would reach.
+            let preview = PlanPreview.shared
+            let charging = (preview.level ?? -1) > nowLevel + 0.01
+            let shown = charging ? (preview.level ?? nowLevel) : nowLevel
             VStack(spacing: 14) {
                 HStack(spacing: 6) {
                     Image(systemName: "bolt.fill").font(.subheadline).foregroundStyle(.yellow)
                     Text("Alert Score").font(.headline)
                 }
                 NavigationLink(value: HomeRoute.alertness) {
-                    ring(level: level, now: now)
+                    ring(level: shown, now: now, peakTime: charging ? preview.peakTime : nil)
                 }
                 .buttonStyle(.plain)
-                Text(caption(level: level, rhythm: rhythm))
-                    .font(.caption).foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                bankFooter
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 20)
@@ -44,7 +42,7 @@ struct EnergyRingView: View {
 
     // MARK: - Ring
 
-    private func ring(level: Double, now: Date) -> some View {
+    private func ring(level: Double, now: Date, peakTime: Date?) -> some View {
         ZStack {
             Circle().stroke(.quaternary, lineWidth: 18)
             Circle()
@@ -61,9 +59,15 @@ struct EnergyRingView: View {
                     .font(.system(size: 48, weight: .bold, design: .rounded))
                     .monospacedDigit()
                     .contentTransition(.numericText())
-                Text(AlertnessProvider.phaseLabel(now))
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
+                if let peakTime {
+                    Label("peak \(peakTime, format: .dateTime.hour().minute())", systemImage: "bolt.fill")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.mint)
+                } else {
+                    Text(AlertnessProvider.phaseLabel(now))
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
             }
         }
         .frame(width: 180, height: 180)
@@ -78,46 +82,4 @@ struct EnergyRingView: View {
         }
     }
 
-    private func caption(level: Double, rhythm: AlertnessRhythm) -> String {
-        if rhythm.isShortNight && level < 0.6 { return "Short night — you're running lower today." }
-        if level < 0.45 { return "Low — a nap or some daylight would lift you." }
-        if level >= 0.7 { return "Running strong. Tap for your day's curve." }
-        return "Holding steady. Tap for your day's curve."
-    }
-
-    // MARK: - Descriptive bank
-
-    private var bankFooter: some View {
-        HStack(spacing: 14) {
-            stat(value: "\(napsToday)", label: napsToday == 1 ? "nap today" : "naps today")
-            if streak > 0 {
-                Divider().frame(height: 28)
-                stat(value: "🔥 \(streak)", label: streak == 1 ? "day" : "day streak")
-            }
-            Divider().frame(height: 28)
-            stat(value: "\(minutesThisWeek)", label: "min this week")
-        }
-        .frame(maxWidth: .infinity)
-    }
-
-    private func stat(value: String, label: String) -> some View {
-        VStack(spacing: 1) {
-            Text(value).font(.headline)
-            Text(label).font(.caption2).foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity)
-    }
-
-    // MARK: - Data (for the bank)
-
-    private var napRecords: [NapRecord] {
-        store.records.map {
-            NapRecord(id: $0.id, start: $0.start, end: $0.end, type: $0.type,
-                      onset: $0.onset, wakeReason: $0.wakeReason)
-        }
-    }
-
-    private var napsToday: Int { NapBank.count(on: Date(), in: napRecords) }
-    private var streak: Int { NapBank.currentStreak(asOf: Date(), in: napRecords) }
-    private var minutesThisWeek: Int { NapBank.minutesAsleepLast7Days(endingAt: Date(), in: napRecords) }
 }

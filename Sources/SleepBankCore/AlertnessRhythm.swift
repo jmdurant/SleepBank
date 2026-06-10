@@ -41,6 +41,28 @@ public struct AlertnessRhythm: Sendable {
         }
     }
 
+    /// A hypothetical bout of physical activity placed on the curve. `intensity` sets
+    /// the size of the *acute* arousal bump (a walk lifts less than a workout, and both
+    /// less than a nap); `outdoors` adds the light/circadian-anchoring layer — its
+    /// payoff is downstream (better sleep tonight), carried by messaging, not a big
+    /// acute curve lift, per `docs/DAYLIGHT_EVIDENCE.md`.
+    public struct Activity: Sendable, Identifiable {
+        public enum Intensity: String, Sendable, CaseIterable { case walk, workout }
+        public let id: String
+        public let intensity: Intensity
+        public let outdoors: Bool
+        public let start: Date
+        public let duration: TimeInterval
+        public init(id: String = "activity", intensity: Intensity, outdoors: Bool,
+                    start: Date, duration: TimeInterval) {
+            self.id = id
+            self.intensity = intensity
+            self.outdoors = outdoors
+            self.start = start
+            self.duration = duration
+        }
+    }
+
     public let wakeTime: Date
     /// 0…1 residual sleep pressure at wake — higher means a shorter night.
     public let sleepDebt: Double
@@ -191,10 +213,23 @@ public struct AlertnessRhythm: Sendable {
         return combined * shape
     }
 
-    /// Raw (C − S + morning light) before display normalization — the single source
-    /// of truth for every sampling method.
-    private func rawLevel(at date: Date, extraNap: Nap? = nil) -> Double {
+    /// Acute arousal from a bout of physical activity — a modest, short-lived lift
+    /// (raised catecholamines + core temp), NOT a sleep-pressure discharge like a nap.
+    /// Smooth: builds from onset, peaks ~35 min in, fades over ~1.5 h. A workout lifts
+    /// about twice a walk, and both stay well under a nap. Placed late, the lingering
+    /// tail keeps the evening elevated — the honest "exercise too close to bed" cost.
+    private func arousal(of a: Activity, at date: Date) -> Double {
+        let u = date.timeIntervalSince(a.start) / 3600
+        guard u > 0 else { return 0 }
+        let coef = a.intensity == .workout ? 0.21 : 0.10
+        return coef * (1 - exp(-u / 0.5)) * exp(-u / 1.6)
+    }
+
+    /// Raw (C − S + morning light + activity arousal) before display normalization —
+    /// the single source of truth for every sampling method.
+    private func rawLevel(at date: Date, extraNap: Nap? = nil, activities: [Activity] = []) -> Double {
         circadian(hour: hour(of: date)) - pressure(at: date, extraNap: extraNap) + morningLift(at: date)
+            + activities.reduce(0) { $0 + arousal(of: $1, at: date) }
     }
 
     private func hour(of date: Date) -> Double {
@@ -234,6 +269,19 @@ public struct AlertnessRhythm: Sendable {
                       type: napType, fullness: 1)
         return stride(from: start, through: end, step: step).map {
             Reading(date: $0, level: normalize(rawLevel(at: $0, extraNap: nap)))
+        }
+    }
+
+    /// Alertness at a moment under a whole plan — an optional nap plus any activities.
+    public func level(at date: Date, nap: Nap?, activities: [Activity]) -> Double {
+        normalize(rawLevel(at: date, extraNap: nap, activities: activities))
+    }
+
+    /// The combined "with your plan" curve: an optional nap stacked with activities.
+    public func planReadings(nap: Nap?, activities: [Activity],
+                             from start: Date, to end: Date, step: TimeInterval = 900) -> [Reading] {
+        stride(from: start, through: end, step: step).map {
+            Reading(date: $0, level: normalize(rawLevel(at: $0, extraNap: nap, activities: activities)))
         }
     }
 }

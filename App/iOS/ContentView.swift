@@ -105,6 +105,7 @@ struct ContentView: View {
             open(route)
             PlanNotificationService.shared.clearPending()
         }
+        LocationService.shared.refresh()   // coarse location → local sunset for light timing
         guard await health.requestAuthorization() else { return }
         await health.refreshAll()
         // Seed bedtime history from past HealthKit nights so Sleep Score can grade
@@ -131,32 +132,15 @@ struct ContentView: View {
 // MARK: - Home tab
 
 private struct HomeView: View {
-    @State private var health = HealthKitService.shared
-
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 EnergyRingView()
                 AlertnessCurveView()
-                baselineCard
             }
             .padding()
         }
         .toolbar(.hidden, for: .navigationBar)
-    }
-
-    private var baselineCard: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Today's Baseline").font(.headline)
-            Label(health.restingHeartRate > 0 ? "\(Int(health.restingHeartRate)) bpm resting (\(health.restingHRTrend))" : "Resting HR —",
-                  systemImage: "heart.fill")
-            Label(health.hrvAverage > 0 ? String(format: "%.0f ms HRV", health.hrvAverage) : "HRV —",
-                  systemImage: "waveform.path.ecg")
-        }
-        .font(.subheadline)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding()
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 16))
     }
 }
 
@@ -201,6 +185,7 @@ private struct HistoryView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 lastNightCard
+                baselineCard
                 chartCard
                 NavigationLink { ValidationView() } label: {
                     Label("Validation & Training Data", systemImage: "checklist")
@@ -220,14 +205,13 @@ private struct HistoryView: View {
             Text("Last Night").font(.headline)
             if let s = health.lastNightSleep, s.totalHours > 0 {
                 let need = max(health.sleepAverage7Day > 0 ? health.sleepAverage7Day : 7.5, 6)
-                let c = SleepScore.components(
+                let score = SleepScore.score(
                     asleepHours: s.totalHours, needHours: need, efficiency: s.efficiency,
                     deepHours: s.deepHours, remHours: s.remHours,
                     bedtimeMinutes: s.bedtime.map(BedtimeHistoryStore.minutesFrom6pm),
                     normalMinutes: BedtimeHistoryStore.shared.normalMinutes,
                     spreadMinutes: BedtimeHistoryStore.shared.spreadMinutes)
-                scoreRow(c.total)
-                breakdown(c)
+                scoreRow(score)
                 Text(String(format: "%.1f h asleep · %.0f%% efficiency", s.totalHours, s.efficiency * 100))
                     .font(.subheadline)
                 Text(String(format: "7-day average: %.1f h", health.sleepAverage7Day))
@@ -255,22 +239,18 @@ private struct HistoryView: View {
         .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 16))
     }
 
-    private func breakdown(_ c: SleepScore.Components) -> some View {
-        HStack(spacing: 14) {
-            factor("Duration", c.duration, 50)
-            factor("Consistency", c.consistency, 30)
-            factor("Interruptions", c.interruptions, 20)
+    private var baselineCard: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Today's Baseline").font(.headline)
+            Label(health.restingHeartRate > 0 ? "\(Int(health.restingHeartRate)) bpm resting (\(health.restingHRTrend))" : "Resting HR —",
+                  systemImage: "heart.fill")
+            Label(health.hrvAverage > 0 ? String(format: "%.0f ms HRV", health.hrvAverage) : "HRV —",
+                  systemImage: "waveform.path.ecg")
         }
-        .padding(.vertical, 2)
-    }
-
-    private func factor(_ name: String, _ value: Int?, _ max: Int) -> some View {
-        VStack(spacing: 1) {
-            Text(value.map { "\($0)" } ?? "—").font(.subheadline.weight(.bold).monospacedDigit())
-            Text("/ \(max)").font(.caption2).foregroundStyle(.tertiary)
-            Text(name).font(.caption2).foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity)
+        .font(.subheadline)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding()
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 16))
     }
 
     private func scoreRow(_ score: Int) -> some View {
