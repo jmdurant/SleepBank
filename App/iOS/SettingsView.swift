@@ -13,6 +13,7 @@ struct SettingsView: View {
     @State private var relax = GuidedRelaxationService.shared
     @State private var calendar = CalendarService.shared
     @State private var napWindows = NapWindowsStore.shared
+    @AppStorage("appearanceMode") private var appearance: AppearanceMode = .system
     @State private var morningPlan = PlanNotificationService.morningPlanEnabled
     @State private var windDownReminder = PlanNotificationService.windDownReminderEnabled
 
@@ -72,11 +73,18 @@ struct SettingsView: View {
                 Text("These windows override your calendar — a nap can be suggested here even if you're booked (e.g. a quiet stretch during a long appointment).")
             }
 
+            Section("Appearance") {
+                Picker("Theme", selection: $appearance) {
+                    ForEach(AppearanceMode.allCases) { Text($0.title).tag($0) }
+                }
+                .pickerStyle(.segmented)
+            }
+
             Section("Features") {
                 NavigationLink(value: HomeRoute.plan) { Label("Today's Plan", systemImage: "list.bullet.clipboard.fill") }
                 NavigationLink(value: HomeRoute.daylight) { Label("Daylight", systemImage: "sun.max.fill") }
                 NavigationLink(value: HomeRoute.windDown) { Label("Wind Down (screens, lights)", systemImage: "moon.stars.fill") }
-                NavigationLink(value: HomeRoute.alertness) { Label("Alertness", systemImage: "bolt.fill") }
+                NavigationLink(value: HomeRoute.alertness) { Label("Alert Score", systemImage: "bolt.fill") }
             }
 
             Section {

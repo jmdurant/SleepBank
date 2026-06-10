@@ -15,11 +15,20 @@ import SleepChartKit
 struct ContentView: View {
     @State private var health = HealthKitService.shared
     @State private var path: [HomeRoute] = []
+    @AppStorage("appearanceMode") private var appearance: AppearanceMode = .system
 
     var body: some View {
         NavigationStack(path: $path) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
+                    HStack {
+                        Spacer()
+                        NavigationLink(value: HomeRoute.settings) {
+                            Image(systemName: "gearshape.fill").font(.title3).foregroundStyle(.secondary)
+                        }
+                    }
+                    EnergyRingView()
+                    AlertnessCurveView()
                     NavigationLink(value: HomeRoute.plan) {
                         HStack {
                             Image(systemName: "list.bullet.clipboard.fill")
@@ -32,8 +41,6 @@ struct ContentView: View {
                         .foregroundStyle(.white)
                     }
                     .buttonStyle(.plain)
-                    EnergyRingView()
-                    AlertnessCurveView()
                     NavigationLink {
                         NapView()
                     } label: {
@@ -82,7 +89,7 @@ struct ContentView: View {
                 }
                 .padding()
             }
-            .navigationTitle("SleepBank")
+            .toolbar(.hidden, for: .navigationBar)
             .task {
                 // Cold-started from a notification tap.
                 if let route = PlanNotificationService.shared.pendingRoute {
@@ -121,13 +128,6 @@ struct ContentView: View {
                 case .settings:  SettingsView()
                 }
             }
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    NavigationLink(value: HomeRoute.settings) {
-                        Image(systemName: "gearshape.fill")
-                    }
-                }
-            }
             .onOpenURL { url in
                 switch url.host {
                 case "plan":      path = [.plan]
@@ -144,6 +144,7 @@ struct ContentView: View {
                 PlanNotificationService.shared.clearPending()
             }
         }
+        .preferredColorScheme(appearance.colorScheme)
     }
 
     private var lastNightCard: some View {

@@ -24,7 +24,7 @@ struct AlertnessIntent: AppIntent {
         let rhythm = snap.rebuild()
         let level = rhythm.level(at: now)
         let phase = AlertnessRhythm.phaseLabel(at: now).lowercased()
-        var message = "You're at about \(pct(level))% alertness — \(phase)."
+        var message = "Your alert score is about \(pct(level)) — \(phase)."
 
         // Add a nap suggestion only if a nap now would meaningfully lift the day.
         let napEnd = now.addingTimeInterval(NapType.power.targetWakeAfterOnset)

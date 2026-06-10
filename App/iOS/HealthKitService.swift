@@ -187,28 +187,40 @@ class HealthKitService {
         do {
             let samples = try await querySamples(sleepType, predicate: predicate)
 
-            var inBed: TimeInterval = 0, asleep: TimeInterval = 0
+            var asleep: TimeInterval = 0
             var rem: TimeInterval = 0, deep: TimeInterval = 0, core: TimeInterval = 0, awake: TimeInterval = 0
-            var bedtime: Date?, wakeTime: Date?
+            // Track the in-bed span from the samples themselves — Apple Watch rarely
+            // emits explicit `.inBed`, so bedtime/wake/in-bed come from the session.
+            var sessionStart: Date?, sessionEnd: Date?
 
             for sample in samples {
+                let value = HKCategoryValueSleepAnalysis(rawValue: sample.value)
+                let counts: Bool
+                switch value {
+                case .inBed, .asleepUnspecified, .asleep, .asleepREM, .asleepDeep, .asleepCore, .awake:
+                    counts = true
+                default: counts = false
+                }
+                guard counts else { continue }
+                if sessionStart == nil || sample.startDate < sessionStart! { sessionStart = sample.startDate }
+                if sessionEnd == nil || sample.endDate > sessionEnd! { sessionEnd = sample.endDate }
+
                 let duration = sample.endDate.timeIntervalSince(sample.startDate)
-                switch HKCategoryValueSleepAnalysis(rawValue: sample.value) {
-                case .inBed:
-                    inBed += duration
-                    if bedtime == nil { bedtime = sample.startDate }
-                    wakeTime = sample.endDate
+                switch value {
                 case .asleepUnspecified, .asleep: asleep += duration
                 case .asleepREM: rem += duration; asleep += duration
                 case .asleepDeep: deep += duration; asleep += duration
                 case .asleepCore: core += duration; asleep += duration
                 case .awake: awake += duration
-                default: break
+                default: break   // .inBed contributes to the span only
                 }
             }
 
             let totalSleepHours = asleep / 3600
-            let inBedHours = max(inBed, asleep) / 3600
+            // In bed = the whole session span (asleep + awake/restless in between).
+            let inBedSeconds = (sessionStart != nil && sessionEnd != nil)
+                ? sessionEnd!.timeIntervalSince(sessionStart!) : asleep
+            let inBedHours = inBedSeconds / 3600
             let avg = await fetchSleepAverage7Day()
 
             return SleepSummary(
@@ -218,9 +230,9 @@ class HealthKitService {
                 deepHours: deep / 3600,
                 coreHours: core / 3600,
                 awakeHours: awake / 3600,
-                bedtime: bedtime,
-                wakeTime: wakeTime,
-                efficiency: inBedHours > 0 ? totalSleepHours / inBedHours : 0,
+                bedtime: sessionStart,
+                wakeTime: sessionEnd,
+                efficiency: inBedSeconds > 0 ? min(asleep / inBedSeconds, 1) : 0,
                 averageLast7Days: avg
             )
         } catch {
