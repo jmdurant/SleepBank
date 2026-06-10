@@ -27,7 +27,7 @@ struct DayPlanView: View {
             let plan = DayPlan.build(rhythm: rhythm, now: now, busy: busy)
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    readinessCard(plan)
+                    AlertnessRecapView()
                     if let napAt = scheduledNap { scheduledNapCard(napAt) }
                     ForEach(scheduledActivities) { scheduledActivityCard($0) }
                     agendaCard(plan)
@@ -123,23 +123,6 @@ struct DayPlanView: View {
         .background(.indigo.opacity(0.12), in: RoundedRectangle(cornerRadius: 16))
     }
 
-    // MARK: - Readiness
-
-    private func readinessCard(_ plan: DayPlan) -> some View {
-        VStack(spacing: 6) {
-            Text("\(pct(plan.startingLevel))%").font(.system(size: 44, weight: .bold, design: .rounded))
-            Text("how your day starts").font(.caption).foregroundStyle(.secondary)
-            Text(plan.isShortNight
-                 ? "Starting low after a short night — here's how to get through it well."
-                 : "Starting strong — here's how to keep it.")
-                .font(.subheadline).multilineTextAlignment(.center)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity)
-        .padding()
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 20))
-    }
-
     // MARK: - Agenda
 
     private func agendaCard(_ plan: DayPlan) -> some View {
@@ -223,5 +206,4 @@ struct DayPlanView: View {
     }
 
     private func clock(_ date: Date) -> String { date.formatted(.dateTime.hour().minute()) }
-    private func pct(_ level: Double) -> Int { Int((level * 100).rounded()) }
 }
