@@ -4,11 +4,123 @@
 
 A clean, lightweight SwiftUI package for displaying beautiful sleep stage visualizations with comprehensive HealthKit integration.
 
-> **This repository is also the home of the SleepBank app** — a power-nap app
-> (iOS + watchOS) built on top of SleepChartKit. See
-> [`ARCHITECTURE.md`](ARCHITECTURE.md) for the app's design and
-> [`RATIONALE.md`](RATIONALE.md) for the scientific rationale, evidence base, and
-> validation/regulatory considerations.
+> **This repository is the home of SleepBank** — a **daytime alertness manager**
+> for iOS + watchOS, built on top of the SleepChartKit package documented further
+> below.
+
+---
+
+# 😴⚡ SleepBank — a daytime alertness manager
+
+SleepBank began as a power-nap app and grew into a **daytime alertness manager**:
+it helps you *time* rest and light so you feel sharp through the day — using a
+smart alarm, a predicted alertness curve, and the natural levers that actually move
+it (naps, morning daylight, morning movement). It's honest by design: it shows you
+*when* to act, not a pseudo-scientific score.
+
+> **Status:** investigational / pre-validation **wellness prototype** — **not** a
+> medical device and makes no diagnostic claim. See [`RATIONALE.md`](RATIONALE.md).
+
+## What it does
+
+### 🛌 Smart-alarm power naps — *the core*
+- Two nap types: **Power Nap** (~20 min, wake before deep sleep) and **Cycle Nap**
+  (~90 min, one full cycle).
+- The alarm fires off **detected sleep onset**, not the clock — it wakes you in
+  light sleep, **before slow-wave (N3) sleep consolidates**, to dodge the grogginess
+  of sleep inertia.
+- Wakes on the earliest of: your target, a safety ceiling, **deep-sleep approach**,
+  or a **spontaneous awakening** — tiered haptic → audible.
+
+### ⚡ "You are here" — your daily alertness curve
+- A predicted **two-process** curve (circadian rhythm − sleep pressure) for the
+  whole day: the late-morning peak, the **post-lunch dip**, the evening **second
+  wind**, and the night plunge.
+- A **"you are here"** marker with your current % and a plain-words phase, plus the
+  single most-relevant move (a nap when it would help, morning light when it's early).
+- **Last night's sleep sets the curve's height** — a short night visibly lowers it
+  all day, and a dashed branch shows where a nap *now* could take you.
+
+### 🔋 Energy ring & the (honest) sleep bank
+- An Apple-Activity-style **charge ring** that fills when you wake from a nap and
+  **drains over the benefit window** — because nap alertness is genuinely transient.
+- A **descriptive** sleep bank: naps today, minutes this week, streaks. Deliberately
+  **not** a ledger — naps restore alertness, they don't mathematically repay sleep
+  debt, and the app says so.
+
+### ☀️ Morning light & movement — circadian anchoring
+- Reads Apple Watch **Time in Daylight**, **sub-segmented by window** — morning
+  light is weighted because that's what anchors your body clock.
+- A morning walk earns a small, honest lift on the curve (the **cortisol awakening
+  response**); **morning movement** earns its own credit (exercise is a non-photic
+  zeitgeber). Stacked but capped — and **fasted/caffeine are deliberately *not*
+  credited** without evidence.
+- A 🌅 **morning-light streak**, plus a **daylight detail screen** that explains why
+  it matters (anchors your rhythm + better sleep tonight).
+
+### 📡 Sensor fusion
+- A ladder of optional signals: **Apple Watch** (HR + immobility) → **Polar H10**
+  (HR, HRV, accelerometer, breathing, posture) → **Muse** frontal **EEG**.
+- Onset is detected by fusing immobility with HR drop / HRV rise / breathing slowing
+  / EEG; deep-sleep approach is detected to trigger the wake.
+- **AirPods Pro 3 heart rate** is on the roadmap as a fourth, zero-extra-hardware
+  sensor (the earbuds are already in for the wind-down audio) — see
+  [`docs/AIRPODS_HR_SENSOR.md`](docs/AIRPODS_HR_SENSOR.md).
+
+### 📲 Everywhere you look
+- **Home / Lock-screen widgets** — a live "you are here" alertness % + morning-light
+  streak, and banked naps.
+- **Apple Watch app & complications** — start/stop naps, nap totals, and a
+  morning-light streak complication.
+- **Siri / Shortcuts** — *"How alert am I?"* / *"Should I nap?"* answered without
+  opening the app, plus *"Start a nap."*
+- **Live Activity** during a nap, and **deep links** (`sleepbank://alertness`,
+  `sleepbank://daylight`, `sleepbank://nap`).
+
+### 🎧 Wind-down
+- Procedural **white / pink / brown noise** and a **guided TTS relaxation** (paced
+  4-7-8 breathing + body relaxation), with smooth audio ducking and AirPlay route
+  control.
+
+### 🍏 Health & data pipeline
+- Writes naps to **Apple Health**.
+- A built-in **validation + training-data pipeline**: every nap is captured as a
+  labeled trace, and raw Muse EEG auto-syncs via iCloud to a Mac-side **YASA**
+  staging tool — building toward an on-device Core ML onset model.
+
+## The evidence base
+
+SleepBank is built on a deliberately honest, fact-checked evidence base — claims
+verified against primary sources, with what is *not* supported flagged:
+
+- [`RATIONALE.md`](RATIONALE.md) — clinical rationale & regulatory positioning
+- [`docs/NAP_BENEFIT_EVIDENCE.md`](docs/NAP_BENEFIT_EVIDENCE.md) — why short naps work + the honest sleep-debt framing
+- [`docs/DAYLIGHT_EVIDENCE.md`](docs/DAYLIGHT_EVIDENCE.md) — morning light, circadian anchoring & the cortisol awakening response
+- [`docs/EEG_EVIDENCE.md`](docs/EEG_EVIDENCE.md) — Muse / frontal-EEG sleep staging
+- [`docs/AIRPODS_HR_SENSOR.md`](docs/AIRPODS_HR_SENSOR.md) — AirPods Pro 3 heart-rate access research
+- [`ARCHITECTURE.md`](ARCHITECTURE.md) — app design
+
+## Building SleepBank
+
+The app project is generated with **XcodeGen**:
+
+```sh
+brew install xcodegen
+xcodegen generate
+open SleepBank.xcodeproj
+```
+
+Targets: **SleepBank** (iOS app), **SleepBankWatch** (watchOS), **SleepBankWidget**
+(iOS widgets + Live Activity), **SleepBankWatchWidget** (complications). Requires
+iOS 17+. Onset/nap logic lives in the pure, unit-tested **SleepBankCore** library
+(`swift test`).
+
+---
+
+# SleepChartKit — the charting package underneath
+
+SleepChartKit is the SwiftUI sleep-visualization package SleepBank is built on; the
+rest of this README documents it.
 
 ## Features
 
