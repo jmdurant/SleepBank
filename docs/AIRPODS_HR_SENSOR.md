@@ -17,23 +17,40 @@
   paired as a generic BLE HR strap (this is why Garmin/Zwift/Peloton-hardware and
   Android can't see it). Access is **Apple-mediated**, not raw BLE.
 
-## How third-party apps get it (best current understanding)
+## How third-party apps get it — TWO paths, and the one that matters for us
 
-- HR is **workout-context-gated**: it streams while an **active workout session**
-  is running. Apps like Strava, Nike Run Club, Peloton, Runna, Ladder get **live**
-  AirPods HR during a workout (Strava shows it live on the recording screen, saves
-  to Health on end).
-- The enabling API is **iOS workout sessions** — `HKWorkoutSession` +
-  `HKLiveWorkoutBuilder` / `HKLiveWorkoutDataSource`, **new to iPhone in iOS 26
-  (WWDC25 session 322)**; previously workout sessions were watchOS-only. The OS
-  "automatically handles getting heart rate data from paired external devices" and
-  delivers it via the `workoutBuilder(_:didCollectDataOf:)` callback.
-- **Ambiguity to confirm:** WWDC25 322 explicitly lists **Powerbeats Pro 2** and
-  generic BLE-GATT monitors as iOS HR sources but **did not name AirPods Pro 3**.
-  Since third-party fitness apps demonstrably *do* get AirPods HR live, the most
-  likely path is that the OS routes in-ear AirPods Pro 3 HR into the active iOS
-  workout session automatically (no public BLE, possibly no special entitlement) —
-  but the exact mechanism/entitlement is **the thing to verify with the dev**.
+There are two distinct ways to get AirPods Pro 3 HR, and the difference between
+them is the whole ballgame for onset detection:
+
+**(A) Passive / background → NOT continuous.** AirPods Pro 3 record HR passively
+whenever they're in your ears ("on by default"), written automatically to
+HealthKit (visible in the Health app). A third-party app reads it with ordinary
+HealthKit queries (`HKObserverQuery` + `HKAnchoredObjectQuery`, background
+delivery) — **no workout, no entitlement.** BUT the samples are **sparse/irregular**
+(ambient sampling, not a steady stream), so this is **too coarse to catch the small
+HR *drop* at sleep onset.** Onset detection needs a near-continuous trace.
+
+**(B) Workout session → continuous.** During an active **iOS `HKWorkoutSession`**
+(`HKLiveWorkoutBuilder` / `HKLiveWorkoutDataSource`, new to iPhone in iOS 26 /
+WWDC25 322), AirPods HR streams continuously via `workoutBuilder(_:didCollectDataOf:)`.
+Strava/Nike/Peloton use this. A `.mindAndBody` session (our meditation-framed nap,
+below) is the honest way to trigger it. **This is the path our onset detection
+needs.**
+
+> **The crux — and the key question for the AirPulse dev.** AirPulse advertises
+> "automatically records your heart rate **anytime** you put in your AirPods Pro 3"
+> with a **live graph** — i.e. it appears to get a *continuous-ish* live stream
+> **without** running a workout. That shouldn't be possible via path (A) alone
+> (too sparse) and path (B) requires a workout. So **either** AirPulse's "live" is
+> actually denser passive HealthKit delivery than we assume, **or** there's a
+> non-workout continuous API we haven't found, **or** it quietly runs a lightweight
+> session. **Resolving this is the entire value of the dev conversation** — if there
+> is a no-workout continuous path, it's strictly better for a nap (no workout
+> housekeeping); if not, we use a `.mindAndBody` session.
+>
+> WWDC25 322 listed **Powerbeats Pro 2** and BLE-GATT monitors as iOS HR sources
+> but **did not name AirPods Pro 3** — so even path (B)'s exact mechanism for
+> AirPods is unconfirmed in public docs.
 
 ```swift
 // The likely shape (iOS 26+), to be confirmed:
@@ -83,24 +100,51 @@ NSDR / "non-sleep deep rest"). This is both honest and the technical key:
 
 ## Open questions for the AirPulse developer (Christian Range)
 
-*(The Fitness+ Meditation/Yoga support and the Rhythm app largely answer #2 and #4
-already — confirm rather than discover.)*
+**THE one that matters most:**
 
-1. **Exact access path:** is live AirPods Pro 3 HR just `HKWorkoutSession` +
-   `HKLiveWorkoutDataSource` on iOS 26 with the OS auto-providing AirPods HR, or is
-   there a dedicated API / entitlement / extra step?
-2. **`.mindAndBody` activates HR?** confirm a low-intensity mind-and-body/meditation
-   workout type streams AirPods HR (Fitness+ Meditation suggests yes).
-3. **HR once asleep:** does HR keep streaming after the user stops "meditating" and
-   actually **falls asleep / goes fully still** — or does auto-pause / no-motion
-   stop it? (We'd disable workout auto-pause.) Need the onset HR *drop*.
-4. **Audio coexistence:** confirm HR sensing runs while AirPods play our noise + TTS
-   (Rhythm plays audio, so likely yes).
-5. **Update cadence & latency:** how often HR updates (≤5 s is fine for onset).
-6. **Workout housekeeping:** does the `.mindAndBody` session create a Fitness/Health
-   entry / affect rings, and is that acceptable/suppressible? (We may also log a
-   `mindfulSession` for Mindful Minutes.)
+0. **Continuous without a workout?** AirPulse records HR "anytime you put in your
+   AirPods" with a live graph. Is that a genuine **continuous** stream **without** an
+   `HKWorkoutSession` — and if so, *how*? (denser passive HealthKit delivery via
+   `HKObserverQuery`/`HKAnchoredObjectQuery`? a non-workout HR API? a hidden
+   lightweight session?) Or is the "live" view actually sparse passive samples? This
+   determines whether we can skip the workout entirely.
+
+Then:
+
+1. **Exact access path** if it *is* workout-based: just `HKWorkoutSession` +
+   `HKLiveWorkoutDataSource` on iOS 26 with the OS auto-providing AirPods HR, or a
+   dedicated API / entitlement / extra step?
+2. **`.mindAndBody` activates HR?** does a low-intensity mind-and-body / meditation
+   workout type stream AirPods HR (Fitness+ Meditation suggests yes)?
+3. **HR once asleep / still:** does HR keep streaming after the user stops moving and
+   falls asleep, or does auto-pause / no-motion stop it? (We need the onset HR *drop*
+   from a near-motionless person.)
+4. **Audio coexistence:** does HR sensing run while AirPods play our noise + TTS?
+   (Rhythm plays audio, so likely yes.)
+5. **Update cadence & latency:** how often does HR update? (≤5 s is fine for onset.)
+6. **Workout housekeeping:** does a session create a Fitness/Health entry / affect
+   rings, and is that suppressible? (We may also log a `mindfulSession` for Mindful
+   Minutes.)
 7. **Battery** over a 20–90 min session.
+
+## Draft message to Christian
+
+> Hey Christian — I'm the SleepBank beta tester; I'm building a power-nap app with a
+> smart alarm that wakes you before deep sleep, and AirPods Pro 3 HR would be a
+> perfect onset sensor since people already wear the buds for the wind-down audio.
+>
+> The thing I can't figure out from the docs: AirPulse seems to give a **continuous
+> live** HR readout **without** running a workout. As far as I can tell, the passive
+> HealthKit HR that AirPods write in the background is too sparse for that — so how
+> are you getting a steady live stream? Is it (a) denser passive HealthKit delivery
+> than I'd expect (observer/anchored queries + background delivery), (b) some
+> non-workout HR API, or (c) a lightweight session under the hood?
+>
+> And a few specifics if you're up for it: does the HR keep updating when the person
+> is **lying nearly still** (I need to catch the small HR dip at sleep onset)? Does
+> sensing work **while audio is playing**? Roughly **how often** does it update? No
+> worries if any of this is secret sauce — even a nudge toward the right API would
+> save me a lot of trial and error. Thanks!
 
 ## Status
 
