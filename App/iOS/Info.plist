@@ -24,6 +24,8 @@
 	<string>SleepBank reads your sleep and heart-rate data to study your naps and validate nap-onset detection.</string>
 	<key>NSHealthUpdateUsageDescription</key>
 	<string>SleepBank records your naps to Apple Health.</string>
+	<key>NSHomeKitUsageDescription</key>
+	<string>SleepBank adjusts your HomeKit lights' warmth to match your rhythm — warm in the evening to help you wind down.</string>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
 	<key>NSUbiquitousContainers</key>

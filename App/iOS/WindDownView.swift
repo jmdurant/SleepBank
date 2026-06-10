@@ -46,6 +46,9 @@ struct WindDownView: View {
     @State private var shield = WindDownShieldService.shared
     @State private var showAppPicker = false
     #endif
+    #if canImport(HomeKit)
+    @State private var lighting = HomeLightingService.shared
+    #endif
 
     private var active: Bool { noise.isPlaying || relax.isSpeaking }
 
@@ -62,6 +65,9 @@ struct WindDownView: View {
                 checklist
                 #if canImport(FamilyControls)
                 shieldCard
+                #endif
+                #if canImport(HomeKit)
+                lightingCard
                 #endif
                 screensOffCard
             }
@@ -108,6 +114,9 @@ struct WindDownView: View {
                 relax.start(relax.guide == .none ? .breathing478 : relax.guide)
                 #if canImport(FamilyControls)
                 shield.shield()
+                #endif
+                #if canImport(HomeKit)
+                if lighting.syncEnabled { lighting.setWarm() }
                 #endif
             }
         } label: {
@@ -207,6 +216,42 @@ struct WindDownView: View {
         case (false, true):  return "Edit blocked apps"
         case (false, false): return "Choose apps to block"
         }
+    }
+    #endif
+
+    // MARK: - Home lighting (HomeKit color temperature)
+
+    #if canImport(HomeKit)
+    private var lightingCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Image(systemName: "lightbulb.led.fill").foregroundStyle(.orange)
+                Text("Warm your home lights").font(.subheadline.weight(.semibold))
+                Spacer()
+                if lighting.lightCount > 0 {
+                    Text("\(lighting.lightCount) light\(lighting.lightCount == 1 ? "" : "s")")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            Text("When wind-down starts, shift your HomeKit lights warm (the hue, not the brightness) — the room cues your body that it's nearly sleep.")
+                .font(.caption).foregroundStyle(.secondary)
+            Toggle(isOn: Binding(get: { lighting.syncEnabled }, set: { lighting.syncEnabled = $0 })) {
+                Text("Warm lights at wind-down").font(.caption)
+            }
+            HStack(spacing: 8) {
+                Button { lighting.setWarm() } label: {
+                    Label("Warm now", systemImage: "sun.haze.fill").font(.caption2)
+                }.buttonStyle(.bordered).tint(.orange)
+                Button { lighting.setCool() } label: {
+                    Label("Cool now", systemImage: "sun.max.fill").font(.caption2)
+                }.buttonStyle(.bordered).tint(.blue)
+            }
+            Text("Tip: leave Apple's Adaptive Lighting on for the smooth all-day curve — this just nudges the key shifts to *your* schedule.")
+                .font(.caption2).foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding()
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 20))
     }
     #endif
 
