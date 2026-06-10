@@ -246,7 +246,7 @@ struct WindDownView: View {
                     Label("Cool now", systemImage: "sun.max.fill").font(.caption2)
                 }.buttonStyle(.bordered).tint(.blue)
             }
-            Text("Tip: leave Apple's Adaptive Lighting on for the smooth all-day curve — this just nudges the key shifts to *your* schedule.")
+            Text("Already run a daylight curve (Adaptive Lighting, or a Hue daylight-sync plugin)? Keep it — SleepBank only nudges the key sleep moments. If your curve re-asserts every few minutes, exclude these lights from it (or use its manual mode) so the wind-down warmth holds.")
                 .font(.caption2).foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
