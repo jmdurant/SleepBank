@@ -37,20 +37,21 @@ Strava/Nike/Peloton use this. A `.mindAndBody` session (our meditation-framed na
 below) is the honest way to trigger it. **This is the path our onset detection
 needs.**
 
-> **The crux — and the key question for the AirPulse dev.** AirPulse advertises
-> "automatically records your heart rate **anytime** you put in your AirPods Pro 3"
-> with a **live graph** — i.e. it appears to get a *continuous-ish* live stream
-> **without** running a workout. That shouldn't be possible via path (A) alone
-> (too sparse) and path (B) requires a workout. So **either** AirPulse's "live" is
-> actually denser passive HealthKit delivery than we assume, **or** there's a
-> non-workout continuous API we haven't found, **or** it quietly runs a lightweight
-> session. **Resolving this is the entire value of the dev conversation** — if there
-> is a no-workout continuous path, it's strictly better for a nap (no workout
-> housekeeping); if not, we use a `.mindAndBody` session.
+> **✅ CRUX RESOLVED (AirPulse dev Christian Range, 2026-06-10).** There is **no
+> secret non-workout API.** In his words: *"I start a workout just as every other
+> app as well and delete it afterwards. That's the only way I know to start the
+> heart rate sensor and receive the data in Apple Health, which I can then read from
+> Apple Health."* So it's **path (B): workout-gated.** The recipe:
+> 1. **Start a workout** → activates the AirPods Pro 3 HR sensor.
+> 2. HR streams into **HealthKit** during the workout.
+> 3. **Read it** (from HealthKit, or directly off the live workout builder).
+> 4. **Delete the workout afterward** so it doesn't litter Fitness / the rings.
 >
-> WWDC25 322 listed **Powerbeats Pro 2** and BLE-GATT monitors as iOS HR sources
-> but **did not name AirPods Pro 3** — so even path (B)'s exact mechanism for
-> AirPods is unconfirmed in public docs.
+> AirPulse's "anytime you put them in / live graph" is just an auto-started workout
+> under the hood. For SleepBank this is the path we already use on the watch — run a
+> quiet `.mindAndBody` `HKWorkoutSession` during the nap, read AirPods HR (live via
+> `HKLiveWorkoutBuilder`), fuse into onset detection, and delete the workout on nap
+> end. Path (A) passive HealthKit remains too sparse for onset.
 
 ```swift
 // The likely shape (iOS 26+), to be confirmed:
@@ -98,34 +99,26 @@ NSDR / "non-sleep deep rest"). This is both honest and the technical key:
 - Could give a **phone-only, anywhere nap** real onset detection with no watch and
   no chest strap — just the earbuds already in for the audio.
 
-## Open questions for the AirPulse developer (Christian Range)
+## Open questions
 
-**THE one that matters most:**
+**#0 (access path) — ✅ ANSWERED by Christian:** workout-gated. Start a workout →
+sensor on → HR to HealthKit → read it → delete the workout after. No special API or
+non-workout path.
 
-0. **Continuous without a workout?** AirPulse records HR "anytime you put in your
-   AirPods" with a live graph. Is that a genuine **continuous** stream **without** an
-   `HKWorkoutSession` — and if so, *how*? (denser passive HealthKit delivery via
-   `HKObserverQuery`/`HKAnchoredObjectQuery`? a non-workout HR API? a hidden
-   lightweight session?) Or is the "live" view actually sparse passive samples? This
-   determines whether we can skip the workout entirely.
+**Still worth confirming when we build/test on-device:**
 
-Then:
-
-1. **Exact access path** if it *is* workout-based: just `HKWorkoutSession` +
-   `HKLiveWorkoutDataSource` on iOS 26 with the OS auto-providing AirPods HR, or a
-   dedicated API / entitlement / extra step?
-2. **`.mindAndBody` activates HR?** does a low-intensity mind-and-body / meditation
-   workout type stream AirPods HR (Fitness+ Meditation suggests yes)?
-3. **HR once asleep / still:** does HR keep streaming after the user stops moving and
-   falls asleep, or does auto-pause / no-motion stop it? (We need the onset HR *drop*
-   from a near-motionless person.)
-4. **Audio coexistence:** does HR sensing run while AirPods play our noise + TTS?
-   (Rhythm plays audio, so likely yes.)
-5. **Update cadence & latency:** how often does HR update? (≤5 s is fine for onset.)
-6. **Workout housekeeping:** does a session create a Fitness/Health entry / affect
-   rings, and is that suppressible? (We may also log a `mindfulSession` for Mindful
-   Minutes.)
-7. **Battery** over a 20–90 min session.
+1. **HR once asleep / still:** does HR keep streaming after the user stops moving and
+   falls asleep, or does workout auto-pause / no-motion stop it? (We need the onset
+   HR *drop* from a near-motionless person — so disable auto-pause.)
+2. **Audio coexistence:** does HR sensing run while AirPods play our noise + TTS?
+   (Rhythm plays audio while reading HR, so likely yes.)
+3. **Update cadence & latency:** how often does HR land in Health / the builder?
+   (≤5 s is fine for onset.) Reading off `HKLiveWorkoutBuilder` directly is likely
+   fresher than round-tripping through HealthKit.
+4. **Workout housekeeping:** Christian deletes the workout afterward so it doesn't
+   litter Fitness/rings — we'll do the same (and may log a `mindfulSession` for
+   Mindful Minutes instead).
+5. **Battery** over a 20–90 min session.
 
 ## Draft message to Christian
 
@@ -148,10 +141,18 @@ Then:
 
 ## Status
 
-Research done; **not yet wired**. Next step is the developer confirmation above,
-then add an `AirPodsHRService` feeding `OnsetSignal.heartRate` (and optionally
-head-stillness into `movementIntensity`) in `PhoneNapController`, alongside the
-H10/Muse sources.
+Research done, **access path confirmed by the AirPulse dev (workout-gated)**, **not
+yet wired**. Implementation plan, now unblocked:
+1. `AirPodsHRService` runs an `HKWorkoutSession` (`.mindAndBody`) + `HKLiveWorkoutBuilder`
+   during a phone nap, with auto-pause disabled.
+2. Read HR from the live builder's `didCollectDataOf` callback → feed
+   `OnsetSignal.heartRate` in `PhoneNapController`, alongside H10/Muse.
+3. Optionally feed AirPods head-stillness (`CMHeadphoneMotionManager`) into
+   `movementIntensity`.
+4. On nap end, finish and **delete the workout** (Christian's tip) so it doesn't
+   litter Fitness/rings; optionally write a `mindfulSession`.
+Gives a phone-only, anywhere nap with real onset detection from the earbuds already
+in for the wind-down audio.
 
 ## Sources
 
