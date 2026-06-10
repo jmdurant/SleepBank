@@ -21,6 +21,14 @@ import SwiftUI
 import FamilyControls
 import ManagedSettings
 
+/// How the picked apps are used.
+enum WindDownShieldMode: String, CaseIterable, Identifiable {
+    case blocklist   // block the chosen apps
+    case allowlist   // "Bare Necessities" — block everything EXCEPT the chosen apps
+    var id: String { rawValue }
+    var title: String { self == .blocklist ? "Block these" : "Allow only these" }
+}
+
 @available(iOS 16.0, *)
 @Observable
 final class WindDownShieldService {
@@ -28,15 +36,20 @@ final class WindDownShieldService {
 
     private let store = ManagedSettingsStore(named: .init("sleepbank.winddown"))
     private let selectionKey = "windDownShieldSelection"
+    private let modeKey = "windDownShieldMode"
 
     private(set) var isAuthorized = false
     private(set) var isShielding = false
     var selection = FamilyActivitySelection() {
         didSet { persist() }
     }
+    var mode: WindDownShieldMode = .blocklist {
+        didSet { UserDefaults.standard.set(mode.rawValue, forKey: modeKey) }
+    }
 
     private init() {
         load()
+        mode = WindDownShieldMode(rawValue: UserDefaults.standard.string(forKey: modeKey) ?? "") ?? .blocklist
         isAuthorized = AuthorizationCenter.shared.authorizationStatus == .approved
     }
 
@@ -57,9 +70,16 @@ final class WindDownShieldService {
     /// Shield the chosen apps/categories (called when wind-down starts).
     func shield() {
         guard isAuthorized, hasSelection else { return }
-        store.shield.applications = selection.applicationTokens.isEmpty ? nil : selection.applicationTokens
-        store.shield.applicationCategories = selection.categoryTokens.isEmpty
-            ? nil : .specific(selection.categoryTokens)
+        switch mode {
+        case .blocklist:
+            store.shield.applications = selection.applicationTokens.isEmpty ? nil : selection.applicationTokens
+            store.shield.applicationCategories = selection.categoryTokens.isEmpty
+                ? nil : .specific(selection.categoryTokens)
+        case .allowlist:
+            // Bare Necessities: shield ALL apps except the chosen exceptions.
+            store.shield.applications = nil
+            store.shield.applicationCategories = .all(except: selection.applicationTokens)
+        }
         isShielding = true
     }
 

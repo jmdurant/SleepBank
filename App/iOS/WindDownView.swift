@@ -158,8 +158,10 @@ struct WindDownView: View {
     // MARK: - Block distracting apps (Wind-Down Mode)
 
     #if canImport(FamilyControls)
+    private var isAllowlist: Bool { shield.mode == .allowlist }
+
     private var shieldCard: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Image(systemName: "hand.raised.fill").foregroundStyle(.purple)
                 Text("Block distracting apps").font(.subheadline.weight(.semibold))
@@ -168,21 +170,35 @@ struct WindDownView: View {
                     Text("Blocking").font(.caption.weight(.medium)).foregroundStyle(.purple)
                 }
             }
-            Text("While wind-down is running, the apps you choose are blocked — so the scroll can't keep you up. iPhone can't *measure* your screen time, but it can help you *stop*.")
+            Picker("Mode", selection: Binding(get: { shield.mode }, set: { shield.mode = $0 })) {
+                Text("Block these").tag(WindDownShieldMode.blocklist)
+                Text("Bare Necessities").tag(WindDownShieldMode.allowlist)
+            }
+            .pickerStyle(.segmented)
+            Text(isAllowlist
+                 ? "Bare Necessities blocks *everything* except the few apps you allow — pick **Phone, Messages, Clock, FaceTime, and SleepBank** so you stay reachable and can turn this off."
+                 : "While wind-down runs, the apps you choose are blocked — so the scroll can't keep you up.")
                 .font(.caption).foregroundStyle(.secondary)
             Button { showAppPicker = true } label: {
-                Label(shield.hasSelection ? "Edit blocked apps" : "Choose apps to block",
-                      systemImage: "app.badge.checkmark")
-                    .font(.caption.weight(.medium))
+                Label(buttonLabel, systemImage: "app.badge.checkmark").font(.caption.weight(.medium))
             }
             if !shield.isAuthorized {
-                Text("Needs Screen Time permission and the Family Controls entitlement — see docs/WIND_DOWN_MODE.md.")
+                Text("Needs Screen Time permission (auto-provisions on a development build) — see docs/WIND_DOWN_MODE.md.")
                     .font(.caption2).foregroundStyle(.orange)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding()
         .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 20))
+    }
+
+    private var buttonLabel: String {
+        switch (isAllowlist, shield.hasSelection) {
+        case (true, true):   return "Edit allowed apps"
+        case (true, false):  return "Choose apps to allow"
+        case (false, true):  return "Edit blocked apps"
+        case (false, false): return "Choose apps to block"
+        }
     }
     #endif
 

@@ -29,9 +29,27 @@ evening scrolling, we **block the apps that keep you up.**
 
 - **Manual shield (no monitor extension needed).** The user picks apps/categories
   via `FamilyActivityPicker` (stored as a `FamilyActivitySelection`). When they tap
-  **Start wind-down**, `WindDownShieldService.shield()` sets
-  `ManagedSettingsStore.shield.applications`; **Stop** clears it. The shield is
-  applied app-side while authorized — no `DeviceActivityMonitor` extension required.
+  **Start wind-down**, `WindDownShieldService.shield()` applies the shield; **Stop**
+  clears it. Applied app-side while authorized — no `DeviceActivityMonitor` extension.
+- **Two modes:**
+  - **Block these** (blocklist) — shields the chosen apps:
+    `store.shield.applications = tokens`.
+  - **Bare Necessities** (allowlist) — shields **everything except** the chosen apps:
+    `store.shield.applicationCategories = .all(except: tokens)`. The stronger mode —
+    you don't have to enumerate every distraction.
+
+### Bare Necessities gotchas (important)
+
+- **You can't hardcode "Phone / Messages / Clock / FaceTime / SleepBank" by name.**
+  iOS only exposes apps as **opaque `ApplicationToken`s** obtained by the user
+  picking them in `FamilyActivityPicker` — there's no by-bundle-ID lookup. Those
+  system apps *do* appear in the picker and are selectable as exceptions, so the
+  user chooses their necessities once (persisted).
+- **Always include SleepBank in the allowlist** — otherwise the app that turns
+  wind-down *off* would itself be shielded. (Emergency calling stays available
+  regardless, and alarms fire even if Clock is shielded.)
+- The strict block-all is best paired with the **Phase-B schedule** (auto-lift in
+  the morning) so you never depend on reopening a shielded app.
 - Authorization via `AuthorizationCenter.shared.requestAuthorization(for: .individual)`.
   Without the entitlement this fails gracefully → `isAuthorized = false` → the card
   shows a setup hint and shielding is a no-op. **The rest of the app is unaffected.**
