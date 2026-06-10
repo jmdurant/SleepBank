@@ -22,6 +22,7 @@ struct EnergyRingView: View {
             let charge = AlertnessCharge.current(now: context.date, lastNap: lastNap)
             VStack(spacing: 16) {
                 ring(for: charge)
+                alertnessNow(at: context.date)
                 bankFooter
             }
             .frame(maxWidth: .infinity)
@@ -93,6 +94,23 @@ struct EnergyRingView: View {
         let m = charge.minutesRemaining
         let left = m >= 60 ? "\(m / 60)h \(m % 60)m" : "\(m)m"
         return "\(source.title) · fades in \(left)"
+    }
+
+    // MARK: - Alertness now (glance — full picture lives in the curve card)
+
+    /// The ring shows the *nap* charge; this line shows your *overall* predicted
+    /// alertness right now (sleep + naps + light + movement) and where you sit in the
+    /// day — the "you are here" number, glanceable without opening the curve.
+    private func alertnessNow(at now: Date) -> some View {
+        let rhythm = AlertnessProvider.rhythm(now: now)
+        let level = rhythm.level(at: now)
+        return HStack(spacing: 6) {
+            Image(systemName: "bolt.fill").font(.caption2).foregroundStyle(.yellow)
+            Text("\(AlertnessProvider.pct(level))% alert")
+                .font(.subheadline.weight(.semibold)).monospacedDigit()
+            Text("· \(AlertnessProvider.phaseLabel(now))")
+                .font(.subheadline).foregroundStyle(.secondary)
+        }
     }
 
     // MARK: - Descriptive bank

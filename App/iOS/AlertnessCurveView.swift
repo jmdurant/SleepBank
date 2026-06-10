@@ -71,19 +71,8 @@ struct AlertnessCurveView: View {
         }
     }
 
-    private func pct(_ level: Double) -> Int { Int((level * 100).rounded()) }
-
-    /// Where you sit in the circadian day, in plain words.
-    private func phaseLabel(_ now: Date) -> String {
-        switch Calendar.current.component(.hour, from: now) {
-        case ..<10:    return "Morning rise"
-        case 10..<13:  return "Late-morning peak"
-        case 13..<16:  return "Post-lunch dip"
-        case 16..<18:  return "Afternoon"
-        case 18..<21:  return "Evening — second wind"
-        default:       return "Wind-down"
-        }
-    }
+    private func pct(_ level: Double) -> Int { AlertnessProvider.pct(level) }
+    private func phaseLabel(_ now: Date) -> String { AlertnessProvider.phaseLabel(now) }
 
     /// What's shaping your "now" — the inputs converging on the marker.
     private func whyLine(_ rhythm: AlertnessRhythm) -> String {
@@ -225,28 +214,7 @@ struct AlertnessCurveView: View {
     // MARK: - Model wiring
 
     private func makeRhythm(now: Date) -> AlertnessRhythm {
-        let summary = health.lastNightSleep
-        let typical = summary?.averageLast7Days ?? health.sleepAverage7Day
-        return AlertnessRhythm.fromSleep(
-            wakeTime: summary?.wakeTime,
-            sleptHours: summary?.totalHours ?? 0,
-            typicalHours: typical,
-            naps: napsToday(now: now),
-            morningLightDose: AlertnessRhythm.morningLightDose(minutes: health.daylightToday.morning),
-            morningActivityDose: AlertnessRhythm.morningActivityDose(minutes: health.morningActivityMinutes),
-            now: now
-        )
-    }
-
-    /// Today's completed naps that reached sleep, as rhythm discharges.
-    private func napsToday(now: Date) -> [AlertnessRhythm.Nap] {
-        let cal = Calendar.current
-        return store.records.compactMap { r -> AlertnessRhythm.Nap? in
-            guard let onset = r.onset, cal.isDate(r.start, inSameDayAs: now) else { return nil }
-            let asleep = r.end.timeIntervalSince(onset)
-            let fullness = min(asleep / r.type.targetWakeAfterOnset, 1)
-            return AlertnessRhythm.Nap(end: r.end, type: r.type, fullness: fullness)
-        }
+        AlertnessProvider.rhythm(health: health, store: store, now: now)
     }
 
     private func curveWindow(wake: Date, now: Date) -> (start: Date, end: Date) {
