@@ -18,6 +18,14 @@ struct AlertnessCurveView: View {
     var health = HealthKitService.shared
     var store = NapDecisionStore.shared
 
+    /// The nap start time the user has dragged to. Nil = "right now" (the default
+    /// "if you nap now" projection).
+    @State private var scrubNapAt: Date?
+    /// Which nap the user is exploring on the curve.
+    @State private var napType: NapType = .power
+    /// Brief "✓ scheduled" feedback after tapping +.
+    @State private var scheduledAt: Date?
+
     var body: some View {
         TimelineView(.periodic(from: .now, by: 300)) { context in
             let now = context.date
@@ -25,7 +33,17 @@ struct AlertnessCurveView: View {
             let window = curveWindow(wake: rhythm.wakeTime, now: now)
             let baseline = rhythm.readings(from: window.start, to: window.end, step: 1200)
             let nowLevel = rhythm.level(at: now)
-            let projection = projectionReadings(rhythm: rhythm, now: now, window: window)
+            // Draggable hypothetical nap: a valid start time (clamped into the window),
+            // and the recovery curve it would produce.
+            let napRange = napScrubRange(rhythm: rhythm, now: now, window: window, type: napType)
+            let napAt: Date? = napRange.map { clampNap(scrubNapAt ?? now, to: $0) }
+            // Start the projection at the nap moment (not the wake time) so the dashed
+            // line emanates from the moon marker: flat along the baseline during the
+            // nap, then rising as you wake. Finer step for a smooth post-nap rise.
+            let projection = napAt.map {
+                rhythm.projectedReadings(napType: napType, napAt: $0, from: $0,
+                                         to: window.end, step: 300)
+            } ?? []
             // The "rested ceiling": where today's curve would sit after a 100 Sleep
             // Score night. Always drawn — when you're already rested it simply hugs
             // your real curve; when you're short it opens a visible gap to close.
@@ -35,14 +53,28 @@ struct AlertnessCurveView: View {
             // between your real curve and the same sleep with none of those.
             let gain = gainReadings(rhythm: rhythm, now: now, window: window)
             let yRange = yDomain(baseline: baseline, ideal: idealReadings, projection: projection, nowLevel: nowLevel)
+            // The nap as a span on the chart: start (the moon), wake, and its level.
+            let nap: (start: Date, wake: Date, level: Double)? = napAt.map {
+                ($0, $0.addingTimeInterval(napType.targetWakeAfterOnset), rhythm.level(at: $0))
+            }
+            // Does this nap steal tonight's sleepiness? (Meaningfully elevated alertness
+            // at bedtime — a deep nap's durable tail leaves a small residual even from
+            // midday, so the bar is set where it actually impairs sleep onset.)
+            let nightCost = napAt.map { nightSleepCost(rhythm: rhythm, napAt: $0, type: napType) } ?? 0
+            let napLate = nightCost >= 0.065
 
             VStack(alignment: .leading, spacing: 10) {
-                youAreHere(rhythm: rhythm, now: now, projection: projection)
+                youAreHere(rhythm: rhythm, now: now, napAt: napAt, napLate: napLate)
                 chart(baseline: baseline, projection: projection, ideal: idealReadings,
-                      gain: gain, now: now, nowLevel: nowLevel, yRange: yRange)
+                      gain: gain, now: now, nowLevel: nowLevel, yRange: yRange,
+                      nap: nap, napLate: napLate,
+                      setNap: { raw in if let r = napRange { scrubNapAt = clampNap(raw, to: r); scheduledAt = nil } })
                     .frame(height: 170)
-                legend(hasProjection: !projection.isEmpty, hasIdeal: true, hasGain: !gain.isEmpty)
-                if let g = gainNowPct(rhythm: rhythm, now: now), !gain.isEmpty {
+                legend(hasProjection: !projection.isEmpty, hasIdeal: true, hasGain: !gain.isEmpty, napLate: napLate)
+                if let napAt, !projection.isEmpty {
+                    napTypeToggle
+                    napScrubRow(rhythm: rhythm, napAt: napAt, projection: projection, napLate: napLate)
+                } else if let g = gainNowPct(rhythm: rhythm, now: now), !gain.isEmpty {
                     gainCallout(g, rhythm: rhythm)
                 } else if let gap = idealGap(rhythm: rhythm, ideal: ideal, now: now) {
                     idealCallout(gap)
@@ -57,24 +89,80 @@ struct AlertnessCurveView: View {
 
     // MARK: - "You are here"
 
-    /// The emotional centre of the card: where you are right now, *why* (last
-    /// night's sleep + today's naps/light/movement all converge on this point), and
-    /// the single most-relevant next move for the moment.
-    private func youAreHere(rhythm: AlertnessRhythm, now: Date,
-                            projection: [AlertnessRhythm.Reading]) -> some View {
+    /// The emotional centre of the card: where you are right now, *why*, plus a "+"
+    /// to schedule a nap at the currently-selected time.
+    private func youAreHere(rhythm: AlertnessRhythm, now: Date, napAt: Date?, napLate: Bool) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Text("Your day · \(AlertnessProvider.phaseLabel(now))").font(.headline)
                 Spacer()
+                if let napAt { scheduleButton(napAt, napLate: napLate) }
             }
             Text(whyLine(rhythm)).font(.caption).foregroundStyle(.secondary)
-            if let action = actionSuggestion(rhythm: rhythm, now: now, projection: projection) {
+            if napAt == nil, let action = morningNudge(rhythm: rhythm, now: now) {
                 Label(action.text, systemImage: action.icon)
                     .font(.caption.weight(.medium))
                     .padding(.vertical, 4).padding(.horizontal, 9)
                     .background(action.tint.opacity(0.15), in: Capsule())
                     .foregroundStyle(action.tint)
             }
+        }
+    }
+
+    /// Choose which nap to explore on the curve — power (short) vs cycle (long).
+    private var napTypeToggle: some View {
+        Picker("Nap type", selection: $napType) {
+            Text("Power · 20 min").tag(NapType.power)
+            Text("Cycle · 90 min").tag(NapType.cycle)
+        }
+        .pickerStyle(.segmented)
+    }
+
+    /// The "+" (or "✓" right after tapping) that schedules a nap reminder at the
+    /// dragged time, for the selected nap type.
+    private func scheduleButton(_ napAt: Date, napLate: Bool) -> some View {
+        let done = scheduledAt.map { abs($0.timeIntervalSince(napAt)) < 60 } ?? false
+        let tint: Color = done ? .green : (napLate ? .orange : .indigo)
+        return Button {
+            Task {
+                if await PlanNotificationService.shared.scheduleNap(at: napAt, type: napType) {
+                    scheduledAt = napAt
+                }
+            }
+        } label: {
+            Image(systemName: done ? "checkmark.circle.fill" : "plus.circle.fill")
+                .font(.title3)
+                .foregroundStyle(tint)
+                .symbolEffect(.bounce, value: done)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(done ? "Nap reminder scheduled" : "Schedule a nap at this time")
+    }
+
+    /// A live readout of the dragged nap: when, the boost it delivers, and — when it's
+    /// too late — a warning that it'll cost tonight's sleep.
+    private func napScrubRow(rhythm: AlertnessRhythm, napAt: Date,
+                             projection: [AlertnessRhythm.Reading], napLate: Bool) -> some View {
+        let wake = napAt.addingTimeInterval(napType.targetWakeAfterOnset)
+        let peak = projection.max(by: { $0.level < $1.level })
+        let boost = peak.map { max(0, Int((($0.level - rhythm.level(at: $0.date)) * 100).rounded())) } ?? 0
+        let scheduled = scheduledAt.map { abs($0.timeIntervalSince(napAt)) < 60 } ?? false
+        return HStack(alignment: .top, spacing: 6) {
+            Image(systemName: napLate ? "exclamationmark.triangle.fill" : "moon.zzz.fill")
+                .font(.caption2).foregroundStyle(napLate ? .orange : .mint)
+            Group {
+                if napLate {
+                    Text("A nap at **\(napAt, format: .dateTime.hour().minute())** is late — it keeps you alert near bedtime and may delay tonight's sleep. Earlier is better.")
+                        .foregroundStyle(.orange)
+                } else if scheduled {
+                    Text("Reminder set for **\(napAt, format: .dateTime.hour().minute())**. Drag to re-time.")
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("Nap at **\(napAt, format: .dateTime.hour().minute())** → up by ~**\(boost)%** through the afternoon (awake \(wake, format: .dateTime.hour().minute())). Tap + to schedule.")
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .font(.caption2)
         }
     }
 
@@ -87,16 +175,9 @@ struct AlertnessCurveView: View {
         return parts.joined(separator: " · ")
     }
 
-    /// The single most-relevant move for the moment: a nap when it would meaningfully
-    /// lift the rest of the day; otherwise a morning-light nudge while it still helps.
-    private func actionSuggestion(rhythm: AlertnessRhythm, now: Date,
-                                  projection: [AlertnessRhythm.Reading]) -> (text: String, icon: String, tint: Color)? {
-        if let peak = projection.max(by: { $0.level < $1.level }) {
-            let gain = peak.level - rhythm.level(at: peak.date)
-            if gain >= 0.03 {
-                return ("A power nap now → lifts you to ~\(AlertnessProvider.pct(peak.level))%", "moon.zzz.fill", .indigo)
-            }
-        }
+    /// A morning-light nudge while it still helps — shown only when no nap is on the
+    /// table (the nap scrubber takes over the action role once one is viable).
+    private func morningNudge(rhythm: AlertnessRhythm, now: Date) -> (text: String, icon: String, tint: Color)? {
         if Calendar.current.component(.hour, from: now) < 11, rhythm.morningLightDose < 0.5 {
             return ("Step outside — morning light anchors your day", "sun.max.fill", .orange)
         }
@@ -110,7 +191,10 @@ struct AlertnessCurveView: View {
                        ideal: [AlertnessRhythm.Reading],
                        gain: [GainPoint],
                        now: Date, nowLevel: Double,
-                       yRange: ClosedRange<Double>) -> some View {
+                       yRange: ClosedRange<Double>,
+                       nap: (start: Date, wake: Date, level: Double)?,
+                       napLate: Bool,
+                       setNap: @escaping (Date) -> Void) -> some View {
         Chart {
             // Base indigo fill under the real curve.
             ForEach(baseline, id: \.date) { r in
@@ -118,6 +202,15 @@ struct AlertnessCurveView: View {
                     .foregroundStyle(.linearGradient(
                         colors: [.indigo.opacity(0.16), .indigo.opacity(0.01)],
                         startPoint: .top, endPoint: .bottom))
+            }
+            // The nap's duration as a translucent band (start → wake): a thin sliver
+            // for a 20-min power nap, a wide block for a 90-min cycle.
+            if let n = nap {
+                RectangleMark(xStart: .value("Asleep from", n.start),
+                              xEnd: .value("Awake", n.wake),
+                              yStart: .value("lo", yRange.lowerBound),
+                              yEnd: .value("hi", yRange.upperBound))
+                    .foregroundStyle((napLate ? Color.orange : .mint).opacity(0.13))
             }
             // The "what your habits added" band: between the no-intervention floor and
             // your real curve, for the part of the day already lived.
@@ -152,7 +245,7 @@ struct AlertnessCurveView: View {
             ForEach(projection, id: \.date) { r in
                 LineMark(x: .value("Time", r.date), y: .value("Alertness", r.level),
                          series: .value("Series", "nap"))
-                    .foregroundStyle(.mint)
+                    .foregroundStyle(napLate ? .orange : .mint)
                     .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 4]))
                     .interpolationMethod(.catmullRom)
             }
@@ -165,6 +258,20 @@ struct AlertnessCurveView: View {
             PointMark(x: .value("Now", now), y: .value("Alertness", nowLevel))
                 .foregroundStyle(.indigo)
                 .symbolSize(60)
+            // The draggable nap handle — a mint moon sitting on the curve at the
+            // chosen nap time.
+            if let n = nap {
+                PointMark(x: .value("Nap", n.start), y: .value("Alertness", n.level))
+                    .foregroundStyle(.white)
+                    .symbolSize(180)
+                PointMark(x: .value("Nap", n.start), y: .value("Alertness", n.level))
+                    .foregroundStyle(napLate ? .orange : .mint)
+                    .symbolSize(110)
+                    .annotation(position: .top, spacing: 2) {
+                        Image(systemName: napLate ? "exclamationmark.triangle.fill" : "moon.zzz.fill")
+                            .font(.system(size: 9)).foregroundStyle(napLate ? .orange : .mint)
+                    }
+            }
         }
         .chartYScale(domain: yRange)
         .chartYAxis(.hidden)
@@ -174,13 +281,30 @@ struct AlertnessCurveView: View {
                 AxisValueLabel(format: .dateTime.hour())
             }
         }
+        .chartOverlay { proxy in
+            GeometryReader { geo in
+                if let plot = proxy.plotFrame {
+                    let rect = geo[plot]
+                    Rectangle().fill(.clear).contentShape(Rectangle())
+                        .gesture(
+                            DragGesture(minimumDistance: 0)
+                                .onChanged { value in
+                                    let x = value.location.x - rect.minX
+                                    if let date: Date = proxy.value(atX: x, as: Date.self) {
+                                        setNap(date)
+                                    }
+                                }
+                        )
+                }
+            }
+        }
     }
 
-    private func legend(hasProjection: Bool, hasIdeal: Bool, hasGain: Bool) -> some View {
+    private func legend(hasProjection: Bool, hasIdeal: Bool, hasGain: Bool, napLate: Bool) -> some View {
         HStack(spacing: 14) {
             label(color: .indigo, text: "You")
             if hasGain { label(color: .green, text: "Your gain") }
-            if hasProjection { label(color: .mint, text: "If you nap now") }
+            if hasProjection { label(color: napLate ? .orange : .mint, text: napLate ? "Too late" : "If you nap") }
             if hasIdeal { label(color: .teal, text: "Rested ceiling") }
             Spacer()
         }
@@ -353,14 +477,26 @@ struct AlertnessCurveView: View {
         return (start, max(end, now.addingTimeInterval(3600)))
     }
 
-    /// The dashed "where you could be" segment — only when there's still useful day
-    /// left to nap into.
-    private func projectionReadings(rhythm: AlertnessRhythm, now: Date,
-                                    window: (start: Date, end: Date)) -> [AlertnessRhythm.Reading] {
-        let wakeFromNap = now.addingTimeInterval(NapType.power.targetWakeAfterOnset)
-        guard wakeFromNap < window.end.addingTimeInterval(-3600),
-              now > rhythm.wakeTime.addingTimeInterval(1800) else { return [] }
-        return rhythm.projectedReadings(napType: .power, napAt: now,
-                                        from: wakeFromNap, to: window.end, step: 1200)
+    /// The range of valid nap *start* times: no earlier than now (or just after wake),
+    /// and early enough to leave ≥1 h of day to benefit from. Nil when the day's too
+    /// far gone to nap usefully.
+    private func napScrubRange(rhythm: AlertnessRhythm, now: Date,
+                               window: (start: Date, end: Date), type: NapType) -> (earliest: Date, latest: Date)? {
+        let napDur = type.targetWakeAfterOnset
+        let earliest = max(now, rhythm.wakeTime.addingTimeInterval(1800))
+        let latest = window.end.addingTimeInterval(-(napDur + 3600))
+        return latest > earliest ? (earliest, latest) : nil
+    }
+
+    private func clampNap(_ d: Date, to r: (earliest: Date, latest: Date)) -> Date {
+        min(max(d, r.earliest), r.latest)
+    }
+
+    /// How much a nap would still have you elevated at bedtime (~16 h after waking) —
+    /// i.e. how much it steals tonight's sleepiness. The display-scale gap between the
+    /// napped curve and baseline at bedtime.
+    private func nightSleepCost(rhythm: AlertnessRhythm, napAt: Date, type: NapType) -> Double {
+        let bedtime = rhythm.wakeTime.addingTimeInterval(16 * 3600)
+        return rhythm.level(at: bedtime, withNapAt: napAt, type: type) - rhythm.level(at: bedtime)
     }
 }

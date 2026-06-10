@@ -10,6 +10,7 @@
 
 import Foundation
 import UserNotifications
+import SleepBankCore
 
 extension Notification.Name {
     static let openPlan = Notification.Name("sleepbank.openPlan")
@@ -22,6 +23,21 @@ final class PlanNotificationService: NSObject, UNUserNotificationCenterDelegate 
     private let id = "dailyPlan"
 
     private let windDownId = "windDown"
+    private let napId = "scheduledNap"
+
+    /// The user-scheduled nap time for today (set from the alertness curve's "+"),
+    /// surfaced so the plan/UI can reflect it. Cleared on a new day.
+    static var scheduledNapAt: Date? {
+        get {
+            let t = UserDefaults.standard.double(forKey: "scheduledNapAt")
+            guard t > 0 else { return nil }
+            let date = Date(timeIntervalSinceReferenceDate: t)
+            return Calendar.current.isDateInToday(date) ? date : nil
+        }
+        set {
+            UserDefaults.standard.set(newValue?.timeIntervalSinceReferenceDate ?? 0, forKey: "scheduledNapAt")
+        }
+    }
 
     /// Set whenever a notification is tapped, so a cold-started ContentView can route
     /// even if it missed the live post.
@@ -68,6 +84,34 @@ final class PlanNotificationService: NSObject, UNUserNotificationCenterDelegate 
         content.sound = .default
         content.userInfo = ["route": "winddown"]
         schedule(id: windDownId, content: content, fire: windDownFireTime())
+    }
+
+    /// Schedule a one-shot reminder for a nap the user picked off the alertness
+    /// curve. Replaces any previously-scheduled nap. Returns false if the time is in
+    /// the past or notifications are denied.
+    @discardableResult
+    func scheduleNap(at date: Date, type: NapType) async -> Bool {
+        let interval = date.timeIntervalSinceNow
+        guard interval > 60 else { return false }
+        let granted = (try? await center.requestAuthorization(options: [.alert, .sound])) ?? false
+        guard granted else { return false }
+
+        let content = UNMutableNotificationContent()
+        content.title = "😴 Time for your \(type.title.lowercased())"
+        content.body = "Settle in now — a nap here keeps you sharp through the rest of the day, no caffeine needed."
+        content.sound = .default
+        content.userInfo = ["route": "nap"]
+
+        center.removePendingNotificationRequests(withIdentifiers: [napId])
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: interval, repeats: false)
+        try? await center.add(UNNotificationRequest(identifier: napId, content: content, trigger: trigger))
+        Self.scheduledNapAt = date
+        return true
+    }
+
+    func cancelScheduledNap() {
+        center.removePendingNotificationRequests(withIdentifiers: [napId])
+        Self.scheduledNapAt = nil
     }
 
     private func schedule(id: String, content: UNMutableNotificationContent, fire: (Int, Int)) {

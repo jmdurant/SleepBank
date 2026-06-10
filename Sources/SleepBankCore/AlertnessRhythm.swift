@@ -124,7 +124,10 @@ public struct AlertnessRhythm: Sendable {
 
     private static let omega = 2 * Double.pi / 24
     private static let tauRise: Double = 18.2     // h — Process S build constant (Daan)
-    private static let tauRelief: Double = 2.5    // h — nap relief fade (subjective-benefit window)
+    private static let tauRelief: Double = 2.6    // h — subjective-benefit fade
+    private static let tauHomeoPower: Double = 4.0   // h — a light nap's homeostatic discharge fades by evening
+    private static let tauHomeoCycle: Double = 9.0   // h — a deep nap's discharge lingers to bedtime (why a late one ruins sleep)
+    private static let tauNapOnset: Double = 0.7  // h — how fast the benefit comes on (saturating, so the peak is rounded)
     private static let morningLightPeak: Double = 0.12     // raw units (~+0.07 on the 0…1 display)
     private static let morningActivityPeak: Double = 0.10  // a second, independent morning lift
     private static let morningLiftCap: Double = 0.18        // combined morning lift stays modest
@@ -152,10 +155,24 @@ public struct AlertnessRhythm: Sendable {
     }
 
     private func relief(of nap: Nap, at date: Date) -> Double {
-        guard date >= nap.end else { return 0 }
-        let dt = date.timeIntervalSince(nap.end) / 3600
-        let depth = (nap.type == .cycle ? 0.42 : 0.16) * nap.fullness
-        return depth * exp(-dt / Self.tauRelief)
+        let onset = nap.end.addingTimeInterval(-nap.type.targetWakeAfterOnset)
+        let v = date.timeIntervalSince(onset) / 3600   // hours since sleep onset
+        guard v > 0 else { return 0 }
+        // A smooth impulse response: a saturating onset (the benefit builds over the
+        // nap and the first hour after, clearing inertia) times a bi-exponential decay
+        // — a fast subjective component plus a slow homeostatic one. A power nap is
+        // mostly the quick bump and fades by evening; a cycle nap carries more in the
+        // durable slow tail, so it lifts a little higher, lasts far longer, and — taken
+        // late — keeps the evening elevated, stealing tonight's sleepiness. The product
+        // of two smooth curves is itself smooth everywhere: no corner at the peak or
+        // where it rejoins the baseline. Depths stay modest so relief never drives
+        // pressure to zero (which would pin the curve at the circadian max).
+        let subjective = (nap.type == .cycle ? 0.18 : 0.23) * nap.fullness
+        let homeostatic = (nap.type == .cycle ? 0.22 : 0.05) * nap.fullness
+        let tauHomeo = nap.type == .cycle ? Self.tauHomeoCycle : Self.tauHomeoPower
+        let onsetRamp = 1 - exp(-v / Self.tauNapOnset)
+        let decay = subjective * exp(-v / Self.tauRelief) + homeostatic * exp(-v / tauHomeo)
+        return decay * onsetRamp
     }
 
     /// Morning lift — two stacked, independently-evidenced morning behaviours:

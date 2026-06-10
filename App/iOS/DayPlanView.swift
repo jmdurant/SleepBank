@@ -14,6 +14,7 @@ import SleepBankCore
 struct DayPlanView: View {
     var health = HealthKitService.shared
     var store = NapDecisionStore.shared
+    @State private var scheduledNap: Date? = PlanNotificationService.scheduledNapAt
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 600)) { context in
@@ -26,6 +27,7 @@ struct DayPlanView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     readinessCard(plan)
+                    if let napAt = scheduledNap { scheduledNapCard(napAt) }
                     agendaCard(plan)
                     if plan.napBlockedByCalendar {
                         Label("Your calendar's booked through your dip — grab even 10 min if a gap opens.",
@@ -56,6 +58,34 @@ struct DayPlanView: View {
             await CalendarService.shared.requestAccess()
             if await health.requestAuthorization() { await health.refreshAll() }
         }
+        .onAppear { scheduledNap = PlanNotificationService.scheduledNapAt }
+    }
+
+    /// The nap the user scheduled off the alertness curve, with a one-tap cancel.
+    private func scheduledNapCard(_ napAt: Date) -> some View {
+        HStack(spacing: 12) {
+            ZStack {
+                Circle().fill(.indigo.opacity(0.18)).frame(width: 32, height: 32)
+                Image(systemName: "moon.zzz.fill").font(.caption).foregroundStyle(.indigo)
+            }
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Nap scheduled for \(clock(napAt))").font(.subheadline.weight(.semibold))
+                Text("We'll remind you — settle in to stay sharp through the afternoon.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer()
+            Button {
+                PlanNotificationService.shared.cancelScheduledNap()
+                scheduledNap = nil
+            } label: {
+                Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Cancel scheduled nap")
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.indigo.opacity(0.12), in: RoundedRectangle(cornerRadius: 16))
     }
 
     // MARK: - Readiness

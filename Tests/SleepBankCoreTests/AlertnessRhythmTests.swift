@@ -62,6 +62,28 @@ final class AlertnessRhythmTests: XCTestCase {
                        r.level(at: later), accuracy: 0.02)
     }
 
+    func testLateNapKeepsTheNightMoreAlertThanAnEarlyNap() {
+        // The cost of a late nap: at bedtime, an early-afternoon nap has fully faded,
+        // but an evening nap still keeps you elevated — i.e. less sleepy when you want
+        // to sleep. Compared at a common 23:00 bedtime.
+        let r = rhythm(debt: 0.3)
+        let bedtime = at(23.0)
+        let earlyNap = r.level(at: bedtime, withNapAt: at(13.0), type: .cycle) - r.level(at: bedtime)
+        let lateNap  = r.level(at: bedtime, withNapAt: at(20.0), type: .cycle) - r.level(at: bedtime)
+        XCTAssertGreaterThan(lateNap, earlyNap + 0.05)   // markedly worse for the night
+        XCTAssertGreaterThan(lateNap, 0.03)              // a late deep nap visibly steals night sleepiness
+    }
+
+    func testLateDeepNapLeavesYouMoreAlertThanRestedAtBedtime() {
+        // The "can't fall asleep" signal: after a late 90-min nap, bedtime alertness
+        // sits *above* a fully-rested person's — you're too wired to sleep.
+        let tired = rhythm(debt: 0.4)
+        let rested = rhythm(debt: 0.05)
+        let bedtime = at(23.0)
+        let nappedAtBed = tired.level(at: bedtime, withNapAt: at(19.0), type: .cycle)
+        XCTAssertGreaterThan(nappedAtBed, rested.level(at: bedtime))
+    }
+
     func testCycleNapLiftsMoreThanPowerNap() {
         let r = rhythm(debt: 0.3)
         let napAt = at(14.0)
@@ -70,6 +92,27 @@ final class AlertnessRhythmTests: XCTestCase {
         let powerLift = r.level(at: after, withNapAt: napAt, type: .power) - r.level(at: after)
         let cycleLift = r.level(at: after, withNapAt: napAt, type: .cycle) - r.level(at: after)
         XCTAssertGreaterThan(cycleLift, powerLift)
+    }
+
+    func testCycleNapBenefitOutlastsPowerNap() {
+        // The cycle nap's value is durability: hours later it's still clearly lifting
+        // you while the power nap has mostly faded.
+        let r = rhythm(debt: 0.3)
+        let napAt = at(13.0)
+        let late = at(18.0)
+        let powerLift = r.level(at: late, withNapAt: napAt, type: .power) - r.level(at: late)
+        let cycleLift = r.level(at: late, withNapAt: napAt, type: .cycle) - r.level(at: late)
+        XCTAssertGreaterThan(cycleLift, powerLift + 0.04)
+    }
+
+    func testCycleNapDoesNotPinCurveToTheCeiling() {
+        // A deep nap should lift you to ~your rested level, not slam the curve to the
+        // top — i.e. it must not over-discharge pressure into the floor.
+        let tired = rhythm(debt: 0.45)
+        let napAt = at(13.0)
+        let peak = at(13.0 + 90.0/60 + 0.75)   // ~the modelled benefit peak
+        let napped = tired.level(at: peak, withNapAt: napAt, type: .cycle)
+        XCTAssertLessThan(napped, 0.95)   // boosted, but not pinned at the maximum
     }
 
     func testReadingsSpanTheRequestedWindow() {
