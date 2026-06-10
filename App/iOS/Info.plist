@@ -25,9 +25,7 @@
 	<key>NSHealthUpdateUsageDescription</key>
 	<string>SleepBank records your naps to Apple Health.</string>
 	<key>NSHomeKitUsageDescription</key>
-	<string>SleepBank adjusts your HomeKit lights' warmth to match your rhythm — warm in the evening to help you wind down.</string>
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>SleepBank uses your location to compute local sunrise/sunset for the circadian lighting curve.</string>
+	<string>SleepBank warms your HomeKit lights at wind-down to help you sleep.</string>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
 	<key>NSUbiquitousContainers</key>

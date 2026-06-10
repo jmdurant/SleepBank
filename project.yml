@@ -49,8 +49,7 @@ targets:
         NSSupportsLiveActivities: true
         NSHealthShareUsageDescription: "SleepBank reads your sleep and heart-rate data to study your naps and validate nap-onset detection."
         NSHealthUpdateUsageDescription: "SleepBank records your naps to Apple Health."
-        NSHomeKitUsageDescription: "SleepBank adjusts your HomeKit lights' warmth to match your rhythm — warm in the evening to help you wind down."
-        NSLocationWhenInUseUsageDescription: "SleepBank uses your location to compute local sunrise/sunset for the circadian lighting curve."
+        NSHomeKitUsageDescription: "SleepBank warms your HomeKit lights at wind-down to help you sleep."
         NSBluetoothAlwaysUsageDescription: "SleepBank connects to a Muse headband and Polar H10 to read EEG and continuous heart rate for sleep-onset detection."
         # Keep H10/Muse streaming and relaxing-sound playback alive while the
         # phone is backgrounded/locked during a nap.

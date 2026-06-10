@@ -116,7 +116,7 @@ struct WindDownView: View {
                 shield.shield()
                 #endif
                 #if canImport(HomeKit)
-                if lighting.syncEnabled { lighting.setWarm() }
+                if lighting.syncEnabled { lighting.warm() }
                 #endif
             }
         } label: {
@@ -226,51 +226,27 @@ struct WindDownView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Image(systemName: "lightbulb.led.fill").foregroundStyle(.orange)
-                Text("Circadian home lighting").font(.subheadline.weight(.semibold))
+                Text("Warm your lights at wind-down").font(.subheadline.weight(.semibold))
                 Spacer()
                 if lighting.lightCount > 0 {
                     Text("\(lighting.lightCount) light\(lighting.lightCount == 1 ? "" : "s")")
                         .font(.caption).foregroundStyle(.secondary)
                 }
             }
-            Text("Shifts your HomeKit lights' warmth (the hue, not the brightness) along a daylight curve — cool by day, warm at night, extra warm at wind-down. Computed from your local sunrise/sunset.")
+            Text("When wind-down starts, shift your HomeKit lights warm (the hue, not the brightness) — the room cues your body that it's nearly sleep.")
                 .font(.caption).foregroundStyle(.secondary)
             Toggle(isOn: Binding(get: { lighting.syncEnabled }, set: { lighting.syncEnabled = $0 })) {
-                Text("Sync lights to the daylight curve").font(.caption)
+                Text("Warm lights at wind-down").font(.caption)
             }
-            Toggle(isOn: Binding(get: { lighting.autoRunEnabled }, set: { lighting.autoRunEnabled = $0 })) {
-                Text("Run automatically (needs a Home hub)").font(.caption)
-            }
-            .disabled(lighting.lightCount == 0)
-            HStack {
-                Text("Now: ~\(lighting.currentKelvin())K").font(.caption2.weight(.medium)).foregroundStyle(.secondary)
-                if !lighting.hasLocation {
-                    Button("Use my location") { lighting.requestLocation() }.font(.caption2)
-                }
-                Spacer()
-            }
-            HStack(spacing: 8) {
-                Button { lighting.applyCircadian() } label: {
-                    Label("Apply now", systemImage: "wand.and.stars").font(.caption2)
-                }.buttonStyle(.bordered).tint(.indigo)
-                Button { lighting.setWarm() } label: {
-                    Label("Warm", systemImage: "sun.haze.fill").font(.caption2)
-                }.buttonStyle(.bordered).tint(.orange)
-                Button { lighting.setCool() } label: {
-                    Label("Cool", systemImage: "sun.max.fill").font(.caption2)
-                }.buttonStyle(.bordered).tint(.blue)
-            }
-            Text("Sets all lights via one Home scene (\u{201C}SleepBank Lighting\u{201D}). Already run a daylight plugin (Hue daylight-sync) or Apple Adaptive Lighting? Use one or the other — two curves on the same bulbs will tug-of-war. (Continuous unattended control needs a Home hub + automations — coming.)")
+            Button { lighting.warm() } label: {
+                Label("Warm now", systemImage: "sun.haze.fill").font(.caption2)
+            }.buttonStyle(.bordered).tint(.orange)
+            Text("For an all-day daylight curve, use Apple Adaptive Lighting (or your Hue setup) — SleepBank just handles the wind-down moment.")
                 .font(.caption2).foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding()
         .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 20))
-        .task {
-            if lighting.syncEnabled { lighting.requestLocation() }
-            // Re-materialize the stepped automations so their values track the season.
-            if lighting.autoRunEnabled { await lighting.installAutomations() }
-        }
     }
     #endif
 
