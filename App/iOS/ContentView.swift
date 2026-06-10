@@ -84,6 +84,11 @@ struct ContentView: View {
             }
             .navigationTitle("SleepBank")
             .task {
+                // Cold-started from a plan notification tap.
+                if PlanNotificationService.shared.pendingPlan {
+                    path = [.plan]
+                    PlanNotificationService.shared.clearPending()
+                }
                 if await health.requestAuthorization() {
                     await health.refreshAll()
                     // Push last-night timeline + the morning-light streak to the watch.
@@ -98,6 +103,8 @@ struct ContentView: View {
                                    morningLightStreak: health.morningLightStreak,
                                    updated: Date()).save()
                     WidgetCenter.shared.reloadAllTimelines()
+                    // Schedule the morning plan notification with a fresh teaser/time.
+                    await PlanNotificationService.shared.requestAndSchedule()
                 }
             }
             .navigationDestination(for: HomeRoute.self) { route in
@@ -116,6 +123,10 @@ struct ContentView: View {
                 case "nap":       path = [.nap]
                 default:          break
                 }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .openPlan)) { _ in
+                path = [.plan]
+                PlanNotificationService.shared.clearPending()
             }
         }
     }
