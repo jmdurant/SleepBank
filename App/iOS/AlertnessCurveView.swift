@@ -105,9 +105,12 @@ struct AlertnessCurveView: View {
             let yRange = yDomain(baseline: baseline, ideal: idealReadings, projection: projection, nowLevel: nowLevel)
             // With no plan, the chart becomes a scrubber: drag the dot to read any time.
             let scrubbing = items.isEmpty
-            let scrubDot: (date: Date, level: Double)? = scrubbing
-                ? PlanPreview.shared.scrubTime.map { let d = min(max($0, window.start), window.end); return (d, rhythm.level(at: d)) }
-                : nil
+            // The single draggable dot when scrubbing — defaults to "now" until dragged.
+            let scrubDot: (date: Date, level: Double)? = {
+                guard scrubbing else { return nil }
+                let d = min(max(PlanPreview.shared.scrubTime ?? now, window.start), window.end)
+                return (d, rhythm.level(at: d))
+            }()
             let onDrag: (Date, Bool) -> Void = scrubbing
                 ? { (raw: Date, _: Bool) in PlanPreview.shared.scrubTime = min(max(raw, window.start), window.end) }
                 : makeDragHandler(resolved: resolved, markers: markers, rhythm: rhythm, now: now, window: window)
@@ -327,7 +330,7 @@ struct AlertnessCurveView: View {
                        scrub: (date: Date, level: Double)?, onDrag: @escaping (Date, Bool) -> Void) -> some View {
         Chart {
             ForEach(baseline, id: \.date) { r in
-                AreaMark(x: .value("Time", r.date), y: .value("Alertness", r.level))
+                AreaMark(x: .value("Time", r.date), y: .value("Alertness", r.level), series: .value("s", "base"))
                     .foregroundStyle(.linearGradient(colors: [.indigo.opacity(0.16), .indigo.opacity(0.01)],
                                                      startPoint: .top, endPoint: .bottom))
             }
@@ -337,7 +340,8 @@ struct AlertnessCurveView: View {
                     .foregroundStyle((b.late ? Color.orange : .mint).opacity(0.10))
             }
             ForEach(gain, id: \.date) { g in
-                AreaMark(x: .value("Time", g.date), yStart: .value("Floor", g.bare), yEnd: .value("You", g.actual))
+                AreaMark(x: .value("Time", g.date), yStart: .value("Floor", g.bare), yEnd: .value("You", g.actual),
+                         series: .value("s", "gain"))
                     .foregroundStyle(.green.opacity(0.22))
             }
             ForEach(gain, id: \.date) { g in
@@ -362,8 +366,10 @@ struct AlertnessCurveView: View {
             }
             RuleMark(x: .value("Now", now))
                 .foregroundStyle(.secondary.opacity(0.4)).lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
-            PointMark(x: .value("Now", now), y: .value("Alertness", nowLevel)).foregroundStyle(.white).symbolSize(120)
-            PointMark(x: .value("Now", now), y: .value("Alertness", nowLevel)).foregroundStyle(.indigo).symbolSize(60)
+            if scrub == nil {   // when scrubbing, the scrub dot *is* the now dot (moved)
+                PointMark(x: .value("Now", now), y: .value("Alertness", nowLevel)).foregroundStyle(.white).symbolSize(120)
+                PointMark(x: .value("Now", now), y: .value("Alertness", nowLevel)).foregroundStyle(.indigo).symbolSize(60)
+            }
             if let s = scrub {
                 RuleMark(x: .value("Scrub", s.date))
                     .foregroundStyle(.indigo.opacity(0.5)).lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
