@@ -14,6 +14,7 @@ struct SettingsView: View {
     @State private var calendar = CalendarService.shared
     @State private var napWindows = NapWindowsStore.shared
     @AppStorage("appearanceMode") private var appearance: AppearanceMode = .system
+    @AppStorage("sleepBasis") private var sleepBasis: SleepBasis = .auto
     @State private var morningPlan = PlanNotificationService.morningPlanEnabled
     @State private var windDownReminder = PlanNotificationService.windDownReminderEnabled
 
@@ -71,6 +72,16 @@ struct SettingsView: View {
                 Text("Always OK to nap")
             } footer: {
                 Text("These windows override your calendar — a nap can be suggested here even if you're booked (e.g. a quiet stretch during a long appointment).")
+            }
+
+            Section {
+                Picker("Base today's curve on", selection: $sleepBasis) {
+                    ForEach(SleepBasis.allCases) { Text($0.title).tag($0) }
+                }
+            } header: {
+                Text("Last night → today")
+            } footer: {
+                Text("Sleep Score uses duration + quality (needs Apple-Watch sleep tracking). Sleep debt uses hours only — works with Oura, a manual log, or no watch. Auto picks whichever your data supports.")
             }
 
             Section("Appearance") {

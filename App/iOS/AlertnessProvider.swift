@@ -29,15 +29,50 @@ enum AlertnessProvider {
                        store: NapDecisionStore = .shared, now: Date) -> AlertnessRhythm {
         let summary = health.lastNightSleep
         let typical = summary?.averageLast7Days ?? health.sleepAverage7Day
-        return AlertnessRhythm.fromSleep(
-            wakeTime: summary?.wakeTime,
-            sleptHours: summary?.totalHours ?? 0,
-            typicalHours: typical,
+        let need = max(typical > 0 ? typical : 7.5, 6)
+        let healthAsleep = summary?.totalHours ?? 0
+        let efficiency = summary?.efficiency ?? 0
+        let wake = summary?.wakeTime ?? Calendar.current.date(bySettingHour: 7, minute: 0, second: 0, of: now) ?? now
+
+        // Fall back to a manual "how long did you sleep" entry when HealthKit has none.
+        let manual = ManualSleepStore.shared.today
+        let asleep = healthAsleep > 0 ? healthAsleep : (manual ?? 0)
+        // Manual entries have no efficiency, so force the hours basis for them.
+        let basis: SleepBasis = healthAsleep > 0 ? SleepBasis.current : .hours
+
+        // Bedtime consistency (Apple's 3rd factor) — last night's bedtime vs the
+        // rolling normal. Only available with HealthKit sleep + enough history.
+        let bedtimeMinutes = healthAsleep > 0 ? summary?.bedtime.map(BedtimeHistoryStore.minutesFrom6pm) ?? nil : nil
+        let normalMinutes = BedtimeHistoryStore.shared.normalMinutes
+
+        return AlertnessRhythm(
+            wakeTime: wake,
+            sleepDebt: sleepDebt(asleep: asleep, need: need, efficiency: efficiency, basis: basis,
+                                 bedtimeMinutes: bedtimeMinutes, normalMinutes: normalMinutes),
             naps: napsToday(store: store, now: now),
+            isShortNight: asleep > 0 && asleep < need - 0.75,
             morningLightDose: AlertnessRhythm.morningLightDose(minutes: health.daylightToday.morning),
-            morningActivityDose: AlertnessRhythm.morningActivityDose(minutes: health.morningActivityMinutes),
-            now: now
+            morningActivityDose: AlertnessRhythm.morningActivityDose(minutes: health.morningActivityMinutes)
         )
+    }
+
+    /// The curve's start-of-day sleep pressure, per the chosen basis. No data → assume
+    /// rested (don't penalize someone without a tracker).
+    static func sleepDebt(asleep: Double, need: Double, efficiency: Double, basis: SleepBasis,
+                          bedtimeMinutes: Int? = nil, normalMinutes: Int? = nil) -> Double {
+        guard asleep > 0 else { return 0.05 }
+        let useScore: Bool
+        switch basis {
+        case .hours:       useScore = false
+        case .sleepScore:  useScore = true
+        case .auto:        useScore = efficiency > 0 && efficiency < 0.999   // has awake data → quality tracking
+        }
+        if useScore {
+            return SleepScore.debt(fromScore: SleepScore.score(
+                asleepHours: asleep, needHours: need, efficiency: efficiency,
+                bedtimeMinutes: bedtimeMinutes, normalMinutes: normalMinutes))
+        }
+        return SleepScore.debt(asleepHours: asleep, needHours: need)
     }
 
     static func pct(_ level: Double) -> Int { Int((level * 100).rounded()) }

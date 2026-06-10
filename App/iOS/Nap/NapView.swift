@@ -26,7 +26,6 @@ struct NapView: View {
                 picker
             }
         }
-        .navigationTitle("Nap")
         .padding(.horizontal)
     }
 
