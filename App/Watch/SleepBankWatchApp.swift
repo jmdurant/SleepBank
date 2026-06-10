@@ -19,6 +19,7 @@ struct SleepBankWatchApp: App {
 struct WatchRootView: View {
     @State private var showDaylight = false
     @State private var showPlan = false
+    @State private var workout = ActivityWorkoutService.shared
 
     var body: some View {
         NapSessionView()
@@ -32,5 +33,9 @@ struct WatchRootView: View {
             }
             .sheet(isPresented: $showDaylight) { WatchDaylightView() }
             .sheet(isPresented: $showPlan) { NavigationStack { WatchDayPlanView() } }
+            // A reminder's "Start Walk/Workout" action started a real workout.
+            .sheet(isPresented: Binding(get: { workout.isActive }, set: { if !$0 { workout.stop() } })) {
+                WorkoutRunningView()
+            }
     }
 }

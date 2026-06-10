@@ -180,12 +180,20 @@ private struct HistoryView: View {
     @State private var manual = ManualSleepStore.shared
     @State private var editing = false
     @State private var entryHours = 7.0
+    @State private var selectedDate = Calendar.current.startOfDay(for: Date())
+    @State private var summary: HealthKitService.SleepSummary?
+    @State private var samples: [SleepSample] = []
+    @State private var loading = false
+    @State private var showCalendar = false
+
+    private var isToday: Bool { Calendar.current.isDateInToday(selectedDate) }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                lastNightCard
-                baselineCard
+                dateNav
+                nightCard
+                if isToday { baselineCard }
                 chartCard
                 NavigationLink { ValidationView() } label: {
                     Label("Validation & Training Data", systemImage: "checklist")
@@ -197,13 +205,52 @@ private struct HistoryView: View {
             .padding()
         }
         .navigationTitle("History")
-        .task { if await health.requestAuthorization() { await health.refreshAll() } }
+        .task(id: selectedDate) {
+            guard await health.requestAuthorization() else { return }
+            loading = true
+            let r = await health.sleep(nightEnding: selectedDate)
+            summary = r.summary; samples = r.samples; loading = false
+        }
     }
 
-    private var lastNightCard: some View {
+    // MARK: - Date navigation
+
+    private var dateNav: some View {
+        HStack(spacing: 8) {
+            Button { shift(-1) } label: { Image(systemName: "chevron.left").font(.headline) }
+                .buttonStyle(.plain).foregroundStyle(.indigo)
+            Spacer()
+            Text(dateLabel).font(.headline)
+                .onTapGesture { showCalendar = true }
+                .popover(isPresented: $showCalendar) {
+                    DatePicker("Night", selection: Binding(get: { selectedDate },
+                                                           set: { selectedDate = Calendar.current.startOfDay(for: $0); showCalendar = false }),
+                               in: ...Date(), displayedComponents: .date)
+                        .datePickerStyle(.graphical).padding()
+                        .frame(minWidth: 300, minHeight: 320).presentationCompactAdaptation(.popover)
+                }
+            Spacer()
+            Button { shift(1) } label: { Image(systemName: "chevron.right").font(.headline) }
+                .buttonStyle(.plain).foregroundStyle(.indigo).disabled(isToday)
+        }
+        .padding(.horizontal, 4)
+    }
+
+    private var dateLabel: String {
+        if isToday { return "Last night" }
+        if Calendar.current.isDateInYesterday(selectedDate) { return "Yesterday" }
+        return selectedDate.formatted(.dateTime.weekday(.wide).month().day())
+    }
+
+    private func shift(_ delta: Int) {
+        let next = Calendar.current.date(byAdding: .day, value: delta, to: selectedDate) ?? selectedDate
+        selectedDate = min(Calendar.current.startOfDay(for: Date()), Calendar.current.startOfDay(for: next))
+    }
+
+    private var nightCard: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Last Night").font(.headline)
-            if let s = health.lastNightSleep, s.totalHours > 0 {
+            Text(isToday ? "Last Night" : "Night of \(selectedDate.formatted(.dateTime.month().day()))").font(.headline)
+            if let s = summary, s.totalHours > 0 {
                 let need = max(health.sleepAverage7Day > 0 ? health.sleepAverage7Day : 7.5, 6)
                 let score = SleepScore.score(
                     asleepHours: s.totalHours, needHours: need, efficiency: s.efficiency,
@@ -216,11 +263,11 @@ private struct HistoryView: View {
                     .font(.subheadline)
                 Text(String(format: "7-day average: %.1f h", health.sleepAverage7Day))
                     .font(.caption).foregroundStyle(.secondary)
-            } else if let h = manual.today, !editing {
+            } else if isToday, let h = manual.today, !editing {
                 Text(String(format: "You logged %.1f h last night.", h)).font(.subheadline)
                 Text("Today's Alert Score starts from this.").font(.caption).foregroundStyle(.secondary)
                 Button("Change") { entryHours = h; editing = true }.font(.caption)
-            } else {
+            } else if isToday {
                 Text(manual.today == nil ? "No sleep data — how long did you sleep last night?" : "Update last night")
                     .font(.subheadline)
                 Stepper(value: $entryHours, in: 0...14, step: 0.25) {
@@ -232,6 +279,9 @@ private struct HistoryView: View {
                     Label("Save", systemImage: "checkmark").frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
+            } else {
+                Text(loading ? "Loading…" : "No sleep recorded for this night.")
+                    .font(.subheadline).foregroundStyle(.secondary)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -266,12 +316,13 @@ private struct HistoryView: View {
     private var chartCard: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Sleep Stages").font(.headline)
-            if health.lastNightSamples.isEmpty {
-                Text("Charting sample data — grant Health access for your real night.")
+            if samples.isEmpty {
+                Text(isToday ? "Charting sample data — grant Health access for your real night."
+                             : "No staged sleep for this night.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             SleepChartView(
-                samples: health.lastNightSamples.isEmpty ? Self.sampleNight : health.lastNightSamples,
+                samples: samples.isEmpty ? Self.sampleNight : samples,
                 style: .timeline
             )
             .frame(height: 220)

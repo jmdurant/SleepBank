@@ -159,16 +159,31 @@ class HealthKitService {
     /// start after noon — both excluded. (The old 00:00-yesterday start swept in the
     /// prior night's post-midnight hours, double-counting them into "last night.")
     private func lastNightWindow(now: Date = Date(), calendar: Calendar = .current) -> (start: Date, end: Date) {
-        let startOfToday = calendar.startOfDay(for: now)
-        let eveningYesterday = calendar.date(byAdding: .hour, value: -6, to: startOfToday) ?? now   // 18:00 yesterday
-        let noonToday = calendar.date(byAdding: .hour, value: 12, to: startOfToday) ?? now
-        return (eveningYesterday, min(now, noonToday))
+        nightWindow(ending: now, now: now, calendar: calendar)
     }
 
-    /// Raw last-night sleep stages converted to SleepChartKit samples.
-    func fetchLastNightSamples() async -> [SleepSample] {
+    /// The sleep window for the night ending on `morning` ([18:00 the day before, noon],
+    /// capped at `now` when that morning is today).
+    private func nightWindow(ending morning: Date, now: Date = Date(), calendar: Calendar = .current) -> (start: Date, end: Date) {
+        let startOfDay = calendar.startOfDay(for: morning)
+        let eveningBefore = calendar.date(byAdding: .hour, value: -6, to: startOfDay) ?? startOfDay   // 18:00 prior day
+        let noon = calendar.date(byAdding: .hour, value: 12, to: startOfDay) ?? startOfDay
+        return (eveningBefore, calendar.isDate(startOfDay, inSameDayAs: now) ? min(now, noon) : noon)
+    }
+
+    /// Summary + stage samples for the night ending on `date` — powers History's
+    /// per-day browsing.
+    func sleep(nightEnding date: Date) async -> (summary: SleepSummary?, samples: [SleepSample]) {
+        let window = nightWindow(ending: date)
+        async let summary = fetchSleep(window: window)
+        async let samples = fetchLastNightSamples(window: window)
+        return await (summary, samples)
+    }
+
+    /// Raw sleep stages for a window, converted to SleepChartKit samples.
+    func fetchLastNightSamples(window: (start: Date, end: Date)? = nil) async -> [SleepSample] {
         let sleepType = HKCategoryType(.sleepAnalysis)
-        let window = lastNightWindow()
+        let window = window ?? lastNightWindow()
         let predicate = HKQuery.predicateForSamples(withStart: window.start, end: window.end, options: .strictStartDate)
         guard let raw = try? await querySamples(sleepType, predicate: predicate) else { return [] }
         if #available(iOS 16.0, *) {
@@ -179,9 +194,9 @@ class HealthKitService {
 
     // MARK: - Sleep
 
-    private func fetchSleep() async -> SleepSummary? {
+    private func fetchSleep(window: (start: Date, end: Date)? = nil) async -> SleepSummary? {
         let sleepType = HKCategoryType(.sleepAnalysis)
-        let window = lastNightWindow()
+        let window = window ?? lastNightWindow()
         let predicate = HKQuery.predicateForSamples(withStart: window.start, end: window.end, options: .strictStartDate)
 
         do {

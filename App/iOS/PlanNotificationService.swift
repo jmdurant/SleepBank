@@ -49,8 +49,21 @@ final class PlanNotificationService: NSObject, UNUserNotificationCenterDelegate 
     /// even if it missed the live post.
     private(set) var pendingRoute: HomeRoute?
 
-    /// Call once at launch so taps route correctly even on cold start.
-    func configure() { center.delegate = self }
+    /// Call once at launch so taps route correctly even on cold start, and register
+    /// the action buttons (Start Nap / Start Walk / Start Workout).
+    func configure() {
+        center.delegate = self
+        func cat(_ id: String, _ actionID: String, _ title: String) -> UNNotificationCategory {
+            UNNotificationCategory(identifier: id,
+                                   actions: [UNNotificationAction(identifier: actionID, title: title, options: [.foreground])],
+                                   intentIdentifiers: [], options: [])
+        }
+        center.setNotificationCategories([
+            cat("NAP_REMINDER", "START_NAP", "Start Nap"),
+            cat("WALK_REMINDER", "START_WALK", "Start Walk"),
+            cat("WORKOUT_REMINDER", "START_WORKOUT", "Start Workout"),
+        ])
+    }
 
     /// Ask for permission (once) and schedule the morning plan + evening wind-down
     /// notifications, timed off the user's recent wake time when known.
@@ -108,6 +121,7 @@ final class PlanNotificationService: NSObject, UNUserNotificationCenterDelegate 
         content.body = "Settle in now — a nap here keeps you sharp through the rest of the day, no caffeine needed."
         content.sound = .default
         content.userInfo = ["route": "nap"]
+        content.categoryIdentifier = "NAP_REMINDER"
 
         center.removePendingNotificationRequests(withIdentifiers: [napId])
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: interval, repeats: false)
@@ -157,6 +171,7 @@ final class PlanNotificationService: NSObject, UNUserNotificationCenterDelegate 
             : "A bit of movement now keeps you sharp through the rest of the day."
         content.sound = .default
         content.userInfo = ["route": "plan"]
+        content.categoryIdentifier = title.caseInsensitiveCompare("walk") == .orderedSame ? "WALK_REMINDER" : "WORKOUT_REMINDER"
 
         center.removePendingNotificationRequests(withIdentifiers: [activityId(title)])
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: interval, repeats: false)
@@ -225,11 +240,21 @@ final class PlanNotificationService: NSObject, UNUserNotificationCenterDelegate 
 
     func userNotificationCenter(_ center: UNUserNotificationCenter,
                                 didReceive response: UNNotificationResponse) async {
+        // Action buttons: ask the watch to begin a real workout (best-effort).
+        switch response.actionIdentifier {
+        case "START_WALK":    PhoneConnectivity.shared.startWorkout("walk")
+        case "START_WORKOUT": PhoneConnectivity.shared.startWorkout("workout")
+        default: break
+        }
+        // Where to open the app.
+        let routeStr = response.actionIdentifier == "START_NAP"
+            ? "nap" : response.notification.request.content.userInfo["route"] as? String
         let route: HomeRoute
-        switch response.notification.request.content.userInfo["route"] as? String {
-        case "plan":     route = .plan
+        switch routeStr {
+        case "nap":      route = .nap
         case "winddown": route = .windDown
-        default:         return
+        case "daylight": route = .daylight
+        default:         route = .plan
         }
         pendingRoute = route
         await MainActor.run { NotificationCenter.default.post(name: .openPlan, object: route) }

@@ -132,6 +132,10 @@ class WatchConnectivityService: NSObject, WCSessionDelegate {
                 self.eegDeep = (message["eegDeep"] as? Bool) ?? false
                 self.eegAt = Date()
             }
+            // Reminder action on the phone asked us to start a real workout.
+            if let kind = message["startWorkout"] as? String {
+                ActivityWorkoutService.shared.start(kind: kind)
+            }
         }
     }
 }

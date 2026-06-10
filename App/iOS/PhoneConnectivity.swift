@@ -48,6 +48,22 @@ class PhoneConnectivity: NSObject, WCSessionDelegate {
         session.sendMessage(["liveHR": bpm, "liveHRV": hrv], replyHandler: nil, errorHandler: nil)
     }
 
+    /// Ask the watch to start a real workout (walk / general) from a reminder's
+    /// action button. Best-effort: `sendMessage` if the watch app is reachable, else
+    /// queue it as application context for when it next wakes.
+    func startWorkout(_ kind: String) {
+        let session = WCSession.default
+        guard session.activationState == .activated else { return }
+        let payload: [String: Any] = ["startWorkout": kind, "ts": Date().timeIntervalSince1970]
+        if session.isReachable {
+            session.sendMessage(payload, replyHandler: nil, errorHandler: { _ in
+                try? session.updateApplicationContext(payload)
+            })
+        } else {
+            try? session.updateApplicationContext(payload)
+        }
+    }
+
     /// Forward the Muse EEG onset signal to the watch nap loop.
     func sendEEG(onsetConfidence: Double, deepApproaching: Bool) {
         let session = WCSession.default
