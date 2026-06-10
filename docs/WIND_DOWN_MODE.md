@@ -1,9 +1,11 @@
 # Wind-Down Mode — blocking distracting apps in the evening
 
-> **Status: code shipped, inert until the entitlement is granted.** The
-> implementation is in `App/iOS/WindDownShieldService.swift` + the "Block
-> distracting apps" card in `WindDownView`. It compiles and ships safely today, but
-> does nothing until Apple grants the **Family Controls entitlement** (below).
+> **Status: built, and enabled for DEVELOPMENT builds.** The implementation is in
+> `App/iOS/WindDownShieldService.swift` + the "Block distracting apps" card in
+> `WindDownView`. The `com.apple.developer.family-controls` entitlement is in
+> `project.yml` — it **auto-provisions for development** (your own device, dev
+> signing) with no approval, so you can test the shield now. **Only a
+> TestFlight/App Store build** needs Apple's gated Family Controls request (below).
 
 ## Why this and not screen-time tracking
 
@@ -34,24 +36,20 @@ evening scrolling, we **block the apps that keep you up.**
   Without the entitlement this fails gracefully → `isAuthorized = false` → the card
   shows a setup hint and shielding is a no-op. **The rest of the app is unaffected.**
 
-## To turn it on (two steps — both yours)
+## Two tiers — development works now, distribution needs the form
 
-1. **Request the entitlement from Apple** (Account holder):
-   developer.apple.com → Certificates, IDs & Profiles → Identifiers → the
-   `com.doctordurant.sleepbank` App ID → enable **Family Controls (Distribution)**,
-   and submit the **Family Controls request form**. Wait for approval.
-2. **Add the entitlement to the build** — in `project.yml`, under the `SleepBank`
-   target's `entitlements: properties:` (next to the HealthKit / App Group keys):
+The entitlement key is the same; the *signing tier* differs:
 
-   ```yaml
-       entitlements:
-         properties:
-           com.apple.developer.family-controls: true
-   ```
-
-   then `xcodegen generate`. **Don't add this before approval** — a signed build will
-   fail to provision until Apple grants it (which is why it's left out for now, so
-   you can keep installing other builds).
+- **Development (now):** the entitlement is in `project.yml`, so a dev-signed build
+  on your own device **provisions it automatically** — no form, no approval. Run it,
+  grant Screen Time permission when prompted, pick apps, and the shield works.
+  - *Caveat:* if automatic provisioning ever errors on Family Controls, enable the
+    capability once on the `com.doctordurant.sleepbank` App ID at developer.apple.com
+    (no review) — but dev signing usually registers it for you.
+- **Distribution (later, before TestFlight/App Store):** request **Family Controls
+  (Distribution)** for the App ID at developer.apple.com and submit the **Family
+  Controls request form**. Review can take days to months. The same entitlement key
+  then ships in the distribution build.
 
 ## Future (Phase B): fully-automatic nightly shielding
 

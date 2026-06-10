@@ -67,6 +67,10 @@ targets:
       path: App/iOS/SleepBank.entitlements
       properties:
         com.apple.developer.healthkit: true
+        # Wind-Down Mode app shielding. Auto-provisions for DEVELOPMENT builds (no
+        # approval needed); a TestFlight/App Store build needs Apple's gated
+        # Family Controls (Distribution) request first. See docs/WIND_DOWN_MODE.md.
+        com.apple.developer.family-controls: true
         com.apple.security.application-groups:
           - group.com.doctordurant.sleepbank
         com.apple.developer.icloud-services:
