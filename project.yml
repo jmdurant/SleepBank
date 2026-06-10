@@ -40,6 +40,8 @@ targets:
         embed: true
       - target: SleepBankWidget
         embed: true
+      - target: SleepBankDeviceMonitor
+        embed: true
     info:
       path: App/iOS/Info.plist
       properties:
@@ -167,6 +169,30 @@ targets:
     entitlements:
       path: App/Widget/SleepBankWidget.entitlements
       properties:
+        com.apple.security.application-groups:
+          - group.com.doctordurant.sleepbank
+
+  # ----------------------------------- DeviceActivityMonitor extension (Wind-Down)
+  SleepBankDeviceMonitor:
+    type: app-extension
+    platform: iOS
+    sources:
+      - App/DeviceMonitor
+      - path: App/Shared/WindDownShield.swift
+        buildPhase: sources
+    info:
+      path: App/DeviceMonitor/Info.plist
+      properties:
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.deviceactivity.monitor-extension
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).WindDownMonitor
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.doctordurant.sleepbank.devicemonitor
+    entitlements:
+      path: App/DeviceMonitor/SleepBankDeviceMonitor.entitlements
+      properties:
+        com.apple.developer.family-controls: true
         com.apple.security.application-groups:
           - group.com.doctordurant.sleepbank
 

@@ -182,6 +182,14 @@ struct WindDownView: View {
             Button { showAppPicker = true } label: {
                 Label(buttonLabel, systemImage: "app.badge.checkmark").font(.caption.weight(.medium))
             }
+            if shield.hasSelection {
+                Toggle(isOn: Binding(get: { shield.autoSchedule }, set: { shield.autoSchedule = $0 })) {
+                    Text("Block automatically every evening").font(.caption)
+                }
+                .disabled(!shield.isAuthorized)
+                Text("Shields on its own from wind-down to wake — even if the app's closed.")
+                    .font(.caption2).foregroundStyle(.secondary)
+            }
             if !shield.isAuthorized {
                 Text("Needs Screen Time permission (auto-provisions on a development build) — see docs/WIND_DOWN_MODE.md.")
                     .font(.caption2).foregroundStyle(.orange)

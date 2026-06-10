@@ -69,13 +69,24 @@ The entitlement key is the same; the *signing tier* differs:
   Controls request form**. Review can take days to months. The same entitlement key
   then ships in the distribution build.
 
-## Future (Phase B): fully-automatic nightly shielding
+## Phase B (BUILT): fully-automatic nightly shielding
 
-The manual shield covers "block while I wind down." To shield **automatically every
-evening** (even if the app isn't open), add a **`DeviceActivityMonitor` extension**
-target with a `DeviceActivitySchedule` for the evening window: `intervalDidStart`
-applies the shield, `intervalDidEnd` clears it. That's a separate target (its own
-provisioning + the same entitlement) and is deferred until the entitlement lands and
-the manual flow is validated on-device. A `DeviceActivityMonitor` threshold event
-(*"30 min of social this evening"*) could also fire a nudge — you get the *event*,
-never the raw minutes.
+The **"Block automatically every evening"** toggle shields on its own from
+wind-down to wake, even with the app closed:
+
+- **`SleepBankDeviceMonitor`** — a `DeviceActivityMonitor` app-extension target
+  (`App/DeviceMonitor/WindDownMonitor.swift`). The app schedules an evening→morning
+  `DeviceActivitySchedule` via `DeviceActivityCenter().startMonitoring(...)`; the OS
+  calls the extension's `intervalDidStart` (→ `WindDownShield.apply()`) and
+  `intervalDidEnd` (→ `WindDownShield.clear()`) at the boundaries.
+- **Shared config via App Group.** `WindDownShield` (App/Shared) holds the picked
+  `FamilyActivitySelection` + mode in the App Group and does the actual
+  apply/clear, so the manual path (app) and the automatic path (extension) act on
+  exactly the same selection.
+- The extension carries the same `family-controls` + App Group entitlements
+  (auto-provisions for development).
+
+**Needs on-device validation** (untestable in CI / without a granted entitlement):
+schedule boundaries firing, overnight interval handling, and the allowlist self-lock
+guard. A future `DeviceActivityMonitor` threshold event (*"30 min of social"*) could
+also fire a nudge — you get the *event*, never the raw minutes.

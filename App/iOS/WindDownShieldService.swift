@@ -2,16 +2,13 @@
 //  WindDownShieldService.swift
 //  SleepBank
 //
-//  Wind-Down Mode — shield distracting apps while you wind down. iOS won't let us
-//  *measure* Screen Time (sandboxed, unreadable), but it does let us *enforce*:
-//  ManagedSettings can shield apps the user picks via FamilyControls. We shield on
-//  "Start wind-down" and clear on stop — no monitor extension needed for the manual
-//  case (that path runs app-side while authorized).
+//  Wind-Down Mode — shield distracting apps. iOS won't let us *measure* Screen Time
+//  (sandboxed, unreadable), but it does let us *enforce*. The shield apply/clear +
+//  config live in the shared `WindDownShield` (App Group), so the manual path (here)
+//  and the automatic nightly path (the DeviceActivityMonitor extension) agree.
 //
-//  REQUIRES the gated `com.apple.developer.family-controls` entitlement (the account
-//  holder requests it from Apple; review can take days to months). Until it's
-//  granted, authorization simply fails and the feature stays inert — the rest of the
-//  app is unaffected. See docs/WIND_DOWN_MODE.md.
+//  REQUIRES `com.apple.developer.family-controls` (auto-provisions for development;
+//  TestFlight/App Store needs Apple's gated request). See docs/WIND_DOWN_MODE.md.
 //
 
 import Foundation
@@ -20,44 +17,38 @@ import SwiftUI
 #if canImport(FamilyControls)
 import FamilyControls
 import ManagedSettings
-
-/// How the picked apps are used.
-enum WindDownShieldMode: String, CaseIterable, Identifiable {
-    case blocklist   // block the chosen apps
-    case allowlist   // "Bare Necessities" — block everything EXCEPT the chosen apps
-    var id: String { rawValue }
-    var title: String { self == .blocklist ? "Block these" : "Allow only these" }
-}
+import DeviceActivity
 
 @available(iOS 16.0, *)
 @Observable
 final class WindDownShieldService {
     static let shared = WindDownShieldService()
 
-    private let store = ManagedSettingsStore(named: .init("sleepbank.winddown"))
-    private let selectionKey = "windDownShieldSelection"
-    private let modeKey = "windDownShieldMode"
-
     private(set) var isAuthorized = false
     private(set) var isShielding = false
-    var selection = FamilyActivitySelection() {
-        didSet { persist() }
+
+    // Stored (so @Observable tracks them) and mirrored to the App Group on change so
+    // the extension sees the same config.
+    var selection: FamilyActivitySelection = WindDownShield.selection {
+        didSet { WindDownShield.selection = selection }
     }
-    var mode: WindDownShieldMode = .blocklist {
-        didSet { UserDefaults.standard.set(mode.rawValue, forKey: modeKey) }
+    var mode: WindDownShieldMode = WindDownShield.mode {
+        didSet { WindDownShield.mode = mode }
+    }
+    /// Auto-shield every evening via DeviceActivity (vs. only while wind-down runs).
+    var autoSchedule: Bool = UserDefaults.standard.bool(forKey: "windDownAutoSchedule") {
+        didSet {
+            UserDefaults.standard.set(autoSchedule, forKey: "windDownAutoSchedule")
+            autoSchedule ? enableSchedule() : disableSchedule()
+        }
     }
 
     private init() {
-        load()
-        mode = WindDownShieldMode(rawValue: UserDefaults.standard.string(forKey: modeKey) ?? "") ?? .blocklist
         isAuthorized = AuthorizationCenter.shared.authorizationStatus == .approved
     }
 
-    var hasSelection: Bool {
-        !selection.applicationTokens.isEmpty || !selection.categoryTokens.isEmpty
-    }
+    var hasSelection: Bool { WindDownShield.hasSelection }
 
-    /// Ask for Family Controls authorization (no-op/failure without the entitlement).
     func requestAuthorization() async {
         do {
             try await AuthorizationCenter.shared.requestAuthorization(for: .individual)
@@ -67,41 +58,50 @@ final class WindDownShieldService {
         }
     }
 
-    /// Shield the chosen apps/categories (called when wind-down starts).
+    // MARK: - Manual shield (while wind-down runs)
+
     func shield() {
         guard isAuthorized, hasSelection else { return }
-        switch mode {
-        case .blocklist:
-            store.shield.applications = selection.applicationTokens.isEmpty ? nil : selection.applicationTokens
-            store.shield.applicationCategories = selection.categoryTokens.isEmpty
-                ? nil : .specific(selection.categoryTokens)
-        case .allowlist:
-            // Bare Necessities: shield ALL apps except the chosen exceptions.
-            store.shield.applications = nil
-            store.shield.applicationCategories = .all(except: selection.applicationTokens)
-        }
+        WindDownShield.apply()
         isShielding = true
     }
 
-    /// Lift the shield (called when wind-down stops).
     func unshield() {
-        store.shield.applications = nil
-        store.shield.applicationCategories = nil
+        WindDownShield.clear()
         isShielding = false
     }
 
-    // MARK: - Persistence
+    // MARK: - Automatic nightly schedule (DeviceActivityMonitor extension reacts)
 
-    private func persist() {
-        if let data = try? JSONEncoder().encode(selection) {
-            UserDefaults.standard.set(data, forKey: selectionKey)
-        }
+    /// Monitor the evening→morning window; the extension's `intervalDidStart`
+    /// applies the shield and `intervalDidEnd` lifts it.
+    func enableSchedule() {
+        guard isAuthorized else { return }
+        let (startH, startM) = windDownTime()
+        let (endH, endM) = wakeTime()
+        let schedule = DeviceActivitySchedule(
+            intervalStart: DateComponents(hour: startH, minute: startM),
+            intervalEnd: DateComponents(hour: endH, minute: endM),   // overnight: end < start spans to next day
+            repeats: true)
+        let center = DeviceActivityCenter()
+        try? center.startMonitoring(DeviceActivityName(WindDownShield.activityName), during: schedule)
     }
 
-    private func load() {
-        guard let data = UserDefaults.standard.data(forKey: selectionKey),
-              let saved = try? JSONDecoder().decode(FamilyActivitySelection.self, from: data) else { return }
-        selection = saved
+    func disableSchedule() {
+        DeviceActivityCenter().stopMonitoring([DeviceActivityName(WindDownShield.activityName)])
+        WindDownShield.clear()
+    }
+
+    // Times from the latest synced rhythm snapshot (fallbacks otherwise).
+    private func windDownTime() -> (Int, Int) {
+        guard let snap = RhythmSnapshot.load() else { return (22, 0) }
+        let c = Calendar.current.dateComponents([.hour, .minute], from: snap.wakeTime.addingTimeInterval(15.5 * 3600))
+        return (c.hour ?? 22, c.minute ?? 0)
+    }
+    private func wakeTime() -> (Int, Int) {
+        guard let snap = RhythmSnapshot.load() else { return (7, 0) }
+        let c = Calendar.current.dateComponents([.hour, .minute], from: snap.wakeTime)
+        return (c.hour ?? 7, c.minute ?? 0)
     }
 }
 #endif
