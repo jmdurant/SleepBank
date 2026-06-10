@@ -19,11 +19,17 @@ struct DayPlanView: View {
         TimelineView(.periodic(from: .now, by: 600)) { context in
             let now = context.date
             let rhythm = AlertnessProvider.rhythm(health: health, store: store, now: now)
-            let plan = DayPlan.build(rhythm: rhythm, now: now)
+            let plan = DayPlan.build(rhythm: rhythm, now: now, busy: CalendarService.shared.busyToday(now: now))
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     readinessCard(plan)
                     agendaCard(plan)
+                    if plan.napBlockedByCalendar {
+                        Label("Your calendar's booked through your dip — grab even 10 min if a gap opens.",
+                              systemImage: "calendar.badge.exclamationmark")
+                            .font(.caption).foregroundStyle(.orange)
+                            .padding(.horizontal, 4)
+                    }
                     NavigationLink(value: HomeRoute.windDown) {
                         HStack {
                             Image(systemName: "moon.stars.fill")
@@ -43,7 +49,10 @@ struct DayPlanView: View {
             }
         }
         .navigationTitle("Today's Plan")
-        .task { if await health.requestAuthorization() { await health.refreshAll() } }
+        .task {
+            await CalendarService.shared.requestAccess()
+            if await health.requestAuthorization() { await health.refreshAll() }
+        }
     }
 
     // MARK: - Readiness

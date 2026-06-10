@@ -11,6 +11,7 @@ import SwiftUI
 struct SettingsView: View {
     @State private var noise = NoiseService.shared
     @State private var relax = GuidedRelaxationService.shared
+    @State private var calendar = CalendarService.shared
     @State private var morningPlan = PlanNotificationService.morningPlanEnabled
     @State private var windDownReminder = PlanNotificationService.windDownReminderEnabled
 
@@ -40,6 +41,15 @@ struct SettingsView: View {
                     get: { relax.guide }, set: { relax.guide = $0 })) {
                     ForEach(RelaxationGuide.allCases) { g in Text(g.title).tag(g) }
                 }
+            }
+
+            Section {
+                Toggle("Avoid calendar conflicts", isOn: Binding(
+                    get: { calendar.enabled }, set: { calendar.enabled = $0; if $0 { Task { await calendar.requestAccess() } } }))
+            } header: {
+                Text("Today's Plan")
+            } footer: {
+                Text("Reads your calendar's busy times so a nap is suggested when you're actually free — never event details.")
             }
 
             Section("Features") {

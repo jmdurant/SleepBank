@@ -65,6 +65,41 @@ final class DayPlanTests: XCTestCase {
         }
     }
 
+    func testNapAvoidsACalendarConflict() {
+        // Ideal nap is ~40 min before the dip; book that ideal slot and the nap moves.
+        let r = rhythm(debt: 0.4)
+        let noConflict = DayPlan.build(rhythm: r, now: at(9), calendar: cal)
+        guard let ideal = noConflict.suggestedNap else { return XCTFail("expected a nap") }
+
+        let meeting = DateInterval(start: ideal, duration: 60 * 60)   // booked over the ideal slot
+        let withConflict = DayPlan.build(rhythm: r, now: at(9), busy: [meeting], calendar: cal)
+
+        XCTAssertNotNil(withConflict.suggestedNap)
+        XCTAssertNotEqual(withConflict.suggestedNap, ideal)          // moved
+        if let nap = withConflict.suggestedNap {
+            let slot = DateInterval(start: nap, duration: 30 * 60)
+            XCTAssertFalse(meeting.intersects(slot))                  // no longer overlaps
+        }
+        XCTAssertFalse(withConflict.napBlockedByCalendar)
+    }
+
+    func testNapBlockedWhenAfternoonFullyBooked() {
+        let r = rhythm(debt: 0.4)
+        // Book the whole window the nap could land in.
+        let booked = DateInterval(start: at(9), end: at(18))
+        let plan = DayPlan.build(rhythm: r, now: at(9), busy: [booked], calendar: cal)
+        XCTAssertNil(plan.suggestedNap)
+        XCTAssertTrue(plan.napBlockedByCalendar)
+        XCTAssertFalse(plan.items.contains { $0.kind == .nap })
+    }
+
+    func testNoBusyMeansUnchangedNap() {
+        let r = rhythm(debt: 0.4)
+        let a = DayPlan.build(rhythm: r, now: at(9), calendar: cal).suggestedNap
+        let b = DayPlan.build(rhythm: r, now: at(9), busy: [], calendar: cal).suggestedNap
+        XCTAssertEqual(a, b)
+    }
+
     func testItemsAreChronological() {
         let plan = DayPlan.build(rhythm: rhythm(debt: 0.4), now: at(8), calendar: cal)
         let times = plan.items.map { $0.time ?? at(8) }

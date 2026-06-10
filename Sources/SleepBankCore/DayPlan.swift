@@ -28,13 +28,18 @@ public struct DayPlan: Sendable, Equatable {
     /// The day's predicted afternoon low, if it's still ahead.
     public let dipTime: Date?
     public let dipLevel: Double
-    /// Suggested nap start (≈40 min before the dip), if a nap would help and it's
-    /// still ahead. `nil` if the dip has passed or the day looks fine.
+    /// Suggested nap start — the nearest *calendar-free* slot near ≈40 min before the
+    /// dip, if a nap would help and it's still ahead. `nil` if the dip has passed, the
+    /// day looks fine, or there's no free moment (see `napBlockedByCalendar`).
     public let suggestedNap: Date?
+    /// A nap would help, but every slot near the dip is booked on the calendar.
+    public let napBlockedByCalendar: Bool
     public let items: [Item]
 
+    /// `busy` = the user's calendar events (the app reads EventKit; the core just
+    /// avoids them) — so the nap is suggested in a free moment, not on top of a meeting.
     public static func build(rhythm: AlertnessRhythm, now: Date,
-                             calendar: Calendar = .current) -> DayPlan {
+                             busy: [DateInterval] = [], calendar: Calendar = .current) -> DayPlan {
         let wake = rhythm.wakeTime
         let startingLevel = rhythm.level(at: wake)
         let base = calendar.startOfDay(for: now)
@@ -53,9 +58,16 @@ public struct DayPlan: Sendable, Equatable {
         let dipAhead = dipTime > now
 
         // Nap ~40 min before the dip, so the nap + waking lands you into it refreshed.
-        // Only when the dip is ahead and low enough to be worth it.
+        // Only when the dip is ahead and low enough to be worth it — and in a slot
+        // that isn't booked on the calendar.
         let napWorthwhile = dipAhead && dipLevel < 0.62
-        let suggestedNap = napWorthwhile ? max(dipTime.addingTimeInterval(-40 * 60), now) : nil
+        let napDuration: TimeInterval = 30 * 60
+        let ideal = max(dipTime.addingTimeInterval(-40 * 60), now)
+        let suggestedNap: Date? = napWorthwhile
+            ? freeSlot(ideal: ideal, duration: napDuration, busy: busy,
+                       earliest: now, latest: dipTime.addingTimeInterval(30 * 60))
+            : nil
+        let napBlockedByCalendar = napWorthwhile && suggestedNap == nil && !busy.isEmpty
 
         let morningEnd = wake.addingTimeInterval(4 * 3600)
         let lightDone = rhythm.morningLightDose >= 0.5
@@ -82,6 +94,30 @@ public struct DayPlan: Sendable, Equatable {
 
         return DayPlan(startingLevel: startingLevel, isShortNight: rhythm.isShortNight,
                        dipTime: dipAhead ? dipTime : nil, dipLevel: dipLevel,
-                       suggestedNap: suggestedNap, items: items)
+                       suggestedNap: suggestedNap, napBlockedByCalendar: napBlockedByCalendar,
+                       items: items)
+    }
+
+    /// The free `duration`-long slot closest to `ideal` within `[earliest, latest]`
+    /// that doesn't overlap any `busy` interval. Prefers earlier slots (nap *before*
+    /// the dip) when equidistant. `nil` if the window is fully booked.
+    static func freeSlot(ideal: Date, duration: TimeInterval, busy: [DateInterval],
+                         earliest: Date, latest: Date) -> Date? {
+        guard latest.timeIntervalSince(earliest) >= duration else { return nil }
+        func isFree(_ start: Date) -> Bool {
+            guard start >= earliest, start.addingTimeInterval(duration) <= latest else { return false }
+            let slot = DateInterval(start: start, duration: duration)
+            return !busy.contains { $0.intersects(slot) }
+        }
+        if isFree(ideal) { return ideal }
+        let step: TimeInterval = 5 * 60
+        var offset = step
+        let span = latest.timeIntervalSince(earliest)
+        while offset <= span {
+            if isFree(ideal.addingTimeInterval(-offset)) { return ideal.addingTimeInterval(-offset) }
+            if isFree(ideal.addingTimeInterval(offset)) { return ideal.addingTimeInterval(offset) }
+            offset += step
+        }
+        return nil
     }
 }

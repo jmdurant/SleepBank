@@ -20,6 +20,8 @@
 	<string>1</string>
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>SleepBank connects to a Muse headband and Polar H10 to read EEG and continuous heart rate for sleep-onset detection.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>SleepBank checks your calendar for busy times so it suggests a nap when you're actually free.</string>
 	<key>NSHealthShareUsageDescription</key>
 	<string>SleepBank reads your sleep and heart-rate data to study your naps and validate nap-onset detection.</string>
 	<key>NSHealthUpdateUsageDescription</key>
