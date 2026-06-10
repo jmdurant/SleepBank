@@ -24,6 +24,15 @@ short, well-timed nap recover a meaningful amount of alertness — and can a
 consumer wrist device time that nap well enough to deliver the benefit while
 avoiding the downside (grogginess)?**
 
+**Positioning.** SleepBank is, in effect, a **non-pharmacological daytime
+alertness manager** for people who can't reliably get the night sleep they need —
+a healthy way through the next day using the natural levers (naps, morning light,
+movement) instead of caffeine or other stimulants, which mask the deficit and tend
+to cost the following night's sleep. The honest boundary, maintained throughout
+this document: it helps users **cope with and optimize** a short-sleep day; it does
+**not** replace the sleep they need, and the app states that plainly (e.g., the
+predicted alertness curve sits lower on a short night rather than papering over it).
+
 ---
 
 ## 2. Why short naps (homeostatic basis)

@@ -12,11 +12,16 @@ A clean, lightweight SwiftUI package for displaying beautiful sleep stage visual
 
 # 😴⚡ SleepBank — a daytime alertness manager
 
-SleepBank began as a power-nap app and grew into a **daytime alertness manager**:
-it helps you *time* rest and light so you feel sharp through the day — using a
-smart alarm, a predicted alertness curve, and the natural levers that actually move
-it (naps, morning daylight, morning movement). It's honest by design: it shows you
-*when* to act, not a pseudo-scientific score.
+**For the nights you can't get the sleep you need, SleepBank is the healthiest way
+through the next day** — timing naps, light, and movement so you stay sharp without
+leaning on caffeine or other stimulants.
+
+It began as a power-nap app and grew into a **daytime alertness manager**: it helps
+you *time* rest and light so you feel sharp through the day — using a smart alarm, a
+predicted alertness curve, and the natural levers that actually move it (naps,
+morning daylight, morning movement). It's honest by design: it shows you *when* to
+act, not a pseudo-scientific score — and it's clear that this helps you **cope with
+and optimize** a short-sleep day, not *replace* the sleep you actually need.
 
 > **Status:** investigational / pre-validation **wellness prototype** — **not** a
 > medical device and makes no diagnostic claim. See [`RATIONALE.md`](RATIONALE.md).
