@@ -19,19 +19,29 @@ struct EnergyRingView: View {
             let now = context.date
             let rhythm = AlertnessProvider.rhythm(now: now)
             let nowLevel = rhythm.level(at: now)
-            // While a plan is being built on the curve, preview the peak it would reach.
+            // While a plan is being built, preview its peak; while scrubbing the bare
+            // curve, show the level at the scrubbed time. Tapping resets to "now".
             let preview = PlanPreview.shared
+            let scrubLevel: Double? = preview.scrubTime.map { rhythm.level(at: $0) }
             let charging = (preview.level ?? -1) > nowLevel + 0.01
-            let shown = charging ? (preview.level ?? nowLevel) : nowLevel
+            let shown = scrubLevel ?? (charging ? (preview.level ?? nowLevel) : nowLevel)
+            let markTime: Date? = preview.scrubTime ?? (charging ? preview.peakTime : nil)
             VStack(spacing: 14) {
                 HStack(spacing: 6) {
                     Image(systemName: "bolt.fill").font(.subheadline).foregroundStyle(.yellow)
                     Text("Alert Score").font(.headline)
                 }
-                NavigationLink(value: HomeRoute.alertness) {
-                    ring(level: shown, now: now, peakTime: charging ? preview.peakTime : nil)
+                if scrubLevel != nil {
+                    Button { PlanPreview.shared.scrubTime = nil } label: {
+                        ring(level: shown, now: now, markTime: markTime, scrubbing: true)
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    NavigationLink(value: HomeRoute.alertness) {
+                        ring(level: shown, now: now, markTime: markTime, scrubbing: false)
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 20)
@@ -42,7 +52,7 @@ struct EnergyRingView: View {
 
     // MARK: - Ring
 
-    private func ring(level: Double, now: Date, peakTime: Date?) -> some View {
+    private func ring(level: Double, now: Date, markTime: Date?, scrubbing: Bool) -> some View {
         ZStack {
             Circle().stroke(.quaternary, lineWidth: 18)
             Circle()
@@ -59,14 +69,15 @@ struct EnergyRingView: View {
                     .font(.system(size: 48, weight: .bold, design: .rounded))
                     .monospacedDigit()
                     .contentTransition(.numericText())
-                if let peakTime {
-                    Label("peak \(peakTime, format: .dateTime.hour().minute())", systemImage: "bolt.fill")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(.mint)
+                if let markTime, scrubbing {
+                    Label("at \(markTime, format: .dateTime.hour().minute())", systemImage: "hand.draw.fill")
+                        .font(.caption2.weight(.semibold)).foregroundStyle(.indigo)
+                } else if let markTime {
+                    Label("peak \(markTime, format: .dateTime.hour().minute())", systemImage: "bolt.fill")
+                        .font(.caption2.weight(.semibold)).foregroundStyle(.mint)
                 } else {
                     Text(AlertnessProvider.phaseLabel(now))
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
+                        .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                 }
             }
         }
