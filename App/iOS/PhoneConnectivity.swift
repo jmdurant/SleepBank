@@ -29,12 +29,13 @@ class PhoneConnectivity: NSObject, WCSessionDelegate {
     /// Send the daily summary to the watch — last-night samples plus the morning-
     /// light streak (for the watch complication). One application context, since the
     /// system keeps only the latest. Safe to call repeatedly.
-    func sendDailySummary(samples: [SleepSample], morningLightStreak: Int) {
+    func sendDailySummary(samples: [SleepSample], morningLightStreak: Int, rhythmSnapshot: Data?) {
         guard WCSession.default.activationState == .activated else { return }
         var context: [String: Any] = ["morningLightStreak": morningLightStreak]
         if !samples.isEmpty, let data = try? JSONEncoder().encode(samples.dtos) {
             context["lastNight"] = data
         }
+        if let rhythmSnapshot { context["rhythmSnapshot"] = rhythmSnapshot }
         try? WCSession.default.updateApplicationContext(context)
     }
 

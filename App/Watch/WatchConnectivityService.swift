@@ -84,6 +84,9 @@ class WatchConnectivityService: NSObject, WCSessionDelegate {
             SharedStore.morningLightStreak = streak
             WidgetCenter.shared.reloadAllTimelines()
         }
+        if let snapshot = context["rhythmSnapshot"] as? Data {
+            SharedStore.rhythmSnapshot = snapshot   // for the watch's Today's Plan
+        }
         guard let data = context["lastNight"] as? Data,
               let dtos = try? JSONDecoder().decode([SleepSampleDTO].self, from: data) else { return }
         DispatchQueue.main.async {

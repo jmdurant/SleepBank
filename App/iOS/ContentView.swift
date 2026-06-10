@@ -91,17 +91,21 @@ struct ContentView: View {
                 }
                 if await health.requestAuthorization() {
                     await health.refreshAll()
-                    // Push last-night timeline + the morning-light streak to the watch.
-                    PhoneConnectivity.shared.sendDailySummary(samples: health.lastNightSamples,
-                                                              morningLightStreak: health.morningLightStreak)
+                    // Snapshot the alertness rhythm so the widget — and the watch —
+                    // can compute the live "you are here" % and the day's plan.
+                    let snapshot = RhythmSnapshot(rhythm: AlertnessProvider.rhythm(now: Date()),
+                                                  morningLightStreak: health.morningLightStreak,
+                                                  updated: Date())
+                    snapshot.save()
+                    // Push last-night timeline + morning-light streak + the rhythm
+                    // snapshot (for the watch's Today's Plan) to the watch.
+                    PhoneConnectivity.shared.sendDailySummary(
+                        samples: health.lastNightSamples,
+                        morningLightStreak: health.morningLightStreak,
+                        rhythmSnapshot: try? JSONEncoder().encode(snapshot))
                     // Update the home widget's health summary.
                     SharedStore.lastNightHours = health.lastNightSleep?.totalHours ?? 0
                     SharedStore.restingHR = Int(health.restingHeartRate)
-                    // Snapshot the alertness rhythm so the widget can compute the
-                    // live "you are here" % itself across the day.
-                    RhythmSnapshot(rhythm: AlertnessProvider.rhythm(now: Date()),
-                                   morningLightStreak: health.morningLightStreak,
-                                   updated: Date()).save()
                     WidgetCenter.shared.reloadAllTimelines()
                     // Schedule the morning plan notification with a fresh teaser/time.
                     await PlanNotificationService.shared.requestAndSchedule()

@@ -18,12 +18,18 @@ struct SleepBankWatchApp: App {
 /// complication → daylight glance).
 struct WatchRootView: View {
     @State private var showDaylight = false
+    @State private var showPlan = false
 
     var body: some View {
         NapSessionView()
             .onOpenURL { url in
-                if url.host == "daylight" { showDaylight = true }
+                switch url.host {
+                case "daylight": showDaylight = true
+                case "plan":     showPlan = true
+                default:         break
+                }
             }
             .sheet(isPresented: $showDaylight) { WatchDaylightView() }
+            .sheet(isPresented: $showPlan) { NavigationStack { WatchDayPlanView() } }
     }
 }

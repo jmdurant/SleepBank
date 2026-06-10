@@ -66,6 +66,14 @@ struct NapSessionView: View {
                         .foregroundStyle(.secondary)
                 }
 
+                NavigationLink {
+                    WatchDayPlanView()
+                } label: {
+                    Label("Today's Plan", systemImage: "list.bullet.clipboard.fill")
+                        .font(.caption).frame(maxWidth: .infinity)
+                }
+                .tint(.teal)
+
                 HStack(spacing: 10) {
                     NavigationLink {
                         SleepChartWatchView()
