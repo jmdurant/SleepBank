@@ -44,6 +44,31 @@ final class SleepScoreTests: XCTestCase {
         XCTAssertEqual(oversleep, 100)
     }
 
+    func testLowDeepAndRemDockDuration() {
+        // Same hours, but a stage-poor night loses up to 5 each for low Deep/REM.
+        let healthy = SleepScore.components(asleepHours: 7, needHours: 7.5, efficiency: 0.95,
+                                            deepHours: 7 * 0.15, remHours: 7 * 0.22)
+        let stagePoor = SleepScore.components(asleepHours: 7, needHours: 7.5, efficiency: 0.95,
+                                              deepHours: 7 * 0.04, remHours: 7 * 0.08)
+        XCTAssertGreaterThan(healthy.duration, stagePoor.duration)
+        XCTAssertLessThanOrEqual(healthy.duration - stagePoor.duration, 10)   // capped at −5/−5
+    }
+
+    func testNoStageDataMeansNoStagePenalty() {
+        // Basic trackers report no stages — don't penalise what they can't measure.
+        let p = SleepScore.durationPoints(asleepHours: 7, needHours: 7.5)
+        let withZeroStages = p - SleepScore.stagePenalty(asleepHours: 7, deepHours: 0, remHours: 0)
+        XCTAssertEqual(withZeroStages, p, accuracy: 0.001)
+    }
+
+    func testScatteredScheduleCannotScorePerfectConsistency() {
+        // Even bang on the median, a scattered recent history docks consistency.
+        let onMedianRegular = SleepScore.consistencyPoints(bedtimeMinutes: 300, normalMinutes: 300, spreadMinutes: 10)
+        let onMedianScattered = SleepScore.consistencyPoints(bedtimeMinutes: 300, normalMinutes: 300, spreadMinutes: 75)
+        XCTAssertEqual(onMedianRegular, 30, accuracy: 0.01)
+        XCTAssertLessThan(onMedianScattered, 27)
+    }
+
     func testConsistencyGivesGraceThenPenalizesLateNights() {
         XCTAssertEqual(SleepScore.consistencyPoints(bedtimeMinutes: 300, normalMinutes: 300), 30, accuracy: 0.01)   // on time
         XCTAssertEqual(SleepScore.consistencyPoints(bedtimeMinutes: 315, normalMinutes: 300), 30, accuracy: 0.01)   // 15 min grace

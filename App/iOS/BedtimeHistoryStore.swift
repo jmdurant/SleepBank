@@ -55,6 +55,22 @@ final class BedtimeHistoryStore {
         entries = Array(next.suffix(Self.maxNights))
     }
 
+    /// Seed history from HealthKit's past nights so consistency scoring works
+    /// immediately. HealthKit is authoritative, so it wins on any shared day.
+    func backfill(_ history: [(day: Date, bedtime: Date)]) {
+        guard !history.isEmpty else { return }
+        let cal = Calendar.current
+        var byDay: [Double: Int] = [:]
+        for e in entries { byDay[e.day] = e.minutes }
+        for h in history {
+            byDay[cal.startOfDay(for: h.day).timeIntervalSinceReferenceDate] = Self.minutesFrom6pm(h.bedtime)
+        }
+        entries = byDay.map { Entry(day: $0.key, minutes: $0.value) }
+            .sorted { $0.day < $1.day }
+            .suffix(Self.maxNights)
+            .map { $0 }
+    }
+
     /// Last night's bedtime in anchor-minutes, if recorded.
     var lastNightMinutes: Int? { entries.last?.minutes }
 
@@ -66,6 +82,16 @@ final class BedtimeHistoryStore {
         guard prior.count >= Self.minNightsForNormal else { return nil }
         let mid = prior.count / 2
         return prior.count.isMultiple(of: 2) ? (prior[mid - 1] + prior[mid]) / 2 : prior[mid]
+    }
+
+    /// How scattered the recent bedtimes are — population std-dev (minutes) over the
+    /// window. Feeds Sleep Score's schedule-regularity penalty. Nil until enough nights.
+    var spreadMinutes: Int? {
+        let mins = entries.map { Double($0.minutes) }
+        guard mins.count >= Self.minNightsForNormal else { return nil }
+        let mean = mins.reduce(0, +) / Double(mins.count)
+        let variance = mins.reduce(0) { $0 + ($1 - mean) * ($1 - mean) } / Double(mins.count)
+        return Int(variance.squareRoot().rounded())
     }
 
     private func persist() {

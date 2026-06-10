@@ -107,7 +107,9 @@ struct ContentView: View {
         }
         guard await health.requestAuthorization() else { return }
         await health.refreshAll()
-        // Accumulate bedtime history so Sleep Score can grade consistency over time.
+        // Seed bedtime history from past HealthKit nights so Sleep Score can grade
+        // consistency right away, then record last night precisely.
+        BedtimeHistoryStore.shared.backfill(await health.fetchBedtimeHistory())
         if let bedtime = health.lastNightSleep?.bedtime {
             BedtimeHistoryStore.shared.record(bedtime: bedtime)
         }
@@ -218,11 +220,14 @@ private struct HistoryView: View {
             Text("Last Night").font(.headline)
             if let s = health.lastNightSleep, s.totalHours > 0 {
                 let need = max(health.sleepAverage7Day > 0 ? health.sleepAverage7Day : 7.5, 6)
-                let score = SleepScore.score(
+                let c = SleepScore.components(
                     asleepHours: s.totalHours, needHours: need, efficiency: s.efficiency,
+                    deepHours: s.deepHours, remHours: s.remHours,
                     bedtimeMinutes: s.bedtime.map(BedtimeHistoryStore.minutesFrom6pm),
-                    normalMinutes: BedtimeHistoryStore.shared.normalMinutes)
-                scoreRow(score)
+                    normalMinutes: BedtimeHistoryStore.shared.normalMinutes,
+                    spreadMinutes: BedtimeHistoryStore.shared.spreadMinutes)
+                scoreRow(c.total)
+                breakdown(c)
                 Text(String(format: "%.1f h asleep · %.0f%% efficiency", s.totalHours, s.efficiency * 100))
                     .font(.subheadline)
                 Text(String(format: "7-day average: %.1f h", health.sleepAverage7Day))
@@ -248,6 +253,24 @@ private struct HistoryView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding()
         .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 16))
+    }
+
+    private func breakdown(_ c: SleepScore.Components) -> some View {
+        HStack(spacing: 14) {
+            factor("Duration", c.duration, 50)
+            factor("Consistency", c.consistency, 30)
+            factor("Interruptions", c.interruptions, 20)
+        }
+        .padding(.vertical, 2)
+    }
+
+    private func factor(_ name: String, _ value: Int?, _ max: Int) -> some View {
+        VStack(spacing: 1) {
+            Text(value.map { "\($0)" } ?? "—").font(.subheadline.weight(.bold).monospacedDigit())
+            Text("/ \(max)").font(.caption2).foregroundStyle(.tertiary)
+            Text(name).font(.caption2).foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
     }
 
     private func scoreRow(_ score: Int) -> some View {

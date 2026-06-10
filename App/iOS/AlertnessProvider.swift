@@ -44,11 +44,14 @@ enum AlertnessProvider {
         // rolling normal. Only available with HealthKit sleep + enough history.
         let bedtimeMinutes = healthAsleep > 0 ? summary?.bedtime.map(BedtimeHistoryStore.minutesFrom6pm) ?? nil : nil
         let normalMinutes = BedtimeHistoryStore.shared.normalMinutes
+        let spreadMinutes = BedtimeHistoryStore.shared.spreadMinutes
 
         return AlertnessRhythm(
             wakeTime: wake,
             sleepDebt: sleepDebt(asleep: asleep, need: need, efficiency: efficiency, basis: basis,
-                                 bedtimeMinutes: bedtimeMinutes, normalMinutes: normalMinutes),
+                                 deepHours: summary?.deepHours ?? 0, remHours: summary?.remHours ?? 0,
+                                 bedtimeMinutes: bedtimeMinutes, normalMinutes: normalMinutes,
+                                 spreadMinutes: spreadMinutes),
             naps: napsToday(store: store, now: now),
             isShortNight: asleep > 0 && asleep < need - 0.75,
             morningLightDose: AlertnessRhythm.morningLightDose(minutes: health.daylightToday.morning),
@@ -59,7 +62,9 @@ enum AlertnessProvider {
     /// The curve's start-of-day sleep pressure, per the chosen basis. No data → assume
     /// rested (don't penalize someone without a tracker).
     static func sleepDebt(asleep: Double, need: Double, efficiency: Double, basis: SleepBasis,
-                          bedtimeMinutes: Int? = nil, normalMinutes: Int? = nil) -> Double {
+                          deepHours: Double = 0, remHours: Double = 0,
+                          bedtimeMinutes: Int? = nil, normalMinutes: Int? = nil,
+                          spreadMinutes: Int? = nil) -> Double {
         guard asleep > 0 else { return 0.05 }
         let useScore: Bool
         switch basis {
@@ -70,7 +75,9 @@ enum AlertnessProvider {
         if useScore {
             return SleepScore.debt(fromScore: SleepScore.score(
                 asleepHours: asleep, needHours: need, efficiency: efficiency,
-                bedtimeMinutes: bedtimeMinutes, normalMinutes: normalMinutes))
+                deepHours: deepHours, remHours: remHours,
+                bedtimeMinutes: bedtimeMinutes, normalMinutes: normalMinutes,
+                spreadMinutes: spreadMinutes))
         }
         return SleepScore.debt(asleepHours: asleep, needHours: need)
     }

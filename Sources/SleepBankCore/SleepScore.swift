@@ -40,42 +40,85 @@ public enum SleepScore {
     /// exists to score the consistency factor — then the full 100 points are used.
     /// Without them, consistency is assumed neutral and the measured 70 are rescaled.
     public static func score(asleepHours: Double, needHours: Double, efficiency: Double,
-                             bedtimeMinutes: Int? = nil, normalMinutes: Int? = nil) -> Int {
-        guard asleepHours > 0 else { return 0 }
-        let dur = durationPoints(asleepHours: asleepHours, needHours: needHours)
+                             deepHours: Double = 0, remHours: Double = 0,
+                             bedtimeMinutes: Int? = nil, normalMinutes: Int? = nil,
+                             spreadMinutes: Int? = nil) -> Int {
+        components(asleepHours: asleepHours, needHours: needHours, efficiency: efficiency,
+                   deepHours: deepHours, remHours: remHours,
+                   bedtimeMinutes: bedtimeMinutes, normalMinutes: normalMinutes,
+                   spreadMinutes: spreadMinutes).total
+    }
+
+    /// The score broken into Apple's three factors, for display and debugging.
+    public struct Components: Sendable {
+        public let duration: Int        // /50
+        public let interruptions: Int   // /20
+        public let consistency: Int?    // /30, nil when not enough history
+        public let total: Int           // /100
+    }
+
+    public static func components(asleepHours: Double, needHours: Double, efficiency: Double,
+                                  deepHours: Double = 0, remHours: Double = 0,
+                                  bedtimeMinutes: Int? = nil, normalMinutes: Int? = nil,
+                                  spreadMinutes: Int? = nil) -> Components {
+        guard asleepHours > 0 else { return Components(duration: 0, interruptions: 0, consistency: nil, total: 0) }
+        let dur = max(0, durationPoints(asleepHours: asleepHours, needHours: needHours)
+                        - stagePenalty(asleepHours: asleepHours, deepHours: deepHours, remHours: remHours))
         let interr = interruptionPoints(efficiency: efficiency)
         if let bt = bedtimeMinutes, let normal = normalMinutes {
-            let cons = consistencyPoints(bedtimeMinutes: bt, normalMinutes: normal)
-            return Int((dur + interr + cons).rounded())   // full Duration + Interruptions + Consistency
+            let cons = consistencyPoints(bedtimeMinutes: bt, normalMinutes: normal, spreadMinutes: spreadMinutes)
+            return Components(duration: Int(dur.rounded()), interruptions: Int(interr.rounded()),
+                              consistency: Int(cons.rounded()), total: Int((dur + interr + cons).rounded()))
         }
         // Rescale the 70 points we measure to a 0–100 score (consistency assumed neutral).
-        return Int(((dur + interr) / (durationCap + interruptionCap) * 100).rounded())
+        let total = Int(((dur + interr) / (durationCap + interruptionCap) * 100).rounded())
+        return Components(duration: Int(dur.rounded()), interruptions: Int(interr.rounded()),
+                          consistency: nil, total: total)
+    }
+
+    /// Quality deduction within the 50 duration points: Apple docks up to −5 each for
+    /// low Deep (N3) and low REM. Healthy adults run ~13%+ Deep and ~20%+ REM of total
+    /// sleep; below that the penalty ramps to the full −5. Skipped when there's no
+    /// stage data (basic trackers), so they aren't penalised for what they can't see.
+    static func stagePenalty(asleepHours: Double, deepHours: Double, remHours: Double) -> Double {
+        guard asleepHours > 0, deepHours + remHours > 0 else { return 0 }
+        let deepPen = 5 * min(max((0.13 - deepHours / asleepHours) / 0.13, 0), 1)
+        let remPen  = 5 * min(max((0.20 - remHours / asleepHours) / 0.20, 0), 1)
+        return deepPen + remPen
     }
 
     /// Consistency points (0…30) from how far last night's bedtime drifted from your
     /// recent normal — Apple's rule: going to bed *later* costs ~1 pt per 5 min beyond
     /// a 15-min grace (−10 at +1 h, 0 at +2.5 h); going to bed *earlier* is free up to
     /// an hour, then a gentle −1 per 30 min (max −6). Bedtimes wrap around midnight.
-    public static func consistencyPoints(bedtimeMinutes: Int, normalMinutes: Int) -> Double {
+    public static func consistencyPoints(bedtimeMinutes: Int, normalMinutes: Int,
+                                         spreadMinutes: Int? = nil) -> Double {
         var delta = Double((bedtimeMinutes - normalMinutes) % 1440)   // + later, − earlier
         if delta > 720 { delta -= 1440 }
         if delta < -720 { delta += 1440 }
-        let penalty: Double
+        var penalty: Double
         if delta >= 0 {
             penalty = min(max(delta - 15, 0) * (10.0 / 45.0), consistencyCap)
         } else {
             penalty = min(max(-delta - 60, 0) / 30.0, 6)
         }
+        // Schedule regularity: a scattered recent bedtime history can't score a perfect
+        // 30 even if last night happened to land on the median. Spread (std-dev of
+        // recent bedtimes) up to ~20 min is free, then ~1 pt per 8 min, capped at 15.
+        if let spread = spreadMinutes {
+            penalty += min(max(Double(spread - 20) / 8.0, 0), 15)
+        }
         return min(max(consistencyCap - penalty, 0), consistencyCap)
     }
 
     /// Duration points (0…50). Deductions accelerate the further you fall below the
-    /// full-credit mark — fit to Apple's anchors (≈5 pts at 1 h short, 13 at 2 h,
-    /// >20 at 3 h): `deduction ≈ 3.5·h + 1.5·h²` for `h` hours short.
+    /// full-credit mark. Re-fit to **watchOS 26.2**, which raised the bar for every
+    /// tier: 2 h short now costs ~18 points (it was ~13 pre-26.2). `deduction ≈
+    /// 4.8·h + 2.1·h²` for `h` hours short (≈7 at 1 h, 18 at 2 h, 33 at 3 h).
     static func durationPoints(asleepHours: Double, needHours: Double) -> Double {
         let ref = max(needHours, fullCreditHours)
         let short = max(0, ref - asleepHours)
-        let deduction = 3.5 * short + 1.5 * short * short
+        let deduction = 4.8 * short + 2.1 * short * short
         return min(max(durationCap - deduction, 0), durationCap)
     }
 

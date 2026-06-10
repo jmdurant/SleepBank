@@ -260,6 +260,55 @@ class HealthKitService {
         }
     }
 
+    /// Per-night bedtimes for the last `nights` nights, derived from historical sleep
+    /// samples — so Sleep Score's bedtime-consistency factor works on day one instead
+    /// of waiting to accumulate. Groups samples into sessions (split on >3 h gaps),
+    /// keeps the substantial overnight ones, and reports each session's start keyed to
+    /// the day it ends.
+    func fetchBedtimeHistory(nights: Int = 14) async -> [(day: Date, bedtime: Date)] {
+        let sleepType = HKCategoryType(.sleepAnalysis)
+        let now = Date()
+        guard let start = Calendar.current.date(byAdding: .day, value: -nights, to: now),
+              let raw = try? await querySamples(sleepType,
+                  predicate: HKQuery.predicateForSamples(withStart: start, end: now, options: .strictStartDate))
+        else { return [] }
+
+        func isAsleep(_ s: HKCategorySample) -> Bool {
+            switch HKCategoryValueSleepAnalysis(rawValue: s.value) {
+            case .asleepUnspecified, .asleep, .asleepREM, .asleepDeep, .asleepCore: return true
+            default: return false
+            }
+        }
+        let inBed = raw.filter {
+            switch HKCategoryValueSleepAnalysis(rawValue: $0.value) {
+            case .inBed, .asleepUnspecified, .asleep, .asleepREM, .asleepDeep, .asleepCore, .awake: return true
+            default: return false
+            }
+        }.sorted { $0.startDate < $1.startDate }
+
+        // Coalesce into sessions; a gap > 3 h starts a new one.
+        var sessions: [(start: Date, end: Date, asleep: TimeInterval)] = []
+        for s in inBed {
+            let dur = isAsleep(s) ? s.endDate.timeIntervalSince(s.startDate) : 0
+            if var last = sessions.last, s.startDate.timeIntervalSince(last.end) < 3 * 3600 {
+                last.end = max(last.end, s.endDate)
+                last.asleep += dur
+                sessions[sessions.count - 1] = last
+            } else {
+                sessions.append((s.startDate, s.endDate, dur))
+            }
+        }
+
+        // Keep substantial overnight sessions (>3 h asleep), one bedtime per end-day.
+        let cal = Calendar.current
+        var byDay: [Date: Date] = [:]
+        for session in sessions where session.asleep > 3 * 3600 {
+            let day = cal.startOfDay(for: session.end)
+            byDay[day] = byDay[day].map { min($0, session.start) } ?? session.start
+        }
+        return byDay.map { (day: $0.key, bedtime: $0.value) }.sorted { $0.day < $1.day }
+    }
+
     // MARK: - Resting HR trend
 
     private func fetchRestingHRTrend() async -> String {
