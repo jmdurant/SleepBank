@@ -34,4 +34,17 @@ enum SharedStore {
         get { defaults?.integer(forKey: "restingHR") ?? 0 }
         set { defaults?.set(newValue, forKey: "restingHR") }
     }
+    /// Consecutive days with morning daylight — for the widget.
+    static var morningLightStreak: Int {
+        get { defaults?.integer(forKey: "morningLightStreak") ?? 0 }
+        set { defaults?.set(newValue, forKey: "morningLightStreak") }
+    }
+    /// JSON snapshot of the day's alertness-rhythm inputs, so the widget can compute
+    /// the live "you are here" % itself at each timeline entry. Decoded by
+    /// `RhythmSnapshot` (kept out of this pure-Foundation file so the watch widget,
+    /// which shares it but not SleepBankCore, still builds).
+    static var rhythmSnapshot: Data? {
+        get { defaults?.data(forKey: "rhythmSnapshot") }
+        set { defaults?.set(newValue, forKey: "rhythmSnapshot") }
+    }
 }

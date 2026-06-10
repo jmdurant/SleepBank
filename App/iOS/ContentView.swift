@@ -78,6 +78,11 @@ struct ContentView: View {
                     // Update the home widget's health summary.
                     SharedStore.lastNightHours = health.lastNightSleep?.totalHours ?? 0
                     SharedStore.restingHR = Int(health.restingHeartRate)
+                    // Snapshot the alertness rhythm so the widget can compute the
+                    // live "you are here" % itself across the day.
+                    RhythmSnapshot(rhythm: AlertnessProvider.rhythm(now: Date()),
+                                   morningLightStreak: health.morningLightStreak,
+                                   updated: Date()).save()
                     WidgetCenter.shared.reloadAllTimelines()
                 }
             }

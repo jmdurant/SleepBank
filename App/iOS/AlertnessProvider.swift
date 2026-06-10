@@ -41,16 +41,5 @@ enum AlertnessProvider {
     }
 
     static func pct(_ level: Double) -> Int { Int((level * 100).rounded()) }
-
-    /// Where you sit in the circadian day, in plain words.
-    static func phaseLabel(_ now: Date) -> String {
-        switch Calendar.current.component(.hour, from: now) {
-        case ..<10:    return "Morning rise"
-        case 10..<13:  return "Late-morning peak"
-        case 13..<16:  return "Post-lunch dip"
-        case 16..<18:  return "Afternoon"
-        case 18..<21:  return "Evening — second wind"
-        default:       return "Wind-down"
-        }
-    }
+    static func phaseLabel(_ now: Date) -> String { AlertnessRhythm.phaseLabel(at: now) }
 }

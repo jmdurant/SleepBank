@@ -107,6 +107,19 @@ public struct AlertnessRhythm: Sendable {
         return max(0, min(minutes / target, 1))
     }
 
+    /// Where you sit in the circadian day, in plain words. Shared by the curve card,
+    /// the home ring readout, and the widget so they all label the moment the same.
+    public static func phaseLabel(at date: Date, calendar: Calendar = .current) -> String {
+        switch calendar.component(.hour, from: date) {
+        case ..<10:    return "Morning rise"
+        case 10..<13:  return "Late-morning peak"
+        case 13..<16:  return "Post-lunch dip"
+        case 16..<18:  return "Afternoon"
+        case 18..<21:  return "Evening — second wind"
+        default:       return "Wind-down"
+        }
+    }
+
     // MARK: - Model constants
 
     private static let omega = 2 * Double.pi / 24
