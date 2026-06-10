@@ -238,6 +238,10 @@ struct WindDownView: View {
             Toggle(isOn: Binding(get: { lighting.syncEnabled }, set: { lighting.syncEnabled = $0 })) {
                 Text("Sync lights to the daylight curve").font(.caption)
             }
+            Toggle(isOn: Binding(get: { lighting.autoRunEnabled }, set: { lighting.autoRunEnabled = $0 })) {
+                Text("Run automatically (needs a Home hub)").font(.caption)
+            }
+            .disabled(lighting.lightCount == 0)
             HStack {
                 Text("Now: ~\(lighting.currentKelvin())K").font(.caption2.weight(.medium)).foregroundStyle(.secondary)
                 if !lighting.hasLocation {
@@ -262,7 +266,11 @@ struct WindDownView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding()
         .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 20))
-        .task { if lighting.syncEnabled { lighting.requestLocation() } }
+        .task {
+            if lighting.syncEnabled { lighting.requestLocation() }
+            // Re-materialize the stepped automations so their values track the season.
+            if lighting.autoRunEnabled { await lighting.installAutomations() }
+        }
     }
     #endif
 

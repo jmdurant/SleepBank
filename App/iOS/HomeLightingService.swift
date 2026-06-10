@@ -41,6 +41,17 @@ final class HomeLightingService: NSObject, HMHomeManagerDelegate, CLLocationMana
     var syncEnabled: Bool = UserDefaults.standard.bool(forKey: "homeLightingSync") {
         didSet { UserDefaults.standard.set(syncEnabled, forKey: "homeLightingSync") }
     }
+    /// Run the curve unattended via HomeKit timer automations (needs a Home hub).
+    var autoRunEnabled: Bool = UserDefaults.standard.bool(forKey: "homeLightingAutoRun") {
+        didSet {
+            UserDefaults.standard.set(autoRunEnabled, forKey: "homeLightingAutoRun")
+            Task { autoRunEnabled ? await installAutomations() : await removeAutomations() }
+        }
+    }
+
+    /// Clock hours the curve is stepped into for the daily automations.
+    private let stepHours = [0, 5, 7, 9, 12, 15, 18, 21]
+    private let autoPrefix = "SleepBank Auto"
 
     override init() {
         super.init()
@@ -107,6 +118,79 @@ final class HomeLightingService: NSObject, HMHomeManagerDelegate, CLLocationMana
             }
             additions.notify(queue: .main) { home.executeActionSet(set) { _ in } }
         }
+    }
+
+    // MARK: - Unattended automations (run on a Home hub, app closed)
+
+    /// Materialize the day's curve as one stepped scene + daily timer trigger per
+    /// step. The Home hub fires them through the day even with the app closed. Call
+    /// to (re)install — e.g. daily — so values track the season. Idempotent: clears
+    /// the previous SleepBank automations first.
+    func installAutomations() async {
+        guard let home = manager.homes.first else { return }
+        await removeAutomations()
+        let chars = colorTempCharacteristics()
+        guard !chars.isEmpty else { return }
+        let cal = Calendar.current
+        let startOfDay = cal.startOfDay(for: Date())
+
+        for hour in stepHours {
+            guard let stepTime = cal.date(byAdding: .hour, value: hour, to: startOfDay) else { continue }
+            let mireds = CircadianLighting.kelvinToMireds(currentKelvin(stepTime))
+            guard let scene = await addActionSet(home, name: "\(autoPrefix) \(hour)") else { continue }
+            for ch in chars { await addAction(scene, ch, clamp(mireds, ch)) }
+
+            let fire = nextOccurrence(hour: hour, calendar: cal)
+            let trigger = HMTimerTrigger(name: "\(autoPrefix) \(hour)", fireDate: fire,
+                                         timeZone: nil, recurrence: DateComponents(day: 1),
+                                         recurrenceCalendar: cal)
+            await add(trigger, to: home)
+            await addActionSet(scene, to: trigger)
+            await enable(trigger)
+        }
+    }
+
+    func removeAutomations() async {
+        guard let home = manager.homes.first else { return }
+        for trigger in home.triggers where trigger.name.hasPrefix(autoPrefix) {
+            await remove(trigger, from: home)
+        }
+        for set in home.actionSets where set.name.hasPrefix(autoPrefix) {
+            await remove(set, from: home)
+        }
+    }
+
+    private func nextOccurrence(hour: Int, calendar: Calendar) -> Date {
+        let now = Date()
+        var comps = calendar.dateComponents([.year, .month, .day], from: now)
+        comps.hour = hour; comps.minute = 0
+        let today = calendar.date(from: comps) ?? now
+        return today > now ? today : calendar.date(byAdding: .day, value: 1, to: today) ?? today
+    }
+
+    // Async wrappers over HomeKit's completion-handler APIs (readability).
+    private func addActionSet(_ home: HMHome, name: String) async -> HMActionSet? {
+        await withCheckedContinuation { c in home.addActionSet(withName: name) { set, _ in c.resume(returning: set) } }
+    }
+    private func addAction(_ set: HMActionSet, _ ch: HMCharacteristic, _ mireds: Int) async {
+        await withCheckedContinuation { c in
+            set.addAction(HMCharacteristicWriteAction(characteristic: ch, targetValue: NSNumber(value: mireds))) { _ in c.resume() }
+        }
+    }
+    private func add(_ trigger: HMTrigger, to home: HMHome) async {
+        await withCheckedContinuation { c in home.addTrigger(trigger) { _ in c.resume() } }
+    }
+    private func addActionSet(_ set: HMActionSet, to trigger: HMTrigger) async {
+        await withCheckedContinuation { c in trigger.addActionSet(set) { _ in c.resume() } }
+    }
+    private func enable(_ trigger: HMTrigger) async {
+        await withCheckedContinuation { c in trigger.enable(true) { _ in c.resume() } }
+    }
+    private func remove(_ trigger: HMTrigger, from home: HMHome) async {
+        await withCheckedContinuation { c in home.removeTrigger(trigger) { _ in c.resume() } }
+    }
+    private func remove(_ set: HMActionSet, from home: HMHome) async {
+        await withCheckedContinuation { c in home.removeActionSet(set) { _ in c.resume() } }
     }
 
     // MARK: - HomeKit / Location plumbing
