@@ -152,13 +152,24 @@ class HealthKitService {
         await fetchLatestQuantity(.oxygenSaturation, unit: .percent()) * 100
     }
 
+    /// The window for *last night's* sleep — yesterday evening (18:00) to this
+    /// morning (noon, or now if earlier). With `.strictStartDate` (which filters by
+    /// each sample's START), this cleanly takes only last night's session: the prior
+    /// night's samples all start before 18:00 yesterday, and today's daytime naps
+    /// start after noon — both excluded. (The old 00:00-yesterday start swept in the
+    /// prior night's post-midnight hours, double-counting them into "last night.")
+    private func lastNightWindow(now: Date = Date(), calendar: Calendar = .current) -> (start: Date, end: Date) {
+        let startOfToday = calendar.startOfDay(for: now)
+        let eveningYesterday = calendar.date(byAdding: .hour, value: -6, to: startOfToday) ?? now   // 18:00 yesterday
+        let noonToday = calendar.date(byAdding: .hour, value: 12, to: startOfToday) ?? now
+        return (eveningYesterday, min(now, noonToday))
+    }
+
     /// Raw last-night sleep stages converted to SleepChartKit samples.
     func fetchLastNightSamples() async -> [SleepSample] {
         let sleepType = HKCategoryType(.sleepAnalysis)
-        let now = Date()
-        let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: now)!
-        let startOfYesterday = Calendar.current.startOfDay(for: yesterday)
-        let predicate = HKQuery.predicateForSamples(withStart: startOfYesterday, end: now, options: .strictStartDate)
+        let window = lastNightWindow()
+        let predicate = HKQuery.predicateForSamples(withStart: window.start, end: window.end, options: .strictStartDate)
         guard let raw = try? await querySamples(sleepType, predicate: predicate) else { return [] }
         if #available(iOS 16.0, *) {
             return SleepSample.samples(from: raw)
@@ -170,10 +181,8 @@ class HealthKitService {
 
     private func fetchSleep() async -> SleepSummary? {
         let sleepType = HKCategoryType(.sleepAnalysis)
-        let now = Date()
-        let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: now)!
-        let startOfYesterday = Calendar.current.startOfDay(for: yesterday)
-        let predicate = HKQuery.predicateForSamples(withStart: startOfYesterday, end: now, options: .strictStartDate)
+        let window = lastNightWindow()
+        let predicate = HKQuery.predicateForSamples(withStart: window.start, end: window.end, options: .strictStartDate)
 
         do {
             let samples = try await querySamples(sleepType, predicate: predicate)
