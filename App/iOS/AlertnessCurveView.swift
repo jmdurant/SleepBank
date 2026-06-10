@@ -28,7 +28,7 @@ struct AlertnessCurveView: View {
             let projection = projectionReadings(rhythm: rhythm, now: now, window: window)
 
             VStack(alignment: .leading, spacing: 10) {
-                header(nowLevel: nowLevel, shortNight: rhythm.isShortNight)
+                youAreHere(rhythm: rhythm, now: now, nowLevel: nowLevel, projection: projection)
                 chart(baseline: baseline, projection: projection, now: now, nowLevel: nowLevel)
                     .frame(height: 170)
                 legend(hasProjection: !projection.isEmpty)
@@ -40,24 +40,74 @@ struct AlertnessCurveView: View {
         }
     }
 
-    // MARK: - Header
+    // MARK: - "You are here"
 
-    private func header(nowLevel: Double, shortNight: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack {
-                Text("Today's Alertness").font(.headline)
-                Spacer()
-                Text("\(Int((nowLevel * 100).rounded()))% now")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.secondary)
+    /// The emotional centre of the card: where you are right now, *why* (last
+    /// night's sleep + today's naps/light/movement all converge on this point), and
+    /// the single most-relevant next move for the moment.
+    private func youAreHere(rhythm: AlertnessRhythm, now: Date,
+                            nowLevel: Double, projection: [AlertnessRhythm.Reading]) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Today's Alertness").font(.headline)
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text("\(pct(nowLevel))%")
+                    .font(.system(size: 32, weight: .bold, design: .rounded))
                     .monospacedDigit()
+                    .contentTransition(.numericText())
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("you are here").font(.caption2).foregroundStyle(.secondary)
+                    Text(phaseLabel(now)).font(.subheadline.weight(.semibold))
+                }
+                Spacer()
             }
-            Text(shortNight
-                 ? "Short night — your curve sits lower today. A nap can lift the afternoon."
-                 : "Your predicted rhythm. The dashed line is where a nap now could take you.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            Text(whyLine(rhythm)).font(.caption).foregroundStyle(.secondary)
+            if let action = actionSuggestion(rhythm: rhythm, now: now, projection: projection) {
+                Label(action.text, systemImage: action.icon)
+                    .font(.caption.weight(.medium))
+                    .padding(.vertical, 4).padding(.horizontal, 9)
+                    .background(action.tint.opacity(0.15), in: Capsule())
+                    .foregroundStyle(action.tint)
+            }
         }
+    }
+
+    private func pct(_ level: Double) -> Int { Int((level * 100).rounded()) }
+
+    /// Where you sit in the circadian day, in plain words.
+    private func phaseLabel(_ now: Date) -> String {
+        switch Calendar.current.component(.hour, from: now) {
+        case ..<10:    return "Morning rise"
+        case 10..<13:  return "Late-morning peak"
+        case 13..<16:  return "Post-lunch dip"
+        case 16..<18:  return "Afternoon"
+        case 18..<21:  return "Evening — second wind"
+        default:       return "Wind-down"
+        }
+    }
+
+    /// What's shaping your "now" — the inputs converging on the marker.
+    private func whyLine(_ rhythm: AlertnessRhythm) -> String {
+        var parts = [rhythm.isShortNight ? "Short night" : "Rested"]
+        if !rhythm.naps.isEmpty { parts.append("\(rhythm.naps.count) nap\(rhythm.naps.count == 1 ? "" : "s")") }
+        if rhythm.morningLightDose > 0.1 { parts.append("morning light ✓") }
+        if rhythm.morningActivityDose > 0.1 { parts.append("AM movement ✓") }
+        return parts.joined(separator: " · ")
+    }
+
+    /// The single most-relevant move for the moment: a nap when it would meaningfully
+    /// lift the rest of the day; otherwise a morning-light nudge while it still helps.
+    private func actionSuggestion(rhythm: AlertnessRhythm, now: Date,
+                                  projection: [AlertnessRhythm.Reading]) -> (text: String, icon: String, tint: Color)? {
+        if let peak = projection.max(by: { $0.level < $1.level }) {
+            let gain = peak.level - rhythm.level(at: peak.date)
+            if gain >= 0.03 {
+                return ("A power nap now → lifts you to ~\(pct(peak.level))%", "moon.zzz.fill", .indigo)
+            }
+        }
+        if Calendar.current.component(.hour, from: now) < 11, rhythm.morningLightDose < 0.5 {
+            return ("Step outside — morning light anchors your day", "sun.max.fill", .orange)
+        }
+        return nil
     }
 
     // MARK: - Chart
