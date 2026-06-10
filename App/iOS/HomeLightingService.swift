@@ -53,13 +53,32 @@ final class HomeLightingService: NSObject, HMHomeManagerDelegate {
     func setCool()    { write(mireds: Self.coolMireds) }
     func setNeutral() { write(mireds: Self.neutralMireds) }
 
-    /// Pick a sensible hue for the clock time (used on app open / wind-down stop).
+    /// Pick a hue anchored to the user's *own* rhythm (wake → wind-down), not fixed
+    /// clock hours — so it tracks their schedule regardless of location/season.
+    /// Apple Adaptive Lighting already does the location-aware solar curve; this is
+    /// the personal-transitions layer. Falls back to 7:00–22:30 without sleep data.
     func syncToTimeOfDay(_ now: Date = Date()) {
-        let hour = Calendar.current.component(.hour, from: now)
-        switch hour {
-        case 19...23, 0..<6: setWarm()
-        case 6..<10:         setCool()
-        default:             setNeutral()
+        let cal = Calendar.current
+        func minutesOfDay(_ d: Date) -> Int { cal.component(.hour, from: d) * 60 + cal.component(.minute, from: d) }
+
+        let wakeMin: Int
+        let awakeLength: Int   // minutes from wake to wind-down (the "day")
+        if let snap = RhythmSnapshot.load() {
+            wakeMin = minutesOfDay(snap.wakeTime)
+            awakeLength = Int(15.5 * 60)   // wind-down ≈ wake + 15.5 h
+        } else {
+            wakeMin = 7 * 60
+            awakeLength = Int(15.5 * 60)
+        }
+
+        // Minutes since wake, circular over 24 h — handles wind-down past midnight.
+        let sinceWake = (((minutesOfDay(now) - wakeMin) % 1440) + 1440) % 1440
+        if sinceWake >= awakeLength {
+            setWarm()         // past wind-down → evening / overnight
+        } else if sinceWake < 180 {
+            setCool()         // first ~3 h after waking
+        } else {
+            setNeutral()      // the day
         }
     }
 
