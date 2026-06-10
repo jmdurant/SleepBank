@@ -1,0 +1,138 @@
+//
+//  DayPlanView.swift
+//  SleepBank
+//
+//  "Today's Plan" — the response layer. Readiness apps tell you the day is
+//  compromised; this turns that into an agenda: how the day starts, get morning
+//  light, nap before the afternoon dip, wind down in time. Built from the same
+//  AlertnessRhythm as the curve.
+//
+
+import SwiftUI
+import SleepBankCore
+
+struct DayPlanView: View {
+    var health = HealthKitService.shared
+    var store = NapDecisionStore.shared
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 600)) { context in
+            let now = context.date
+            let rhythm = AlertnessProvider.rhythm(health: health, store: store, now: now)
+            let plan = DayPlan.build(rhythm: rhythm, now: now)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    readinessCard(plan)
+                    agendaCard(plan)
+                    Text("A plan to get through the day well — it helps you cope with a short night, not replace the sleep you need.")
+                        .font(.caption2).foregroundStyle(.secondary)
+                }
+                .padding()
+            }
+        }
+        .navigationTitle("Today's Plan")
+        .task { if await health.requestAuthorization() { await health.refreshAll() } }
+    }
+
+    // MARK: - Readiness
+
+    private func readinessCard(_ plan: DayPlan) -> some View {
+        VStack(spacing: 6) {
+            Text("\(pct(plan.startingLevel))%").font(.system(size: 44, weight: .bold, design: .rounded))
+            Text("how your day starts").font(.caption).foregroundStyle(.secondary)
+            Text(plan.isShortNight
+                 ? "Starting low after a short night — here's how to get through it well."
+                 : "Starting strong — here's how to keep it.")
+                .font(.subheadline).multilineTextAlignment(.center)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding()
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 20))
+    }
+
+    // MARK: - Agenda
+
+    private func agendaCard(_ plan: DayPlan) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(Array(plan.items.enumerated()), id: \.offset) { i, item in
+                if i > 0 { Divider().padding(.leading, 44) }
+                row(item, plan: plan)
+            }
+        }
+        .padding(.vertical, 4)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 20))
+    }
+
+    private func row(_ item: DayPlan.Item, plan: DayPlan) -> some View {
+        let s = style(item.kind)
+        return HStack(alignment: .top, spacing: 10) {
+            ZStack {
+                Circle().fill(s.tint.opacity(item.done ? 0.10 : 0.18)).frame(width: 32, height: 32)
+                Image(systemName: item.done ? "checkmark" : s.icon)
+                    .font(.caption).foregroundStyle(item.done ? .secondary : s.tint)
+            }
+            VStack(alignment: .leading, spacing: 1) {
+                HStack {
+                    Text(title(item, plan: plan))
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(item.done ? .secondary : .primary)
+                    Spacer()
+                    Text(timeLabel(item)).font(.caption.weight(.medium))
+                        .foregroundStyle(item.done ? .secondary : s.tint)
+                }
+                Text(detail(item, plan: plan)).font(.caption).foregroundStyle(.secondary)
+            }
+        }
+        .padding(.vertical, 8).padding(.horizontal, 12)
+        .opacity(item.done ? 0.7 : 1)
+    }
+
+    // MARK: - Wording
+
+    private func style(_ kind: DayPlan.Kind) -> (icon: String, tint: Color) {
+        switch kind {
+        case .morningLight:    return ("sun.max.fill", .orange)
+        case .morningMovement: return ("figure.walk", .green)
+        case .nap:             return ("moon.zzz.fill", .indigo)
+        case .dip:             return ("arrow.down.right", .red)
+        case .windDown:        return ("bed.double.fill", .purple)
+        }
+    }
+
+    private func title(_ item: DayPlan.Item, plan: DayPlan) -> String {
+        switch item.kind {
+        case .morningLight:    return item.done ? "Morning light — done" : "Get morning light"
+        case .morningMovement: return item.done ? "Morning movement — done" : "Move a little"
+        case .nap:             return "Power nap"
+        case .dip:             return "Energy dip"
+        case .windDown:        return "Wind down"
+        }
+    }
+
+    private func detail(_ item: DayPlan.Item, plan: DayPlan) -> String {
+        switch item.kind {
+        case .morningLight:
+            return item.done ? "Rhythm anchored." : "Step outside — it anchors your clock and lifts your morning."
+        case .morningMovement:
+            return item.done ? "Nice — that advances your clock too." : "A short walk advances your clock and wakes you up."
+        case .nap:
+            if let dip = plan.dipTime { return "Before your \(clock(dip)) dip — wake refreshed going into it." }
+            return "A power nap lifts your afternoon."
+        case .dip:
+            return "Your predicted low — plan around it."
+        case .windDown:
+            return plan.isShortNight ? "Aim for an earlier night to start tomorrow higher." : "Start winding down to protect tonight."
+        }
+    }
+
+    private func timeLabel(_ item: DayPlan.Item) -> String {
+        if item.done { return "✓" }
+        guard let time = item.time else { return "Now" }
+        return clock(time)
+    }
+
+    private func clock(_ date: Date) -> String { date.formatted(.dateTime.hour().minute()) }
+    private func pct(_ level: Double) -> Int { Int((level * 100).rounded()) }
+}

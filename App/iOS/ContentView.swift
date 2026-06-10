@@ -20,6 +20,18 @@ struct ContentView: View {
         NavigationStack(path: $path) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
+                    NavigationLink(value: HomeRoute.plan) {
+                        HStack {
+                            Image(systemName: "list.bullet.clipboard.fill")
+                            Text("Today's Plan").font(.headline)
+                            Spacer()
+                            Image(systemName: "chevron.right").font(.subheadline)
+                        }
+                        .padding()
+                        .background(.teal.gradient, in: RoundedRectangle(cornerRadius: 16))
+                        .foregroundStyle(.white)
+                    }
+                    .buttonStyle(.plain)
                     EnergyRingView()
                     AlertnessCurveView()
                     NavigationLink {
@@ -90,6 +102,7 @@ struct ContentView: View {
             }
             .navigationDestination(for: HomeRoute.self) { route in
                 switch route {
+                case .plan:      DayPlanView()
                 case .daylight:  DaylightView()
                 case .alertness: AlertnessDetailView()
                 case .nap:       NapView()
@@ -97,6 +110,7 @@ struct ContentView: View {
             }
             .onOpenURL { url in
                 switch url.host {
+                case "plan":      path = [.plan]
                 case "daylight":  path = [.daylight]
                 case "alertness": path = [.alertness]
                 case "nap":       path = [.nap]
