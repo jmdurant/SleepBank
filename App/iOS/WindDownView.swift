@@ -42,6 +42,10 @@ struct WindDownView: View {
     @State private var noise = NoiseService.shared
     @State private var relax = GuidedRelaxationService.shared
     @State private var screensOff = WindDownLog.isMarked()
+    #if canImport(FamilyControls)
+    @State private var shield = WindDownShieldService.shared
+    @State private var showAppPicker = false
+    #endif
 
     private var active: Bool { noise.isPlaying || relax.isSpeaking }
 
@@ -56,11 +60,19 @@ struct WindDownView: View {
                 header
                 startCard
                 checklist
+                #if canImport(FamilyControls)
+                shieldCard
+                #endif
                 screensOffCard
             }
             .padding()
         }
         .navigationTitle("Wind Down")
+        #if canImport(FamilyControls)
+        .familyActivityPicker(isPresented: $showAppPicker,
+                              selection: Binding(get: { shield.selection }, set: { shield.selection = $0 }))
+        .task { await shield.requestAuthorization() }
+        #endif
     }
 
     // MARK: - Header
@@ -88,9 +100,15 @@ struct WindDownView: View {
         Button {
             if active {
                 relax.stop(); noise.fadeOut()
+                #if canImport(FamilyControls)
+                shield.unshield()
+                #endif
             } else {
                 noise.play()
                 relax.start(relax.guide == .none ? .breathing478 : relax.guide)
+                #if canImport(FamilyControls)
+                shield.shield()
+                #endif
             }
         } label: {
             Label(active ? "Stop wind-down" : "Start wind-down",
@@ -136,6 +154,37 @@ struct WindDownView: View {
             }
         }
     }
+
+    // MARK: - Block distracting apps (Wind-Down Mode)
+
+    #if canImport(FamilyControls)
+    private var shieldCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Image(systemName: "hand.raised.fill").foregroundStyle(.purple)
+                Text("Block distracting apps").font(.subheadline.weight(.semibold))
+                Spacer()
+                if shield.isShielding {
+                    Text("Blocking").font(.caption.weight(.medium)).foregroundStyle(.purple)
+                }
+            }
+            Text("While wind-down is running, the apps you choose are blocked — so the scroll can't keep you up. iPhone can't *measure* your screen time, but it can help you *stop*.")
+                .font(.caption).foregroundStyle(.secondary)
+            Button { showAppPicker = true } label: {
+                Label(shield.hasSelection ? "Edit blocked apps" : "Choose apps to block",
+                      systemImage: "app.badge.checkmark")
+                    .font(.caption.weight(.medium))
+            }
+            if !shield.isAuthorized {
+                Text("Needs Screen Time permission and the Family Controls entitlement — see docs/WIND_DOWN_MODE.md.")
+                    .font(.caption2).foregroundStyle(.orange)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding()
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 20))
+    }
+    #endif
 
     // MARK: - Screens-off self-report
 
