@@ -19,7 +19,10 @@ struct DayPlanView: View {
         TimelineView(.periodic(from: .now, by: 600)) { context in
             let now = context.date
             let rhythm = AlertnessProvider.rhythm(health: health, store: store, now: now)
-            let plan = DayPlan.build(rhythm: rhythm, now: now, busy: CalendarService.shared.busyToday(now: now))
+            // User's "always OK to nap" windows override the calendar's busy times.
+            let busy = Intervals.subtract(NapWindowsStore.shared.todayIntervals(now: now),
+                                          from: CalendarService.shared.busyToday(now: now))
+            let plan = DayPlan.build(rhythm: rhythm, now: now, busy: busy)
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     readinessCard(plan)

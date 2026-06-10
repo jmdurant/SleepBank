@@ -12,6 +12,7 @@ struct SettingsView: View {
     @State private var noise = NoiseService.shared
     @State private var relax = GuidedRelaxationService.shared
     @State private var calendar = CalendarService.shared
+    @State private var napWindows = NapWindowsStore.shared
     @State private var morningPlan = PlanNotificationService.morningPlanEnabled
     @State private var windDownReminder = PlanNotificationService.windDownReminderEnabled
 
@@ -52,6 +53,25 @@ struct SettingsView: View {
                 Text("Reads your calendar's busy times so a nap is suggested when you're actually free — never event details.")
             }
 
+            Section {
+                ForEach(napWindows.windows) { window in
+                    HStack {
+                        DatePicker("", selection: timeBinding(window, isStart: true), displayedComponents: .hourAndMinute)
+                            .labelsHidden()
+                        Text("to").foregroundStyle(.secondary)
+                        DatePicker("", selection: timeBinding(window, isStart: false), displayedComponents: .hourAndMinute)
+                            .labelsHidden()
+                        Spacer()
+                    }
+                }
+                .onDelete { offsets in offsets.map { napWindows.windows[$0] }.forEach(napWindows.remove) }
+                Button { napWindows.add() } label: { Label("Add a window", systemImage: "plus") }
+            } header: {
+                Text("Always OK to nap")
+            } footer: {
+                Text("These windows override your calendar — a nap can be suggested here even if you're booked (e.g. a quiet stretch during a long appointment).")
+            }
+
             Section("Features") {
                 NavigationLink(value: HomeRoute.plan) { Label("Today's Plan", systemImage: "list.bullet.clipboard.fill") }
                 NavigationLink(value: HomeRoute.daylight) { Label("Daylight", systemImage: "sun.max.fill") }
@@ -65,5 +85,22 @@ struct SettingsView: View {
             }
         }
         .navigationTitle("Settings")
+    }
+
+    private func timeBinding(_ window: NapWindowsStore.Window, isStart: Bool) -> Binding<Date> {
+        Binding(
+            get: { Self.dateFromMinutes(isStart ? window.startMinutes : window.endMinutes) },
+            set: { d in
+                let m = Self.minutesFromDate(d)
+                if isStart { napWindows.setStart(window, minutes: m) } else { napWindows.setEnd(window, minutes: m) }
+            })
+    }
+
+    private static func dateFromMinutes(_ m: Int) -> Date {
+        Calendar.current.startOfDay(for: Date()).addingTimeInterval(TimeInterval(m * 60))
+    }
+    private static func minutesFromDate(_ d: Date) -> Int {
+        let c = Calendar.current.dateComponents([.hour, .minute], from: d)
+        return (c.hour ?? 0) * 60 + (c.minute ?? 0)
     }
 }
