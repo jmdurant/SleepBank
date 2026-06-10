@@ -2,33 +2,41 @@
 //  HomeLightingService.swift
 //  SleepBank
 //
-//  Drives the *hue* (color temperature) of HomeKit lights on the user's own rhythm
-//  — warm at wind-down, cool in the morning. Apple's Adaptive Lighting handles the
-//  smooth all-day curve on a generic sun schedule; our value-add is shifting the key
-//  transitions to *your* actual wind-down / wake times. We set color temperature
-//  only (not brightness).
+//  SleepBank as a circadian-lighting engine (for the ~everyone who doesn't run a
+//  Homebridge daylight plugin): it computes the same location-aware solar
+//  color-temperature curve (SleepBankCore.CircadianLighting) and applies it to all
+//  HomeKit lights via a single **scene** (HMActionSet), plus a hard warm shift at
+//  wind-down. Color temperature only (not brightness).
 //
-//  Needs the (ungated) `com.apple.developer.homekit` entitlement + an
-//  NSHomeKitUsageDescription. Untestable without real bulbs + device.
+//  Honest limits: an iOS app can't recompute continuously in the background like a
+//  Homebridge server — it applies the curve when the app is active and at sleep
+//  events. Fully-unattended continuous control needs HomeKit timer automations on a
+//  Home hub (next step). Needs the (ungated) HomeKit entitlement + a Home hub for
+//  reliable whole-house control. Untestable without real bulbs + device.
 //
 
 import Foundation
+import SwiftUI
 
 #if canImport(HomeKit)
 import HomeKit
+import CoreLocation
+import SleepBankCore
 
 @Observable
-final class HomeLightingService: NSObject, HMHomeManagerDelegate {
+final class HomeLightingService: NSObject, HMHomeManagerDelegate, CLLocationManagerDelegate {
     static let shared = HomeLightingService()
 
     private let manager = HMHomeManager()
-    /// Number of color-temperature-capable lights found (for the UI).
-    private(set) var lightCount = 0
+    private let locationManager = CLLocationManager()
+    private let sceneName = "SleepBank Lighting"
 
-    /// Mireds: lower = cooler/bluer, higher = warmer/amber.
-    static let warmMireds = 450      // evening / wind-down
-    static let neutralMireds = 320   // daytime
-    static let coolMireds = 250      // morning
+    private(set) var lightCount = 0
+    @ObservationIgnored private var coordinate: CLLocationCoordinate2D?
+
+    /// Warm/cool bounds in Kelvin (Hue ambiance ≈ 2200–6500 K).
+    var warmK = 2700
+    var coolK = 5000
 
     var syncEnabled: Bool = UserDefaults.standard.bool(forKey: "homeLightingSync") {
         didSet { UserDefaults.standard.set(syncEnabled, forKey: "homeLightingSync") }
@@ -37,52 +45,80 @@ final class HomeLightingService: NSObject, HMHomeManagerDelegate {
     override init() {
         super.init()
         manager.delegate = self
+        locationManager.delegate = self
     }
+
+    var isAuthorized: Bool { manager.authorizationStatus.contains(.authorized) }
+    var hasLocation: Bool { coordinate != nil }
+
+    func requestLocation() {
+        locationManager.requestWhenInUseAuthorization()
+        locationManager.requestLocation()
+    }
+
+    // MARK: - Target (the curve)
+
+    /// Color temperature (Kelvin) for now: location-aware solar curve when we have
+    /// coordinates, else anchored to the user's wake rhythm.
+    func currentKelvin(_ now: Date = Date()) -> Int {
+        if let c = coordinate {
+            return CircadianLighting.kelvin(at: now, latitude: c.latitude, longitude: c.longitude,
+                                            warmK: warmK, coolK: coolK)
+        }
+        if let snap = RhythmSnapshot.load() {
+            return CircadianLighting.kelvinFromRhythm(at: now, wakeTime: snap.wakeTime, warmK: warmK, coolK: coolK)
+        }
+        return warmK
+    }
+
+    // MARK: - Apply (via one scene)
+
+    func applyCircadian() { applyScene(mireds: CircadianLighting.kelvinToMireds(currentKelvin())) }
+    func setWarm()        { applyScene(mireds: CircadianLighting.kelvinToMireds(warmK)) }
+    func setCool()        { applyScene(mireds: CircadianLighting.kelvinToMireds(coolK)) }
+
+    /// Set every light's color temperature at once via a reusable "SleepBank
+    /// Lighting" scene — atomic, and visible/triggerable in the Home app.
+    private func applyScene(mireds: Int) {
+        guard let home = manager.homes.first else { return }
+        let chars = colorTempCharacteristics()
+        guard !chars.isEmpty else { return }
+        if let set = home.actionSets.first(where: { $0.name == sceneName }) {
+            rebuild(set, mireds: mireds, chars: chars, home: home)
+        } else {
+            home.addActionSet(withName: sceneName) { [weak self] set, _ in
+                guard let self, let set else { return }
+                self.rebuild(set, mireds: mireds, chars: chars, home: home)
+            }
+        }
+    }
+
+    private func rebuild(_ set: HMActionSet, mireds: Int, chars: [HMCharacteristic], home: HMHome) {
+        let removal = DispatchGroup()
+        for action in set.actions { removal.enter(); set.removeAction(action) { _ in removal.leave() } }
+        removal.notify(queue: .main) {
+            let additions = DispatchGroup()
+            for ch in chars {
+                let value = self.clamp(mireds, ch)
+                additions.enter()
+                set.addAction(HMCharacteristicWriteAction(characteristic: ch, targetValue: NSNumber(value: value))) { _ in
+                    additions.leave()
+                }
+            }
+            additions.notify(queue: .main) { home.executeActionSet(set) { _ in } }
+        }
+    }
+
+    // MARK: - HomeKit / Location plumbing
 
     func homeManagerDidUpdateHomes(_ manager: HMHomeManager) {
         lightCount = colorTempCharacteristics().count
     }
 
-    var isAuthorized: Bool {
-        manager.authorizationStatus.contains(.authorized)
+    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        coordinate = locations.last?.coordinate
     }
-
-    // MARK: - Transitions
-
-    func setWarm()    { write(mireds: Self.warmMireds) }
-    func setCool()    { write(mireds: Self.coolMireds) }
-    func setNeutral() { write(mireds: Self.neutralMireds) }
-
-    /// Pick a hue anchored to the user's *own* rhythm (wake → wind-down), not fixed
-    /// clock hours — so it tracks their schedule regardless of location/season.
-    /// Apple Adaptive Lighting already does the location-aware solar curve; this is
-    /// the personal-transitions layer. Falls back to 7:00–22:30 without sleep data.
-    func syncToTimeOfDay(_ now: Date = Date()) {
-        let cal = Calendar.current
-        func minutesOfDay(_ d: Date) -> Int { cal.component(.hour, from: d) * 60 + cal.component(.minute, from: d) }
-
-        let wakeMin: Int
-        let awakeLength: Int   // minutes from wake to wind-down (the "day")
-        if let snap = RhythmSnapshot.load() {
-            wakeMin = minutesOfDay(snap.wakeTime)
-            awakeLength = Int(15.5 * 60)   // wind-down ≈ wake + 15.5 h
-        } else {
-            wakeMin = 7 * 60
-            awakeLength = Int(15.5 * 60)
-        }
-
-        // Minutes since wake, circular over 24 h — handles wind-down past midnight.
-        let sinceWake = (((minutesOfDay(now) - wakeMin) % 1440) + 1440) % 1440
-        if sinceWake >= awakeLength {
-            setWarm()         // past wind-down → evening / overnight
-        } else if sinceWake < 180 {
-            setCool()         // first ~3 h after waking
-        } else {
-            setNeutral()      // the day
-        }
-    }
-
-    // MARK: - HomeKit plumbing
+    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {}
 
     private func colorTempCharacteristics() -> [HMCharacteristic] {
         guard let home = manager.homes.first else { return [] }
@@ -93,13 +129,10 @@ final class HomeLightingService: NSObject, HMHomeManagerDelegate {
             .filter { $0.characteristicType == HMCharacteristicTypeColorTemperature }
     }
 
-    private func write(mireds: Int) {
-        guard syncEnabled || true else { return }   // callers gate on syncEnabled
-        for ch in colorTempCharacteristics() {
-            let lo = ch.metadata?.minimumValue?.intValue ?? 140
-            let hi = ch.metadata?.maximumValue?.intValue ?? 500
-            ch.writeValue(min(max(mireds, lo), hi)) { _ in }
-        }
+    private func clamp(_ mireds: Int, _ ch: HMCharacteristic) -> Int {
+        let lo = ch.metadata?.minimumValue?.intValue ?? 140
+        let hi = ch.metadata?.maximumValue?.intValue ?? 500
+        return min(max(mireds, lo), hi)
     }
 }
 #endif
