@@ -25,6 +25,18 @@ struct BreathingGuideView: View {
                            startPoint: .top, endPoint: .bottom)
                 .ignoresSafeArea()
 
+            // A calming beach fades in behind the circle once you start breathing.
+            BeachSceneView()
+                .opacity(pacer.isRunning ? 1 : 0)
+                .animation(.easeInOut(duration: 3), value: pacer.isRunning)
+                .allowsHitTesting(false)
+
+            // Keep the text/controls legible over a bright daytime sky.
+            LinearGradient(colors: [.black.opacity(0.35), .clear, .clear, .black.opacity(0.35)],
+                           startPoint: .top, endPoint: .bottom)
+                .ignoresSafeArea()
+                .allowsHitTesting(false)
+
             VStack(spacing: 28) {
                 Text(pacer.isRunning ? "Cycle \(pacer.cycle) of \(totalCycles)" : "4-7-8 breathing")
                     .font(.subheadline.weight(.medium)).foregroundStyle(.white.opacity(0.65))
