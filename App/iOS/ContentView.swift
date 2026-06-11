@@ -72,6 +72,7 @@ struct ContentView: View {
         case .windDown:  WindDownView()
         case .nap:       NapView()
         case .settings:  SettingsView()
+        case .epworth:   EpworthView()
         }
     }
 
@@ -83,6 +84,7 @@ struct ContentView: View {
         case .windDown:             tab = .today;    todayPath = [.windDown]
         case .nap:                  tab = .nap;      napPath = []
         case .settings:             tab = .settings; settingsPath = []
+        case .epworth:              tab = .settings; settingsPath = [.epworth]
         }
     }
 
