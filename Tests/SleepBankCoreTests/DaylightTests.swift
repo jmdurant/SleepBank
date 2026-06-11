@@ -57,6 +57,41 @@ final class DaylightTests: XCTestCase {
         XCTAssertEqual(day.evening, 15, accuracy: 0.001)
     }
 
+    func testWindowsTileTheDaySoPartsSumToTotal() {
+        // Regression for the reported bug: the late-morning hour (wake+4h → noon) fell
+        // in no bucket, so total (28) > morning + afternoon + evening (18 + 4 + 0).
+        let wake = at(7)                          // morning window ends 11:00
+        let ivs = [
+            interval(8, 8.3, minutes: 18),        // morning
+            interval(11.5, 11.6, minutes: 6),     // the old gap (11:00–12:00) — was dropped
+            interval(14, 14.1, minutes: 4),       // afternoon
+        ]
+        let day = DaylightDay.summarize(intervals: ivs, wakeTime: wake, calendar: cal)
+        XCTAssertEqual(day.morning + day.afternoon + day.evening, day.total, accuracy: 0.001)
+        XCTAssertEqual(day.total, 28, accuracy: 0.001)
+        XCTAssertEqual(day.morning, 18, accuracy: 0.001)
+        XCTAssertEqual(day.afternoon, 10, accuracy: 0.001)   // 4 + the recovered 6
+        XCTAssertEqual(day.evening, 0, accuracy: 0.001)
+    }
+
+    func testLateRiserDoesNotDoubleCountMorningIntoAfternoon() {
+        // wake 09:00 → morning window ends 13:00. A 12:30 interval is morning only;
+        // afternoon starts where the morning window ends, so no overlap.
+        let day = DaylightDay.summarize(intervals: [interval(12.5, 13, minutes: 30)],
+                                        wakeTime: at(9), calendar: cal)
+        XCTAssertEqual(day.morning, 30, accuracy: 0.001)
+        XCTAssertEqual(day.afternoon, 0, accuracy: 0.001)
+        XCTAssertEqual(day.morning + day.afternoon + day.evening, day.total, accuracy: 0.001)
+    }
+
+    func testLateEveningLightIsCounted() {
+        // Summer dusk at ~21:30 used to be dropped (evening capped at 21:00).
+        let day = DaylightDay.summarize(intervals: [interval(21.5, 21.75, minutes: 15)],
+                                        wakeTime: at(7), calendar: cal)
+        XCTAssertEqual(day.evening, 15, accuracy: 0.001)
+        XCTAssertEqual(day.total, 15, accuracy: 0.001)
+    }
+
     func testMorningWindowIsWakeRelative() {
         // A late riser (wake 10:00): 11:00 light is "morning," not afternoon.
         let ivs = [interval(11, 11.5)]

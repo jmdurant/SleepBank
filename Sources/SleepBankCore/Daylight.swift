@@ -90,9 +90,9 @@ public struct DaylightDay: Sendable, Equatable {
     public let total: Double
     /// Minutes in the circadian-critical window — the first hours after waking.
     public let morning: Double
-    /// Minutes across the afternoon (~12:00–17:00).
+    /// Minutes from the end of the morning window to the evening (≤17:00).
     public let afternoon: Double
-    /// Minutes in the evening (~17:00–21:00) — late light can delay the clock.
+    /// Minutes in the evening (from ~17:00 to end of day) — late light can delay the clock.
     public let evening: Double
 
     public init(total: Double, morning: Double, afternoon: Double, evening: Double) {
@@ -104,19 +104,26 @@ public struct DaylightDay: Sendable, Equatable {
 
     public static let empty = DaylightDay(total: 0, morning: 0, afternoon: 0, evening: 0)
 
-    /// Bucket intervals into the day's windows. `morning` is wake-relative (the
-    /// first `morningWindowHours` after waking); afternoon/evening are clock-based.
+    /// Bucket intervals into the day's windows. The windows **tile the whole day**,
+    /// so the parts always sum to `total` (no minutes leak into a gap and none are
+    /// double-counted). `morning` ends a wake-relative `morningWindowHours` after
+    /// waking (its start is the day's start — any pre-wake light is negligible since
+    /// daylight isn't logged while asleep); `afternoon` runs from there to the
+    /// evening; `evening` runs from ~17:00 to end of day. Afternoon/evening starts are
+    /// clamped to the prior window's end, so a late riser (wake + window past 17:00)
+    /// produces no overlap.
     public static func summarize(intervals: [Daylight.Interval], wakeTime: Date,
                                  morningWindowHours: Double = 4, day: Date? = nil,
                                  calendar: Calendar = .current) -> DaylightDay {
         let base = calendar.startOfDay(for: day ?? wakeTime)
         func clock(_ hour: Int) -> Date { base.addingTimeInterval(TimeInterval(hour) * 3600) }
         let morningEnd = wakeTime.addingTimeInterval(morningWindowHours * 3600)
-        return DaylightDay(
-            total: Daylight.total(intervals),
-            morning: Daylight.minutes(in: intervals, from: wakeTime, to: morningEnd),
-            afternoon: Daylight.minutes(in: intervals, from: clock(12), to: clock(17)),
-            evening: Daylight.minutes(in: intervals, from: clock(17), to: clock(21))
-        )
+        let eveningStart = max(clock(17), morningEnd)
+        let dayEnd = clock(24)
+        let morning = Daylight.minutes(in: intervals, from: base, to: morningEnd)
+        let afternoon = Daylight.minutes(in: intervals, from: morningEnd, to: eveningStart)
+        let evening = Daylight.minutes(in: intervals, from: eveningStart, to: dayEnd)
+        return DaylightDay(total: morning + afternoon + evening,
+                           morning: morning, afternoon: afternoon, evening: evening)
     }
 }
