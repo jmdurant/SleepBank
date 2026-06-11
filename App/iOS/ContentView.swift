@@ -127,6 +127,7 @@ struct ContentView: View {
         LocationService.shared.refresh()   // coarse location → local sunset for light timing
         guard await health.requestAuthorization() else { return }
         await health.refreshAll()
+        PhoneNapController.shared.workoutHR.cleanupStrayWorkouts()   // clear any crashed-session leftover
         // Seed bedtime history from past HealthKit nights so Sleep Score can grade
         // consistency right away, then record last night precisely.
         BedtimeHistoryStore.shared.backfill(await health.fetchBedtimeHistory())

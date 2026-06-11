@@ -54,6 +54,7 @@ final class PhoneWorkoutHRService: NSObject, HKWorkoutSessionDelegate, HKLiveWor
         if healthStore.authorizationStatus(for: HKQuantityType.workoutType()) == .notDetermined {
             requestPermissions()
         }
+        cleanupStrayWorkouts()   // clear any leftover from a prior crashed session
         let config = HKWorkoutConfiguration()
         config.activityType = .mindAndBody     // a nap, not exercise
         config.locationType = .indoor
@@ -63,6 +64,7 @@ final class PhoneWorkoutHRService: NSObject, HKWorkoutSessionDelegate, HKLiveWor
             session.delegate = self
             builder.delegate = self
             builder.dataSource = HKLiveWorkoutDataSource(healthStore: healthStore, workoutConfiguration: config)
+            builder.addMetadata([HKMetadataKeyWorkoutBrandName: "SleepBank"]) { _, _ in }
             let start = Date()
             session.startActivity(with: start)
             builder.beginCollection(withStart: start) { ok, err in
@@ -79,6 +81,25 @@ final class PhoneWorkoutHRService: NSObject, HKWorkoutSessionDelegate, HKLiveWor
     func stop() {
         session?.end()       // delegate discards the (unsaved) workout on .ended
         isActive = false
+    }
+
+    /// Safety net: we never intentionally persist a workout (we discard), so ANY
+    /// `.mindAndBody` workout from our own app source is a stray left by a crash /
+    /// force-quit mid-nap. Find and delete them. Safe to call on launch and at nap
+    /// start. (HealthKit only lets an app delete samples it created.)
+    func cleanupStrayWorkouts() {
+        guard HKHealthStore.isHealthDataAvailable() else { return }
+        let mine = HKQuery.predicateForObjects(from: .default())
+        let mindBody = HKQuery.predicateForWorkouts(with: .mindAndBody)
+        let predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [mine, mindBody])
+        let query = HKSampleQuery(sampleType: .workoutType(), predicate: predicate,
+                                  limit: HKObjectQueryNoLimit, sortDescriptors: nil) { [weak self] _, samples, _ in
+            guard let self, let strays = samples, !strays.isEmpty else { return }
+            self.healthStore.delete(strays) { ok, err in
+                log.info("deleted \(strays.count) stray workout(s): \(ok), \(err?.localizedDescription ?? "none")")
+            }
+        }
+        healthStore.execute(query)
     }
 
     // MARK: - HKWorkoutSessionDelegate
