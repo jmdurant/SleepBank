@@ -59,6 +59,9 @@ final class BreathingPacer {
     func start(cycles: Int = 8) {
         stop()
         isRunning = true
+        #if os(iOS)
+        BreathingHaptics.shared.start()
+        #endif
         task = Task { @MainActor in
             for c in 1...max(1, cycles) {
                 if Task.isCancelled { break }
@@ -72,6 +75,9 @@ final class BreathingPacer {
     func stop() {
         task?.cancel(); task = nil
         isRunning = false; phase = .ready; cycle = 0
+        #if os(iOS)
+        BreathingHaptics.shared.stop()
+        #endif
     }
 
     @MainActor private func run(_ p: Phase) async {
@@ -82,9 +88,10 @@ final class BreathingPacer {
     }
 
     private func haptic(_ p: Phase) {
-        #if canImport(UIKit) && os(iOS)
-        let style: UIImpactFeedbackGenerator.FeedbackStyle = p == .exhale ? .soft : .light
-        UIImpactFeedbackGenerator(style: style).impactOccurred(intensity: p == .hold ? 0.5 : 0.85)
+        #if os(iOS)
+        // A swelling Core Haptics pattern shaped to the phase — the Apple-Watch-Breathe
+        // feel (rises on the inhale, releases on the exhale), not one blunt tap.
+        BreathingHaptics.shared.play(p, seconds: p.seconds)
         #elseif canImport(WatchKit)
         WKInterfaceDevice.current().play(p == .inhale ? .start : (p == .exhale ? .stop : .click))
         #endif
