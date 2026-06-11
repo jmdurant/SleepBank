@@ -45,7 +45,22 @@ EEG ground truth, nap by nap.
 - Muse→µV scaling here is approximate (`0.488 µV/unit`); fine for staging, which
   is shape/relative driven.
 
-## Next step (training)
-Once you have several `*_hypnogram.csv` + the matching feature CSVs, a small merge
-script aligns YASA stage → each feature epoch by time, producing the labeled
-table to train a CreateML/CoreML model → drop into `CoreMLOnsetDetector`.
+## Training the on-device model
+Once you have a few naps' `training.csv` (built automatically by Stage Naps), train:
+
+- Double-click **`Train Model.command`** (or `./train.py`).
+- It fits a classifier per target with **leave-one-nap-out cross-validation** (the
+  only honest estimate on n=1 / a few naps) and exports:
+  - **`NapOnsetClassifier.mlmodel`** — matches `CoreMLOnsetDetector`'s contract
+    exactly (inputs `hr, hrv, movement, stillSeconds, eegOnset, eegDeep`; output
+    `labelProbability → {"asleep", "awake"}`).
+  - **`NapDeepClassifier.mlmodel`** — N3-approach head-start (not yet consumed by
+    the app; deep-wake is engine logic today).
+- **Drag `NapOnsetClassifier.mlmodel` into the watch target in Xcode.**
+  `CoreMLOnsetDetector` picks it up automatically; without it the app keeps using
+  the heuristic, so nothing breaks.
+
+**Honest n=1 reality:** with 1 nap `train.py` reports in-sample *fit* and says so
+loudly — take ≥3 naps before trusting a number. YASA labels are **silver** (frontal
+Muse, not PSG): n=1 *calibrates the thresholds to you*; only PSG (the pilot)
+*validates*.
