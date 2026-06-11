@@ -172,6 +172,20 @@ class PhoneNapController {
             }
             engine.finish()
         }
+        teardown()
+    }
+
+    /// Abandon the nap without recording it — no Health write, no recap, no count.
+    /// For when a nap was started by mistake or interrupted.
+    func cancel() {
+        engine?.finish()
+        RawEEGRecorder.shared.discard()   // drop the EEG buffer, don't write a file
+        teardown()
+    }
+
+    /// Tear down sensors, audio, keep-alive, the workout session, and the live
+    /// activity, and reset state. Shared by stop() and cancel().
+    private func teardown() {
         alarm.stop()
         motion.stopMonitoring()
         NoiseService.shared.fadeOut()

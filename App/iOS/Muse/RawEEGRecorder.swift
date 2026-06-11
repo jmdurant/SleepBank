@@ -35,6 +35,13 @@ final class RawEEGRecorder {
         isRecording = true
     }
 
+    /// Stop and drop the buffer without writing — for a cancelled nap.
+    func discard() {
+        isRecording = false
+        channels = [[], [], [], []]
+        sampleCount = 0
+    }
+
     /// Append a packet's worth of samples for one channel (called from MuseService).
     func record(channel: Int, samples: [Float]) {
         guard isRecording, channel < 4, channels[channel].count < maxSamples else { return }

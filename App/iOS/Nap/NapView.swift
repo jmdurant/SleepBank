@@ -160,10 +160,18 @@ struct NapView: View {
             .buttonStyle(.plain)
             .padding(.top, 4)
 
-            Button(role: .destructive) { nap.stop() } label: {
-                Label("End nap", systemImage: "stop.fill").frame(maxWidth: .infinity)
+            HStack(spacing: 12) {
+                Button { nap.cancel() } label: {
+                    Label("Cancel", systemImage: "xmark").frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .tint(.secondary)
+
+                Button(role: .destructive) { nap.stop() } label: {
+                    Label("End nap", systemImage: "stop.fill").frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
             }
-            .buttonStyle(.bordered)
         }
     }
 
