@@ -62,8 +62,10 @@ class PhoneNapController {
         recorder.begin(at: now)
         motion.startMonitoring()
         if NoiseService.shared.autoPlayDuringNap { NoiseService.shared.play() }
-        if GuidedRelaxationService.shared.guide != .none {
-            GuidedRelaxationService.shared.start(GuidedRelaxationService.shared.guide)
+        // The phone's nap UI shows the visual breathing guide (which drives the haptic
+        // pacer itself), so here we only auto-start the spoken body-scan if selected.
+        if GuidedRelaxationService.shared.guide == .eyeRelaxation {
+            GuidedRelaxationService.shared.start(.eyeRelaxation)
         }
         RawEEGRecorder.shared.begin()   // capture raw EEG for the YASA pipeline
 

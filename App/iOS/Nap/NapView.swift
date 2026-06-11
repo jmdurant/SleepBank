@@ -19,6 +19,8 @@ struct NapView: View {
     @State private var showKSSPost = false
     @State private var pendingNapType: NapType?
     @State private var ratedSession: KSSSession?
+    @State private var showBreathe = false
+    @State private var breathedThisNap = false
 
     var body: some View {
         Group {
@@ -33,6 +35,20 @@ struct NapView: View {
             }
         }
         .padding(.horizontal)
+        // Settle into the nap with the same visual 4-7-8 guide as Wind Down — shown
+        // automatically when the nap starts (unless the spoken body-scan is selected),
+        // and reopenable from the active screen. Dismiss to drop to the timer.
+        .fullScreenCover(isPresented: $showBreathe) { BreathingGuideView() }
+        .onChange(of: nap.isNapping) { _, napping in
+            if napping {
+                if !breathedThisNap && GuidedRelaxationService.shared.guide != .eyeRelaxation {
+                    breathedThisNap = true
+                    showBreathe = true
+                }
+            } else {
+                breathedThisNap = false
+            }
+        }
         // Before the nap: rate sleepiness, then start (Skip starts it anyway).
         .sheet(isPresented: $showKSSPre, onDismiss: {
             if let t = pendingNapType { nap.start(type: t); pendingNapType = nil }
@@ -128,11 +144,20 @@ struct NapView: View {
             }
             .font(.caption2).foregroundStyle(.secondary).multilineTextAlignment(.center)
 
+            Button { showBreathe = true } label: {
+                Label("Breathe with the circle", systemImage: "wind")
+                    .font(.subheadline.weight(.medium))
+                    .frame(maxWidth: .infinity).padding(.vertical, 10)
+                    .background(Color.indigo.opacity(0.15), in: Capsule())
+                    .foregroundStyle(.indigo)
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 4)
+
             Button(role: .destructive) { nap.stop() } label: {
                 Label("End nap", systemImage: "stop.fill").frame(maxWidth: .infinity)
             }
             .buttonStyle(.bordered)
-            .padding(.top, 8)
         }
     }
 
