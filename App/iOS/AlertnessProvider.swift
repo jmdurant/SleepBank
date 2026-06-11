@@ -100,7 +100,7 @@ enum AlertnessProvider {
     static func phaseLabel(_ now: Date) -> String { AlertnessRhythm.phaseLabel(at: now) }
 
     /// Whether we have a real sleep basis for today — HealthKit sleep *or* a manual
-    /// estimate. Without one we shouldn't show a confident Alert Score (the curve
+    /// estimate. Without one we shouldn't show a confident Alertness Score (the curve
     /// would default to "rested" and read near the ceiling, which is misleading); the
     /// UI prompts for an estimate instead.
     static func hasSleepData(health: HealthKitService = .shared) -> Bool {

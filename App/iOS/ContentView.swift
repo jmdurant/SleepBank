@@ -2,7 +2,7 @@
 //  ContentView.swift
 //  SleepBank
 //
-//  The app shell: a bottom tab bar — Home (Alert Score + curve), Today (the plan),
+//  The app shell: a bottom tab bar — Home (Alertness Score + curve), Today (the plan),
 //  Nap (start + live sensors), History (last night + sleep bank), Settings. Each tab
 //  has its own navigation stack; deep links / notifications select the right tab and
 //  push as needed. App-wide bootstrap (Health, snapshot, watch sync, notifications)
@@ -120,7 +120,7 @@ struct ContentView: View {
         if let bedtime = health.lastNightSleep?.bedtime {
             BedtimeHistoryStore.shared.record(bedtime: bedtime)
         }
-        // Snapshot the rhythm so the widget + watch can compute the Alert Score / plan.
+        // Snapshot the rhythm so the widget + watch can compute the Alertness Score / plan.
         let snapshot = RhythmSnapshot(rhythm: AlertnessProvider.rhythm(now: Date()),
                                       morningLightStreak: health.morningLightStreak, updated: Date())
         snapshot.save()
@@ -271,7 +271,7 @@ private struct HistoryView: View {
                     .font(.caption).foregroundStyle(.secondary)
             } else if isToday, let h = manual.today, !editing {
                 Text(String(format: "You logged %.1f h last night.", h)).font(.subheadline)
-                Text("Today's Alert Score starts from this.").font(.caption).foregroundStyle(.secondary)
+                Text("Today's Alertness Score starts from this.").font(.caption).foregroundStyle(.secondary)
                 Button("Change") { entryHours = h; editing = true }.font(.caption)
             } else if isToday {
                 Text(manual.today == nil ? "No sleep data — how long did you sleep last night?" : "Update last night")

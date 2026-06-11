@@ -95,7 +95,7 @@ struct SettingsView: View {
                 NavigationLink(value: HomeRoute.plan) { Label("Today's Plan", systemImage: "list.bullet.clipboard.fill") }
                 NavigationLink(value: HomeRoute.daylight) { Label("Daylight", systemImage: "sun.max.fill") }
                 NavigationLink(value: HomeRoute.windDown) { Label("Wind Down (screens, lights)", systemImage: "moon.stars.fill") }
-                NavigationLink(value: HomeRoute.alertness) { Label("Alert Score", systemImage: "bolt.fill") }
+                NavigationLink(value: HomeRoute.alertness) { Label("Alertness Score", systemImage: "bolt.fill") }
                 NavigationLink(value: HomeRoute.epworth) { Label("Daytime Sleepiness check-in", systemImage: "checklist") }
                 NavigationLink(value: HomeRoute.psas) { Label("Pre-Sleep Arousal check-in", systemImage: "chart.line.downtrend.xyaxis") }
                 NavigationLink(value: HomeRoute.kss) { Label("Sleepiness (nap before/after)", systemImage: "bolt.fill") }

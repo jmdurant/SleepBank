@@ -4,7 +4,7 @@
 //
 //  A manual "how long did you sleep last night?" entry, for when there's no
 //  HealthKit sleep data (no Apple Watch, Oura not syncing, etc.). Seeds the Sleep
-//  Score / curve offset so everyone gets a grounded Alert Score. Per-day; clears on
+//  Score / curve offset so everyone gets a grounded Alertness Score. Per-day; clears on
 //  a new day.
 //
 

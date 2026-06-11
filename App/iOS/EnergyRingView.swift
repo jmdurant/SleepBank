@@ -40,7 +40,7 @@ struct EnergyRingView: View {
             VStack(spacing: 14) {
                 HStack(spacing: 6) {
                     Image(systemName: "bolt.fill").font(.subheadline).foregroundStyle(.yellow)
-                    Text("Alert Score").font(.headline)
+                    Text("Alertness Score").font(.headline)
                 }
                 if needsSleepEntry {
                     // No sleep basis → don't show a (misleadingly high) number; ask.
@@ -166,7 +166,7 @@ struct EnergyRingView: View {
 }
 
 /// Asked on load when Apple Health has no sleep for last night — your estimate
-/// seeds the Alert Score so it reflects your real night, not a "rested" default.
+/// seeds the Alertness Score so it reflects your real night, not a "rested" default.
 struct SleepEntrySheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var hours: Double = 7.0
@@ -178,7 +178,7 @@ struct SleepEntrySheet: View {
                 Image(systemName: "bed.double.fill").font(.largeTitle).foregroundStyle(.indigo)
                 Text("How was last night?")
                     .font(.title3.bold()).multilineTextAlignment(.center)
-                Text("We didn't find sleep data from Apple Health. Your estimate becomes an Apple-style Sleep Score so your Alert Score reflects your real night.")
+                Text("We didn't find sleep data from Apple Health. Your estimate becomes an Apple-style Sleep Score so your Alertness Score reflects your real night.")
                     .font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
 
                 entryRow("Hours slept", value: String(format: "%.1f h", hours)) {

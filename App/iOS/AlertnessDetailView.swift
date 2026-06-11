@@ -18,7 +18,7 @@ struct AlertnessDetailView: View {
             }
             .padding()
         }
-        .navigationTitle("Alert Score")
+        .navigationTitle("Alertness Score")
     }
 
     private var explainer: some View {
