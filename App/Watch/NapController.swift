@@ -88,6 +88,10 @@ class NapController {
         }
         motion.startMonitoring()
         if NoiseService.shared.autoPlayDuringNap { NoiseService.shared.play() }
+        // Wrist-felt settling: haptic-paced breathing (or the spoken body scan) until onset.
+        if GuidedRelaxationService.shared.guide != .none {
+            GuidedRelaxationService.shared.start(GuidedRelaxationService.shared.guide)
+        }
         SharedStore.napActive = true
         WidgetCenter.shared.reloadAllTimelines()   // refresh the complication
         // Tell the phone to connect sensors, start sound, and raise the Live Activity.
@@ -149,6 +153,7 @@ class NapController {
         // and push the new wake target to the Live Activity.
         if onsetDetected && !wasOnset {
             NoiseService.shared.fadeOut()
+            GuidedRelaxationService.shared.stop()   // asleep — the wrist pacing is done
             sync.sendNap(event: "onset", phase: result.phase.rawValue, wakeTarget: effectiveTarget,
                          heartRate: heartRate, typeTitle: napType.title, onset: true)
             lastSentPhase = result.phase
@@ -201,6 +206,7 @@ class NapController {
         workout.stop()
         motion.stopMonitoring()
         NoiseService.shared.fadeOut()    // stop watch sound if onset never fired
+        GuidedRelaxationService.shared.stop()   // stop the wrist pacing if onset never fired
         // Tell the phone to stand sensors down, end the Live Activity, and update
         // the home widget with today's banked totals (the watch is the source).
         sync.sendNap(event: "end", phase: NapPhase.finished.rawValue, wakeTarget: nil,

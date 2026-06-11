@@ -23,8 +23,8 @@ enum RelaxationGuide: String, CaseIterable, Identifiable, Hashable {
     var title: String {
         switch self {
         case .none: return "Off"
-        case .breathing478: return "Paced breathing (4-7-8)"
-        case .eyeRelaxation: return "Eye & body relaxation"
+        case .breathing478: return "Breathe (haptic 4-7-8)"
+        case .eyeRelaxation: return "Body relaxation (voice)"
         }
     }
 }
@@ -56,17 +56,25 @@ class GuidedRelaxationService: NSObject, AVSpeechSynthesizerDelegate {
 
     func start(_ guide: RelaxationGuide) {
         guard guide != .none else { return }
+        current = guide
+        isSpeaking = true
+        if guide == .breathing478 {
+            // Eyes-closed-friendly: haptic-paced breathing, no voice. A high cycle
+            // count keeps it running through the settling phase until sleep onset.
+            BreathingPacer.shared.start(cycles: 120)
+            return
+        }
+        // Body relaxation: the spoken eye/body scan.
         configureSession()
         active = true
-        current = guide
         cycle = 0
-        isSpeaking = true
         enqueueNextCycle()
     }
 
     func stop() {
         active = false
         isSpeaking = false
+        BreathingPacer.shared.stop()
         synth.stopSpeaking(at: .immediate)
         NoiseService.shared.setDucked(false)
     }
@@ -128,9 +136,32 @@ class GuidedRelaxationService: NSObject, AVSpeechSynthesizerDelegate {
         u.pitchMultiplier = 0.95
         u.volume = 0.9
         u.postUtteranceDelay = pause
-        u.voice = AVSpeechSynthesisVoice(language: "en-US")
+        u.voice = Self.preferredVoice ?? AVSpeechSynthesisVoice(language: "en-US")
         return u
     }
+
+    /// The best English voice the user has installed — premium > enhanced > default
+    /// (premium/enhanced are Siri-grade but a user download in Settings → Accessibility
+    /// → Spoken Content → Voices). Without one, falls back to the compact default.
+    @ObservationIgnored static let preferredVoice: AVSpeechSynthesisVoice? = {
+        let en = AVSpeechSynthesisVoice.speechVoices().filter { $0.language.hasPrefix("en") }
+        func rank(_ v: AVSpeechSynthesisVoice) -> Int {
+            var r = 0
+            switch v.quality {
+            case .premium:  r += 100
+            case .enhanced: r += 50
+            default:        break
+            }
+            if v.language == "en-US" { r += 10 }
+            // Avoid novelty/whisper voices for a calm guide.
+            if v.identifier.contains("eloquence") || v.name.contains("(Novelty)") { r -= 1000 }
+            return r
+        }
+        return en.max { rank($0) < rank($1) }
+    }()
+
+    /// True when at least one enhanced/premium English voice is installed.
+    static var hasHQVoice: Bool { (preferredVoice?.quality ?? .default) != .default }
 
     // MARK: - Delegate
 

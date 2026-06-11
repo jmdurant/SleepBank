@@ -88,6 +88,11 @@ class WatchConnectivityService: NSObject, WCSessionDelegate {
             SharedStore.rhythmSnapshot = snapshot   // for the watch's Today's Plan
             Self.refreshPlanSummary()               // digest for the plan complication
         }
+        // Mirror the phone's chosen wind-down guide so a watch-started nap paces it.
+        if let raw = context["relaxGuide"] as? String,
+           let guide = RelaxationGuide(rawValue: raw) {
+            GuidedRelaxationService.shared.guide = guide
+        }
         guard let data = context["lastNight"] as? Data,
               let dtos = try? JSONDecoder().decode([SleepSampleDTO].self, from: data) else { return }
         DispatchQueue.main.async {

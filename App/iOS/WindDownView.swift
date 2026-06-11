@@ -42,6 +42,8 @@ struct WindDownView: View {
     @State private var noise = NoiseService.shared
     @State private var relax = GuidedRelaxationService.shared
     @State private var screensOff = WindDownLog.isMarked()
+    @State private var showBreathe = false
+    @AppStorage("windDownSounds") private var soundsOn = true
     #if canImport(FamilyControls)
     @State private var shield = WindDownShieldService.shared
     @State private var showAppPicker = false
@@ -62,6 +64,7 @@ struct WindDownView: View {
             VStack(alignment: .leading, spacing: 16) {
                 header
                 startCard
+                breatheCard
                 checklist
                 #if canImport(FamilyControls)
                 shieldCard
@@ -103,36 +106,69 @@ struct WindDownView: View {
     // MARK: - Start wind-down
 
     private var startCard: some View {
-        Button {
-            if active {
-                relax.stop(); noise.fadeOut()
-                #if canImport(FamilyControls)
-                shield.unshield()
-                #endif
-            } else {
-                noise.play()
-                relax.start(relax.guide == .none ? .breathing478 : relax.guide)
-                #if canImport(FamilyControls)
-                shield.shield()
-                #endif
-                #if canImport(HomeKit)
-                if lighting.syncEnabled { lighting.warm() }
-                #endif
+        VStack(spacing: 10) {
+            Button {
+                if active {
+                    relax.stop(); noise.fadeOut()
+                    #if canImport(FamilyControls)
+                    shield.unshield()
+                    #endif
+                } else {
+                    if soundsOn { noise.play() }
+                    #if canImport(FamilyControls)
+                    shield.shield()
+                    #endif
+                    #if canImport(HomeKit)
+                    if lighting.syncEnabled { lighting.warm() }
+                    #endif
+                }
+            } label: {
+                Label(active ? "Stop wind-down" : "Start wind-down",
+                      systemImage: active ? "stop.fill" : "play.fill")
+                    .font(.headline).frame(maxWidth: .infinity).padding()
+                    .background(active ? AnyShapeStyle(.red.gradient) : AnyShapeStyle(.purple.gradient),
+                                in: RoundedRectangle(cornerRadius: 16))
+                    .foregroundStyle(.white)
             }
-        } label: {
-            Label(active ? "Stop wind-down" : "Start wind-down",
-                  systemImage: active ? "stop.fill" : "play.fill")
-                .font(.headline).frame(maxWidth: .infinity).padding()
-                .background(active ? AnyShapeStyle(.red.gradient) : AnyShapeStyle(.purple.gradient),
-                            in: RoundedRectangle(cornerRadius: 16))
-                .foregroundStyle(.white)
+            .buttonStyle(.plain)
+
+            // Opt-in — wind-down doesn't force relaxing sounds on you.
+            audioToggle("Relaxing sounds", on: "speaker.wave.2.fill", off: "speaker.slash.fill", isOn: $soundsOn)
+                .onChange(of: soundsOn) { _, on in if active { on ? noise.play() : noise.fadeOut() } }
+        }
+    }
+
+    private func audioToggle(_ title: String, on: String, off: String, isOn: Binding<Bool>) -> some View {
+        Button { isOn.wrappedValue.toggle() } label: {
+            Label(title, systemImage: isOn.wrappedValue ? on : off)
+                .font(.caption.weight(.medium))
+                .frame(maxWidth: .infinity).padding(.vertical, 8)
+                .background((isOn.wrappedValue ? Color.purple.opacity(0.18) : Color.secondary.opacity(0.12)),
+                            in: Capsule())
+                .foregroundStyle(isOn.wrappedValue ? .purple : .secondary)
         }
         .buttonStyle(.plain)
-        .overlay(alignment: .bottom) {
-            Text(active ? "Relaxing sounds + paced breathing playing" : "Relaxing sounds + a paced-breathing guide")
-                .font(.caption2).foregroundStyle(.secondary).offset(y: 18)
+    }
+
+    // MARK: - Visual breathing guide
+
+    private var breatheCard: some View {
+        Button { showBreathe = true } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "wind").font(.title3).foregroundStyle(.purple)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Breathe with the circle").font(.subheadline.weight(.semibold))
+                    Text("A visual, haptic-paced 4-7-8 — follow along, no counting.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer()
+                Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
+            }
+            .padding()
+            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 20))
         }
-        .padding(.bottom, 18)
+        .buttonStyle(.plain)
+        .fullScreenCover(isPresented: $showBreathe) { BreathingGuideView() }
     }
 
     // MARK: - Checklist

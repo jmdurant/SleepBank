@@ -125,7 +125,11 @@ struct AlertnessCurveView: View {
                     .frame(height: 170)
                 legend(hasPlan: !projection.isEmpty, planLate: markers.contains { $0.late })
                 interventionPicker(markers: markers)
-                readout(rhythm: rhythm, markers: markers, projection: projection, isToday: isToday)
+                HStack(alignment: .center, spacing: 8) {
+                    readout(rhythm: rhythm, markers: markers, projection: projection, isToday: isToday)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    templatesMenu(resolvedTimes: resolvedTimes)
+                }
             }
             .padding()
             .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 20))
@@ -175,7 +179,6 @@ struct AlertnessCurveView: View {
                     }
                 Button { changeDay(1) } label: { Image(systemName: "chevron.right").font(.subheadline.weight(.bold)) }
                     .buttonStyle(.plain).foregroundStyle(.indigo).disabled(dayOffset >= 14)
-                templatesMenu(resolvedTimes: resolvedTimes)
                 Spacer()
                 if let m = focusedMarker(markers) {
                     HStack(spacing: 4) {
@@ -216,9 +219,11 @@ struct AlertnessCurveView: View {
                 } label: { Label("Save this plan as template…", systemImage: "square.and.arrow.down") }
             }
         } label: {
-            Image(systemName: "rectangle.stack.badge.plus").font(.subheadline).foregroundStyle(.indigo)
+            Label("Templates", systemImage: "rectangle.stack")
+                .font(.caption.weight(.semibold)).foregroundStyle(.indigo)
+                .labelStyle(.titleAndIcon)
         }
-        .menuStyle(.button).buttonStyle(.plain)
+        .menuStyle(.button).buttonStyle(.plain).fixedSize()
     }
 
     /// Replace this day's plan with a template, placed at the day's clock times.

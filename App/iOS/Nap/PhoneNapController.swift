@@ -62,7 +62,7 @@ class PhoneNapController {
         recorder.begin(at: now)
         motion.startMonitoring()
         if NoiseService.shared.autoPlayDuringNap { NoiseService.shared.play() }
-        if GuidedRelaxationService.shared.autoPlayDuringNap {
+        if GuidedRelaxationService.shared.guide != .none {
             GuidedRelaxationService.shared.start(GuidedRelaxationService.shared.guide)
         }
         RawEEGRecorder.shared.begin()   // capture raw EEG for the YASA pipeline

@@ -36,6 +36,8 @@ class PhoneConnectivity: NSObject, WCSessionDelegate {
             context["lastNight"] = data
         }
         if let rhythmSnapshot { context["rhythmSnapshot"] = rhythmSnapshot }
+        // Carry the chosen wind-down guide so a watch-started nap can pace it on the wrist.
+        context["relaxGuide"] = GuidedRelaxationService.shared.guide.rawValue
         try? WCSession.default.updateApplicationContext(context)
     }
 
