@@ -79,6 +79,7 @@ struct EnergyRingView: View {
             Image(systemName: "bolt.fill").font(.subheadline).foregroundStyle(.yellow)
             Text("Alertness Score").font(.headline)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // MARK: - No-data state
