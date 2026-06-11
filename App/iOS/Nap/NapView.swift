@@ -8,12 +8,14 @@
 //
 
 import SwiftUI
+import AVFoundation
 import SleepChartKit
 import SleepBankCore
 
 struct NapView: View {
     @State private var nap = PhoneNapController.shared
     @State private var kss = KSSStore.shared
+    @State private var routeTick = 0   // bumps to refresh the output label on route change
     @AppStorage("napTrackAlertness") private var trackAlertness = false
     @State private var showKSSPre = false
     @State private var showKSSPost = false
@@ -67,6 +69,9 @@ struct NapView: View {
                 ratedSession = kss.latest
                 showKSSPost = false
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.routeChangeNotification)) { _ in
+            routeTick += 1
         }
     }
 
@@ -143,6 +148,14 @@ struct NapView: View {
                 }
             }
             .font(.caption2).foregroundStyle(.secondary).multilineTextAlignment(.center)
+
+            HStack(spacing: 8) {
+                Image(systemName: NoiseService.shared.currentOutput.icon).font(.caption).foregroundStyle(.indigo)
+                Text(NoiseService.shared.currentOutput.name).font(.caption).foregroundStyle(.secondary).id(routeTick)
+                Spacer()
+                RoutePickerView().frame(width: 34, height: 34)
+            }
+            .padding(.horizontal, 4)
 
             Label("Turn on a Focus (or Do Not Disturb) so nothing interrupts you — your wake alarm still sounds through it.",
                   systemImage: "moon.fill")
@@ -237,7 +250,7 @@ struct NapView: View {
             Button { ratedSession = nil; kss.cancelOpenSession(); nap.dismissRecap() } label: {
                 Label("Done", systemImage: "checkmark").frame(maxWidth: .infinity).padding(.vertical, 6)
             }
-            .buttonStyle(.borderedProminent).tint(.green)
+            .buttonStyle(.borderedProminent).tint(.ocean)
         }
     }
 }

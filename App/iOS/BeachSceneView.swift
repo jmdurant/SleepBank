@@ -10,6 +10,11 @@
 
 import SwiftUI
 
+extension Color {
+    /// The app's ocean blue — accents that match the beach/breathing theme.
+    static let ocean = Color(red: 0.30, green: 0.65, blue: 0.80)
+}
+
 struct BeachSceneView: View {
     @Environment(\.colorScheme) private var scheme
 

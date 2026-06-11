@@ -142,7 +142,7 @@ struct BreathingGuideView: View {
             HStack(spacing: 10) {
                 Image(systemName: "iphone.gen3.radiowaves.left.and.right").font(.caption2)
                 Slider(value: $hapticIntensity, in: 0.5...2.0, step: 0.1)
-                    .tint(Color(red: 0.30, green: 0.65, blue: 0.80))   // ocean blue
+                    .tint(.ocean)
                     .onChange(of: hapticIntensity) { _, _ in BreathingHaptics.shared.previewTap() }
                 Image(systemName: "iphone.gen3.radiowaves.left.and.right").font(.body)
             }
