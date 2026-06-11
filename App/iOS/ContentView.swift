@@ -17,6 +17,7 @@ import SleepBankCore
 struct ContentView: View {
     @State private var health = HealthKitService.shared
     @AppStorage("appearanceMode") private var appearance: AppearanceMode = .system
+    @AppStorage("didOnboard") private var didOnboard = false
 
     enum Tab: Hashable { case home, today, nap, history, settings }
     @State private var tab: Tab = .home
@@ -60,6 +61,9 @@ struct ContentView: View {
             .tabItem { Image(systemName: "gearshape.fill") }.tag(Tab.settings)
         }
         .preferredColorScheme(appearance.colorScheme)
+        .fullScreenCover(isPresented: Binding(get: { !didOnboard }, set: { if !$0 { didOnboard = true } })) {
+            WelcomeView { didOnboard = true }
+        }
         .task { await bootstrap() }
         .onOpenURL { open(host: $0.host) }
         .onReceive(NotificationCenter.default.publisher(for: .openPlan)) { note in

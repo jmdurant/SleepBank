@@ -13,6 +13,7 @@ struct SettingsView: View {
     @State private var relax = GuidedRelaxationService.shared
     @State private var calendar = CalendarService.shared
     @State private var napWindows = NapWindowsStore.shared
+    @State private var profile = SleepProfile.shared
     @AppStorage("appearanceMode") private var appearance: AppearanceMode = .system
     @AppStorage("sleepBasis") private var sleepBasis: SleepBasis = .auto
     @State private var morningPlan = PlanNotificationService.morningPlanEnabled
@@ -75,6 +76,18 @@ struct SettingsView: View {
             }
 
             Section {
+                DatePicker("Typical bedtime", selection: bedtimeBinding, displayedComponents: .hourAndMinute)
+                DatePicker("Typical wake time", selection: wakeBinding, displayedComponents: .hourAndMinute)
+                Stepper(value: needBinding, in: 4...12, step: 0.5) {
+                    Text(String(format: "Sleep need: %.1f h", profile.needHours))
+                }
+            } header: {
+                Text("Your typical schedule")
+            } footer: {
+                Text(scheduleFooter)
+            }
+
+            Section {
                 Picker("Base today's curve on", selection: $sleepBasis) {
                     ForEach(SleepBasis.allCases) { Text($0.title).tag($0) }
                 }
@@ -107,6 +120,39 @@ struct SettingsView: View {
             }
         }
         .navigationTitle("Settings")
+    }
+
+    // MARK: - Typical schedule bindings
+
+    private var bedtimeBinding: Binding<Date> {
+        Binding(get: { Self.dateFromMinutes(profile.bedtimeMinutes) },
+                set: { profile.bedtimeMinutes = Self.minutesFromDate($0); commitProfile() })
+    }
+    private var wakeBinding: Binding<Date> {
+        Binding(get: { Self.dateFromMinutes(profile.wakeMinutes) },
+                set: { profile.wakeMinutes = Self.minutesFromDate($0); commitProfile() })
+    }
+    private var needBinding: Binding<Double> {
+        Binding(get: { profile.needHours },
+                set: { profile.needHours = $0; commitProfile() })
+    }
+
+    /// Mark the profile as set and refresh the curve everywhere.
+    private func commitProfile() {
+        profile.isSet = true
+        AlertnessProvider.publishSnapshot()
+    }
+
+    private var scheduleFooter: String {
+        guard profile.isSet else {
+            return "Sets when your alertness curve peaks and dips (your chronotype) and your sleep-need baseline. Using average defaults until you set this."
+        }
+        let shift = profile.circadianShiftHours
+        let phase: String
+        if shift > 0.25 { phase = String(format: "Your curve runs ~%.1f h later than average (an evening type).", shift) }
+        else if shift < -0.25 { phase = String(format: "Your curve runs ~%.1f h earlier than average (a morning type).", -shift) }
+        else { phase = "Your curve is about average." }
+        return "Sets when your alertness curve peaks and dips (your chronotype) and your sleep-need baseline. \(phase)"
     }
 
     private func timeBinding(_ window: NapWindowsStore.Window, isStart: Bool) -> Binding<Date> {

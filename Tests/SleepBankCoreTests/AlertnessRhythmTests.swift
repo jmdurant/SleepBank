@@ -19,6 +19,36 @@ final class AlertnessRhythmTests: XCTestCase {
         AlertnessRhythm(wakeTime: at(7), sleepDebt: debt, naps: naps, calendar: cal)
     }
 
+    // MARK: - Chronotype phase shift
+
+    func testPhaseShiftZeroForAverageSleeper() {
+        // 11pm–7am → midpoint 3:00am = the reference → no shift.
+        XCTAssertEqual(AlertnessRhythm.phaseShift(bedtimeMinutes: 23 * 60, wakeMinutes: 7 * 60),
+                       0, accuracy: 0.01)
+    }
+
+    func testPhaseShiftLaterForOwl() {
+        // 2am–10am → midpoint 6:00am → ~3 h later (clamped at 4).
+        let shift = AlertnessRhythm.phaseShift(bedtimeMinutes: 2 * 60, wakeMinutes: 10 * 60)
+        XCTAssertEqual(shift, 3, accuracy: 0.01)
+    }
+
+    func testPhaseShiftEarlierForLark() {
+        // 9:30pm–5:30am → midpoint 1:30am → ~1.5 h earlier.
+        let shift = AlertnessRhythm.phaseShift(bedtimeMinutes: 21 * 60 + 30, wakeMinutes: 5 * 60 + 30)
+        XCTAssertEqual(shift, -1.5, accuracy: 0.01)
+    }
+
+    func testShiftSlidesTheCurveLater() {
+        // An owl's curve at a given clock hour equals the un-shifted curve `shift`
+        // hours earlier — i.e. the whole shape moves later by `shift`.
+        let base = AlertnessRhythm(wakeTime: at(7), sleepDebt: 0.2, calendar: cal)
+        let owl = AlertnessRhythm(wakeTime: at(7), sleepDebt: 0.2, circadianShiftHours: 2, calendar: cal)
+        // The afternoon dip sits ~2 h later for the owl, so at 3:30pm the owl is still
+        // higher than the un-shifted curve (whose dip is right then).
+        XCTAssertGreaterThan(owl.level(at: at(15.5)), base.level(at: at(15.5)))
+    }
+
     func testLevelsStayInUnitRange() {
         let r = rhythm(debt: 0.3)
         for h in stride(from: 7.0, through: 23.0, by: 0.5) {

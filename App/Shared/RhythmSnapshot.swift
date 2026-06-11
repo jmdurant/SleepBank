@@ -24,6 +24,7 @@ struct RhythmSnapshot: Codable {
     var isShortNight: Bool
     var morningLightDose: Double
     var morningActivityDose: Double
+    var circadianShiftHours: Double = 0
     var naps: [NapInput]
     var morningLightStreak: Int
     var updated: Date
@@ -34,6 +35,7 @@ struct RhythmSnapshot: Codable {
         self.isShortNight = rhythm.isShortNight
         self.morningLightDose = rhythm.morningLightDose
         self.morningActivityDose = rhythm.morningActivityDose
+        self.circadianShiftHours = rhythm.circadianShiftHours
         self.naps = rhythm.naps.map { NapInput(end: $0.end, typeRaw: $0.type.rawValue, fullness: $0.fullness) }
         self.morningLightStreak = morningLightStreak
         self.updated = updated
@@ -46,7 +48,8 @@ struct RhythmSnapshot: Codable {
         }
         return AlertnessRhythm(wakeTime: wakeTime, sleepDebt: sleepDebt, naps: naps,
                                isShortNight: isShortNight, morningLightDose: morningLightDose,
-                               morningActivityDose: morningActivityDose)
+                               morningActivityDose: morningActivityDose,
+                               circadianShiftHours: circadianShiftHours)
     }
 
     // MARK: - App Group persistence

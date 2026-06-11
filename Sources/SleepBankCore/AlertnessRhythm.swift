@@ -81,17 +81,23 @@ public struct AlertnessRhythm: Sendable {
     /// the clock (Youngstedt 2019 exercise PRC) plus an acute arousal effect, so it
     /// stacks with light. Combined morning lift is capped so it stays modest.
     public let morningActivityDose: Double
+    /// Chronotype phase shift in hours: slides the whole circadian curve later (owl,
+    /// +) or earlier (lark, −) without changing its shape. Derived from the user's
+    /// typical sleep midpoint vs an average ~7am-riser reference. Clamped to ±4 h.
+    public let circadianShiftHours: Double
     private let calendar: Calendar
 
     public init(wakeTime: Date, sleepDebt: Double, naps: [Nap] = [],
                 isShortNight: Bool = false, morningLightDose: Double = 0,
-                morningActivityDose: Double = 0, calendar: Calendar = .current) {
+                morningActivityDose: Double = 0, circadianShiftHours: Double = 0,
+                calendar: Calendar = .current) {
         self.wakeTime = wakeTime
         self.sleepDebt = max(0.05, min(sleepDebt, 0.9))
         self.naps = naps
         self.isShortNight = isShortNight
         self.morningLightDose = max(0, min(morningLightDose, 1))
         self.morningActivityDose = max(0, min(morningActivityDose, 1))
+        self.circadianShiftHours = max(-4, min(circadianShiftHours, 4))
         self.calendar = calendar
     }
 
@@ -100,8 +106,8 @@ public struct AlertnessRhythm: Sendable {
     /// sensible defaults when Health data is missing.
     public static func fromSleep(wakeTime: Date?, sleptHours: Double, typicalHours: Double,
                                  naps: [Nap] = [], morningLightDose: Double = 0,
-                                 morningActivityDose: Double = 0, now: Date,
-                                 calendar: Calendar = .current) -> AlertnessRhythm {
+                                 morningActivityDose: Double = 0, circadianShiftHours: Double = 0,
+                                 now: Date, calendar: Calendar = .current) -> AlertnessRhythm {
         let need = max(typicalHours > 0 ? typicalHours : 7.5, 6)
         let wake = wakeTime ?? calendar.date(bySettingHour: 7, minute: 0, second: 0, of: now) ?? now
         // No data → assume an average night rather than a catastrophic one.
@@ -110,7 +116,21 @@ public struct AlertnessRhythm: Sendable {
         let short = sleptHours > 0 && sleptHours < need - 0.75
         return AlertnessRhythm(wakeTime: wake, sleepDebt: debt, naps: naps,
                                isShortNight: short, morningLightDose: morningLightDose,
-                               morningActivityDose: morningActivityDose, calendar: calendar)
+                               morningActivityDose: morningActivityDose,
+                               circadianShiftHours: circadianShiftHours, calendar: calendar)
+    }
+
+    /// The chronotype phase shift (hours) from a typical bedtime/wake, vs an average
+    /// ~7am-riser whose sleep midpoint is ~03:30. Later mid-sleep → curve later (owl).
+    /// Pass minutes-from-midnight; handles the wrap past midnight. Clamped to ±4 h.
+    public static func phaseShift(bedtimeMinutes: Int, wakeMinutes: Int,
+                                  referenceMidpointMinutes: Int = 180) -> Double {
+        let duration = ((wakeMinutes - bedtimeMinutes) % 1440 + 1440) % 1440      // minutes asleep
+        let midpoint = (bedtimeMinutes + duration / 2) % 1440
+        var delta = (midpoint - referenceMidpointMinutes) % 1440
+        if delta > 720 { delta -= 1440 }
+        if delta < -720 { delta += 1440 }
+        return max(-4, min(Double(delta) / 60.0, 4))
     }
 
     /// Convert morning daylight minutes into a 0…1 dose with diminishing returns.
@@ -131,8 +151,12 @@ public struct AlertnessRhythm: Sendable {
 
     /// Where you sit in the circadian day, in plain words. Shared by the curve card,
     /// the home ring readout, and the widget so they all label the moment the same.
-    public static func phaseLabel(at date: Date, calendar: Calendar = .current) -> String {
-        switch calendar.component(.hour, from: date) {
+    public static func phaseLabel(at date: Date, shiftHours: Double = 0,
+                                  calendar: Calendar = .current) -> String {
+        let c = calendar.dateComponents([.hour, .minute], from: date)
+        // De-shift the clock so the label matches the (possibly slid) curve.
+        let h = Double(c.hour ?? 0) + Double(c.minute ?? 0) / 60 - shiftHours
+        switch h {
         case ..<10:    return "Morning rise"
         case 10..<13:  return "Late-morning peak"
         case 13..<16:  return "Post-lunch dip"
@@ -158,7 +182,8 @@ public struct AlertnessRhythm: Sendable {
 
     /// Circadian alertness (Process C) at a clock hour — bimodal, with the
     /// post-lunch dip and the evening wake-maintenance zone.
-    private func circadian(hour t: Double) -> Double {
+    private func circadian(hour clockHour: Double) -> Double {
+        let t = clockHour - circadianShiftHours             // chronotype: slide the curve
         let w = Self.omega
         let main = 0.55 * sin(w * (t - 11))                 // day-up / night-down, peak ~17, trough ~5
         let dip  = 0.42 * exp(-pow((t - 15.5) / 2.0, 2))    // post-lunch dip

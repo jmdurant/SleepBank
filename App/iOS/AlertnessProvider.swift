@@ -8,6 +8,7 @@
 //
 
 import Foundation
+import WidgetKit
 import SleepBankCore
 
 enum AlertnessProvider {
@@ -27,11 +28,16 @@ enum AlertnessProvider {
     /// light, and morning movement.
     static func rhythm(health: HealthKitService = .shared,
                        store: NapDecisionStore = .shared, now: Date) -> AlertnessRhythm {
+        let profile = SleepProfile.shared
         let summary = health.lastNightSleep
+        // Need: the user's stated typical need (profile) wins, else the rolling average.
         let typical = summary?.averageLast7Days ?? health.sleepAverage7Day
-        let need = max(typical > 0 ? typical : 7.5, 6)
+        let need = profile.isSet ? max(profile.needHours, 6) : max(typical > 0 ? typical : 7.5, 6)
         let healthAsleep = summary?.totalHours ?? 0
-        let wake = summary?.wakeTime ?? Calendar.current.date(bySettingHour: 7, minute: 0, second: 0, of: now) ?? now
+        // Wake for Process S / morning lift: last night's actual wake, else the
+        // profile's typical wake, else 7am.
+        let wake = summary?.wakeTime ?? profile.typicalWake(on: now)
+            ?? Calendar.current.date(bySettingHour: 7, minute: 0, second: 0, of: now) ?? now
 
         // Fall back to a manual "how long did you sleep" entry when HealthKit has none.
         let manual = ManualSleepStore.shared.today
@@ -69,7 +75,8 @@ enum AlertnessProvider {
             naps: napsToday(store: store, now: now),
             isShortNight: asleep > 0 && asleep < need - 0.75,
             morningLightDose: AlertnessRhythm.morningLightDose(minutes: health.daylightToday.morning),
-            morningActivityDose: AlertnessRhythm.morningActivityDose(minutes: health.morningActivityMinutes)
+            morningActivityDose: AlertnessRhythm.morningActivityDose(minutes: health.morningActivityMinutes),
+            circadianShiftHours: profile.circadianShiftHours
         )
     }
 
@@ -97,7 +104,22 @@ enum AlertnessProvider {
     }
 
     static func pct(_ level: Double) -> Int { Int((level * 100).rounded()) }
-    static func phaseLabel(_ now: Date) -> String { AlertnessRhythm.phaseLabel(at: now) }
+    static func phaseLabel(_ now: Date) -> String {
+        AlertnessRhythm.phaseLabel(at: now, shiftHours: SleepProfile.shared.circadianShiftHours)
+    }
+
+    /// Rebuild the rhythm snapshot and push it everywhere downstream (widget + watch)
+    /// — call after anything that changes the curve's inputs (manual sleep, profile).
+    static func publishSnapshot(health: HealthKitService = .shared) {
+        let snapshot = RhythmSnapshot(rhythm: rhythm(now: Date()),
+                                      morningLightStreak: health.morningLightStreak, updated: Date())
+        snapshot.save()
+        PhoneConnectivity.shared.sendDailySummary(
+            samples: health.lastNightSamples,
+            morningLightStreak: health.morningLightStreak,
+            rhythmSnapshot: try? JSONEncoder().encode(snapshot))
+        WidgetCenter.shared.reloadAllTimelines()
+    }
 
     /// Whether we have a real sleep basis for today — HealthKit sleep *or* a manual
     /// estimate. Without one we shouldn't show a confident Alertness Score (the curve
