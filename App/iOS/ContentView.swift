@@ -30,27 +30,34 @@ struct ContentView: View {
             NavigationStack(path: $homePath) {
                 HomeView().navigationDestination(for: HomeRoute.self, destination: destination)
             }
-            .tabItem { Label("Home", systemImage: "bolt.fill") }.tag(Tab.home)
+            .tabItem { Image(systemName: "bolt.fill") }.tag(Tab.home)
 
             NavigationStack(path: $todayPath) {
-                DayPlanView().navigationDestination(for: HomeRoute.self, destination: destination)
+                DayPlanView()
+                    .navigationDestination(for: HomeRoute.self, destination: destination)
+                    .toolbar(.hidden, for: .navigationBar)
             }
-            .tabItem { Label("Today", systemImage: "list.bullet.clipboard.fill") }.tag(Tab.today)
+            .tabItem { Image(systemName: "list.bullet.clipboard.fill") }.tag(Tab.today)
 
             NavigationStack(path: $napPath) {
-                NapTabView().navigationDestination(for: HomeRoute.self, destination: destination)
+                NapTabView()
+                    .navigationDestination(for: HomeRoute.self, destination: destination)
+                    .toolbar(.hidden, for: .navigationBar)
             }
-            .tabItem { Label("Nap", systemImage: "moon.zzz.fill") }.tag(Tab.nap)
+            .tabItem { Image(systemName: "moon.zzz.fill") }.tag(Tab.nap)
 
             NavigationStack {
                 HistoryView()
+                    .toolbar(.hidden, for: .navigationBar)
             }
-            .tabItem { Label("History", systemImage: "chart.bar.fill") }.tag(Tab.history)
+            .tabItem { Image(systemName: "chart.bar.fill") }.tag(Tab.history)
 
             NavigationStack(path: $settingsPath) {
-                SettingsView().navigationDestination(for: HomeRoute.self, destination: destination)
+                SettingsView()
+                    .navigationDestination(for: HomeRoute.self, destination: destination)
+                    .toolbar(.hidden, for: .navigationBar)
             }
-            .tabItem { Label("Settings", systemImage: "gearshape.fill") }.tag(Tab.settings)
+            .tabItem { Image(systemName: "gearshape.fill") }.tag(Tab.settings)
         }
         .preferredColorScheme(appearance.colorScheme)
         .task { await bootstrap() }
