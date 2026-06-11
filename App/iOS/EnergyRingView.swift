@@ -14,6 +14,14 @@ import SleepBankCore
 
 struct EnergyRingView: View {
     var health = HealthKitService.shared
+    @State private var showSleepEntry = false
+    @State private var promptedThisLaunch = false
+
+    /// No real sleep basis yet, and HealthKit has finished loading — so it's a true
+    /// "no data" state, not just "still loading."
+    private var needsSleepEntry: Bool {
+        AlertnessProvider.sleepDataLoaded(health: health) && !AlertnessProvider.hasSleepData(health: health)
+    }
 
     var body: some View {
         // Re-evaluate each minute so the battery tracks the day (dip, naps, drain).
@@ -33,7 +41,11 @@ struct EnergyRingView: View {
                     Image(systemName: "bolt.fill").font(.subheadline).foregroundStyle(.yellow)
                     Text("Alert Score").font(.headline)
                 }
-                if scrubLevel != nil {
+                if needsSleepEntry {
+                    // No sleep basis → don't show a (misleadingly high) number; ask.
+                    Button { showSleepEntry = true } label: { noDataRing }
+                        .buttonStyle(.plain)
+                } else if scrubLevel != nil {
                     Button { PlanPreview.shared.scrubTime = nil } label: {
                         ring(level: shown, now: now, markTime: markTime, scrubbing: true)
                     }
@@ -52,6 +64,28 @@ struct EnergyRingView: View {
             .padding(.horizontal)
             .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 24))
         }
+        // Popup on load when there's no sleep data — once per launch.
+        .onChange(of: needsSleepEntry) { _, needs in
+            if needs && !promptedThisLaunch { promptedThisLaunch = true; showSleepEntry = true }
+        }
+        .onAppear {
+            if needsSleepEntry && !promptedThisLaunch { promptedThisLaunch = true; showSleepEntry = true }
+        }
+        .sheet(isPresented: $showSleepEntry) { SleepEntrySheet() }
+    }
+
+    // MARK: - No-data state
+
+    private var noDataRing: some View {
+        ZStack {
+            Circle().stroke(.quaternary, lineWidth: 18)
+            VStack(spacing: 4) {
+                Image(systemName: "bed.double.fill").font(.title2).foregroundStyle(.indigo)
+                Text("—").font(.system(size: 40, weight: .bold, design: .rounded))
+                Text("Estimate last night").font(.caption.weight(.semibold)).foregroundStyle(.indigo)
+            }
+        }
+        .frame(width: 180, height: 180)
     }
 
     // MARK: - Daylight
@@ -128,4 +162,42 @@ struct EnergyRingView: View {
         }
     }
 
+}
+
+/// Asked on load when Apple Health has no sleep for last night — your estimate
+/// seeds the Alert Score so it reflects your real night, not a "rested" default.
+struct SleepEntrySheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var hours: Double = 7.0
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 22) {
+                Image(systemName: "bed.double.fill").font(.largeTitle).foregroundStyle(.indigo)
+                Text("How long did you sleep last night?")
+                    .font(.title3.bold()).multilineTextAlignment(.center)
+                Text("We didn't find sleep data from Apple Health. Give your best estimate so your Alert Score reflects your real night — until then we can't show it.")
+                    .font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
+
+                Text(String(format: "%.1f hours", hours))
+                    .font(.system(size: 40, weight: .bold, design: .rounded)).monospacedDigit()
+                Stepper("", value: $hours, in: 0...14, step: 0.5).labelsHidden()
+
+                Button {
+                    ManualSleepStore.shared.log(hours: hours)
+                    dismiss()
+                } label: {
+                    Text("Save").font(.headline).frame(maxWidth: .infinity).padding()
+                        .background(.indigo.gradient, in: RoundedRectangle(cornerRadius: 16))
+                        .foregroundStyle(.white)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(24)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Not now") { dismiss() } }
+            }
+        }
+        .presentationDetents([.medium])
+    }
 }
