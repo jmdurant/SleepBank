@@ -24,7 +24,7 @@ enum Intervention: String, CaseIterable, Identifiable, Codable {
     var tint: Color {
         switch self {
         case .nap:     return .mint
-        case .walk:    return .orange
+        case .walk:    return .sand
         case .workout: return .pink
         }
     }

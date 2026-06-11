@@ -238,7 +238,7 @@ private struct HistoryView: View {
     private var dateNav: some View {
         HStack(spacing: 8) {
             Button { shift(-1) } label: { Image(systemName: "chevron.left").font(.headline) }
-                .buttonStyle(.plain).foregroundStyle(.indigo)
+                .buttonStyle(.plain).foregroundStyle(.ocean)
             Spacer()
             Text(dateLabel).font(.headline)
                 .onTapGesture { showCalendar = true }
@@ -251,7 +251,7 @@ private struct HistoryView: View {
                 }
             Spacer()
             Button { shift(1) } label: { Image(systemName: "chevron.right").font(.headline) }
-                .buttonStyle(.plain).foregroundStyle(.indigo).disabled(isToday)
+                .buttonStyle(.plain).foregroundStyle(.ocean).disabled(isToday)
         }
         .padding(.horizontal, 4)
     }
@@ -325,7 +325,7 @@ private struct HistoryView: View {
 
     private func scoreRow(_ score: Int) -> some View {
         HStack(spacing: 8) {
-            Text("\(score)").font(.system(.title, design: .rounded).bold()).foregroundStyle(.indigo)
+            Text("\(score)").font(.system(.title, design: .rounded).bold()).foregroundStyle(.ocean)
             VStack(alignment: .leading, spacing: 0) {
                 Text("Sleep Score").font(.caption2).foregroundStyle(.secondary)
                 Text(SleepScore.label(score)).font(.subheadline.weight(.semibold))

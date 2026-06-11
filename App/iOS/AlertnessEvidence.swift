@@ -58,11 +58,11 @@ enum AlertnessEvidence {
     ]
 
     static let factors: [Factor] = [
-        Factor(icon: "bed.double.fill", tint: .indigo, title: "Last night's sleep",
+        Factor(icon: "bed.double.fill", tint: .ocean, title: "Last night's sleep",
                magnitude: "Sets the whole curve",
                claim: "How much you slept sets how high your curve sits today — a short night lowers it all day.",
                cites: [6]),
-        Factor(icon: "moon.zzz.fill", tint: .indigo, title: "Naps",
+        Factor(icon: "moon.zzz.fill", tint: .ocean, title: "Naps",
                magnitude: "Moderate boost · lasts ~1–3 h",
                claim: "A 10–20 min power nap restores subjective alertness within minutes; the lift lasts roughly 1–3 hours, without erasing real sleep debt.",
                cites: [1, 2]),
@@ -70,7 +70,7 @@ enum AlertnessEvidence {
                magnitude: "Mild boost · short-lived",
                claim: "A bout of activity gives a small lift in alertness and reaction time once you finish — a harder effort more than an easy walk — and gently nudges your body clock.",
                cites: [3, 7]),
-        Factor(icon: "sun.max.fill", tint: .orange, title: "Morning light",
+        Factor(icon: "sun.max.fill", tint: .sand, title: "Morning light",
                magnitude: "Mild now · strong all-day anchor",
                claim: "The immediate alertness bump is modest, but morning light reliably anchors your body clock and amplifies your morning cortisol rise — the durable payoff is steadier rhythm and better sleep tonight.",
                cites: [4, 5]),

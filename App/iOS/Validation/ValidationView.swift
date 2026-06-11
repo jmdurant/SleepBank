@@ -98,7 +98,7 @@ struct ValidationView: View {
                     .font(.caption)
                 if let trigger = r.onsetTrigger {
                     Text("via \(trigger.label)\(r.hasEEG ? " · EEG" : "")")
-                        .font(.caption2).foregroundStyle(.indigo)
+                        .font(.caption2).foregroundStyle(.ocean)
                 }
             }
         }

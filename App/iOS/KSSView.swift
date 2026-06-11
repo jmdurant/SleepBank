@@ -48,7 +48,7 @@ struct KSSPickerView: View {
         switch value {
         case ...3: return .green
         case 4...6: return .mint
-        case 7: return .orange
+        case 7: return .sand
         default: return .red
         }
     }
@@ -80,7 +80,7 @@ struct KSSHistoryView: View {
                                 Text("\(post)").font(.headline.monospacedDigit())
                                 Text(delta == 0 ? "±0" : (delta < 0 ? "\(delta)" : "+\(delta)"))
                                     .font(.caption.weight(.semibold))
-                                    .foregroundStyle(delta < 0 ? .green : (delta > 0 ? .orange : .secondary))
+                                    .foregroundStyle(delta < 0 ? .green : (delta > 0 ? .sand : .secondary))
                             } else {
                                 Text("\(s.pre)").font(.headline.monospacedDigit())
                                 Text("before only").font(.caption).foregroundStyle(.secondary)

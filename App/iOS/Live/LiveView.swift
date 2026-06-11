@@ -68,18 +68,18 @@ struct LiveView: View {
     private var eegTraceCard: some View {
         card {
             HStack {
-                Label("EEG · AF7", systemImage: "brain.head.profile").foregroundStyle(.purple)
+                Label("EEG · AF7", systemImage: "brain.head.profile").foregroundStyle(.ocean)
                 Spacer()
                 Text(muse.eeg.hasGoodSignal ? "Good contact" : "Poor contact")
                     .font(.caption2)
-                    .foregroundStyle(muse.eeg.hasGoodSignal ? .green : .orange)
+                    .foregroundStyle(muse.eeg.hasGoodSignal ? .green : .sand)
             }
             if muse.eeg.traceSamples.count > 1 {
-                WaveformView(samples: muse.eeg.traceSamples, color: .purple)
+                WaveformView(samples: muse.eeg.traceSamples, color: .ocean)
                     .frame(height: 90)
                 HStack(spacing: 10) {
-                    eegFlag("ONSET", muse.eeg.onsetDetected, .indigo)
-                    eegFlag("DEEP", muse.eeg.deepSleepApproaching, .orange)
+                    eegFlag("ONSET", muse.eeg.onsetDetected, .ocean)
+                    eegFlag("DEEP", muse.eeg.deepSleepApproaching, .sand)
                     Spacer()
                     Text(String(format: "onset idx %.2f", muse.eeg.onsetIndex))
                         .font(.caption2).foregroundStyle(.secondary)
@@ -116,12 +116,12 @@ struct LiveView: View {
 
     private var bandPowerCard: some View {
         card {
-            Label("Brainwave bands", systemImage: "waveform.path.ecg").foregroundStyle(.purple)
+            Label("Brainwave bands", systemImage: "waveform.path.ecg").foregroundStyle(.ocean)
             if muse.eeg.hasGoodSignal {
                 Chart(bands) { band in
                     BarMark(x: .value("Band", band.name),
                             y: .value("Power", band.value))
-                        .foregroundStyle(.purple.gradient)
+                        .foregroundStyle(.ocean.gradient)
                 }
                 .chartYScale(domain: 0...1)
                 .frame(height: 120)
@@ -151,7 +151,7 @@ struct LiveView: View {
 /// frame — Canvas keeps it cheap at EEG sample rates.
 struct WaveformView: View {
     let samples: [Float]
-    var color: Color = .purple
+    var color: Color = .ocean
 
     var body: some View {
         Canvas { context, size in

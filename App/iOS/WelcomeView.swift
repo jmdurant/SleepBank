@@ -38,7 +38,7 @@ struct WelcomeView: View {
         ScrollView {
             VStack(spacing: 24) {
                 VStack(spacing: 10) {
-                    Image(systemName: "bolt.fill").font(.system(size: 44)).foregroundStyle(.indigo)
+                    Image(systemName: "bolt.fill").font(.system(size: 44)).foregroundStyle(.ocean)
                     Text("Welcome to SleepBank").font(.title2.bold())
                     Text("A couple of quick questions so your Alertness Score is tuned to *your* body clock — when it peaks, dips, and winds down.")
                         .font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
@@ -69,7 +69,7 @@ struct WelcomeView: View {
 
                 Button { saveProfile(); step = 1 } label: {
                     Text("Next").font(.headline).frame(maxWidth: .infinity).padding()
-                        .background(.indigo.gradient, in: RoundedRectangle(cornerRadius: 16))
+                        .background(.ocean.gradient, in: RoundedRectangle(cornerRadius: 16))
                         .foregroundStyle(.white)
                 }
                 .buttonStyle(.plain)
@@ -121,7 +121,7 @@ struct WelcomeView: View {
 
     private func row(_ icon: String, _ title: String, @ViewBuilder control: () -> some View) -> some View {
         HStack(spacing: 10) {
-            Image(systemName: icon).foregroundStyle(.indigo).frame(width: 26)
+            Image(systemName: icon).foregroundStyle(.ocean).frame(width: 26)
             Text(title).font(.subheadline)
             Spacer()
             control()

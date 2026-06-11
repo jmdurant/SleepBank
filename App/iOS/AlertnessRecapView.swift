@@ -41,7 +41,7 @@ struct AlertnessRecapView: View {
                 headline(recovered: recovered, gapArea: gapArea, evening: evening)
                 gapChart(pts)
                 legend(hasGain: fillArea > 0.001)
-                line("bed.double.fill", .indigo, recapLine(score: sleepScore(), gapArea: gapArea))
+                line("bed.double.fill", .ocean, recapLine(score: sleepScore(), gapArea: gapArea))
                 leverChip(napPeak: napLevel.map(pct), evening: evening)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -85,7 +85,7 @@ struct AlertnessRecapView: View {
             }
             ForEach(pts) { p in
                 LineMark(x: .value("t", p.t), y: .value("v", p.actual), series: .value("s", "you"))
-                    .foregroundStyle(.indigo).interpolationMethod(.catmullRom)
+                    .foregroundStyle(.ocean).interpolationMethod(.catmullRom)
             }
             ForEach(pts) { p in
                 LineMark(x: .value("t", p.t), y: .value("v", p.ideal), series: .value("s", "ideal"))
@@ -125,10 +125,10 @@ struct AlertnessRecapView: View {
     private func leverChip(napPeak: Int?, evening: Bool) -> some View {
         let (text, icon, tint): (String, String, Color) = {
             if !evening, let napPeak {
-                return ("Biggest lever now: a power nap → ~\(napPeak)%", "moon.zzz.fill", .indigo)
+                return ("Biggest lever now: a power nap → ~\(napPeak)%", "moon.zzz.fill", .ocean)
             }
             return ("Biggest lever now: protect tonight's sleep — a steady, earlier night lifts tomorrow's whole curve.",
-                    "moon.stars.fill", .purple)
+                    "moon.stars.fill", .ocean)
         }()
         return Label(text, systemImage: icon)
             .font(.caption.weight(.medium))

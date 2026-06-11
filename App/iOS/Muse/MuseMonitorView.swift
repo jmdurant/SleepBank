@@ -33,7 +33,7 @@ struct MuseMonitorView: View {
                 }
                 Label(muse.eeg.hasGoodSignal ? "Good contact" : "Poor contact",
                       systemImage: muse.eeg.hasGoodSignal ? "checkmark.seal.fill" : "exclamationmark.triangle.fill")
-                    .foregroundStyle(muse.eeg.hasGoodSignal ? .green : .orange)
+                    .foregroundStyle(muse.eeg.hasGoodSignal ? .green : .sand)
             }
 
             Section {
@@ -59,9 +59,9 @@ struct MuseMonitorView: View {
 
             Section("Sleep signals") {
                 metric("Onset index", muse.eeg.onsetIndex,
-                       flag: muse.eeg.onsetDetected ? "ONSET" : nil, flagColor: .indigo)
+                       flag: muse.eeg.onsetDetected ? "ONSET" : nil, flagColor: .ocean)
                 metric("Delta (deep)", muse.eeg.deltaDominance,
-                       flag: muse.eeg.deepSleepApproaching ? "WAKE" : nil, flagColor: .orange)
+                       flag: muse.eeg.deepSleepApproaching ? "WAKE" : nil, flagColor: .sand)
                 metric("Spindle (N2)", muse.eeg.spindlePower)
             }
 
@@ -79,14 +79,14 @@ struct MuseMonitorView: View {
 
     private var statusDot: some View {
         Circle()
-            .fill(muse.isStreaming ? .green : (muse.isConnected ? .yellow : .gray))
+            .fill(muse.isStreaming ? .green : (muse.isConnected ? .sand : .gray))
             .frame(width: 10, height: 10)
     }
 
     private func qualityRow(_ name: String, _ q: Float) -> some View {
         HStack {
             Text(name).frame(width: 50, alignment: .leading)
-            ProgressView(value: Double(q)).tint(q > 0.5 ? .green : .orange)
+            ProgressView(value: Double(q)).tint(q > 0.5 ? .green : .sand)
             Text("\(Int(q * 100))%").monospacedDigit().frame(width: 44, alignment: .trailing)
         }
     }
@@ -106,7 +106,7 @@ struct MuseMonitorView: View {
     private func bandRow(_ name: String, _ value: Float) -> some View {
         HStack {
             Text(name).frame(width: 60, alignment: .leading)
-            ProgressView(value: Double(min(1, value))).tint(.purple)
+            ProgressView(value: Double(min(1, value))).tint(.ocean)
             Text(String(format: "%.0f%%", value * 100)).monospacedDigit().frame(width: 44, alignment: .trailing)
         }
     }

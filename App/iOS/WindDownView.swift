@@ -97,7 +97,7 @@ struct WindDownView: View {
 
     private var header: some View {
         VStack(spacing: 6) {
-            Image(systemName: "moon.stars.fill").font(.largeTitle).foregroundStyle(.purple)
+            Image(systemName: "moon.stars.fill").font(.largeTitle).foregroundStyle(.ocean)
             if let t = windDownTime {
                 Text("Wind down around \(t.formatted(.dateTime.hour().minute()))")
                     .font(.headline)
@@ -135,7 +135,7 @@ struct WindDownView: View {
                 Label(active ? "Stop wind-down" : "Start wind-down",
                       systemImage: active ? "stop.fill" : "play.fill")
                     .font(.headline).frame(maxWidth: .infinity).padding()
-                    .background(active ? AnyShapeStyle(.red.gradient) : AnyShapeStyle(.purple.gradient),
+                    .background(active ? AnyShapeStyle(.red.gradient) : AnyShapeStyle(.ocean.gradient),
                                 in: RoundedRectangle(cornerRadius: 16))
                     .foregroundStyle(.white)
             }
@@ -152,9 +152,9 @@ struct WindDownView: View {
             Label(title, systemImage: isOn.wrappedValue ? on : off)
                 .font(.caption.weight(.medium))
                 .frame(maxWidth: .infinity).padding(.vertical, 8)
-                .background((isOn.wrappedValue ? Color.purple.opacity(0.18) : Color.secondary.opacity(0.12)),
+                .background((isOn.wrappedValue ? Color.ocean.opacity(0.18) : Color.secondary.opacity(0.12)),
                             in: Capsule())
-                .foregroundStyle(isOn.wrappedValue ? .purple : .secondary)
+                .foregroundStyle(isOn.wrappedValue ? .ocean : .secondary)
         }
         .buttonStyle(.plain)
     }
@@ -165,7 +165,7 @@ struct WindDownView: View {
         VStack(spacing: 10) {
             Button { showBreathe = true } label: {
                 HStack(spacing: 12) {
-                    Image(systemName: "wind").font(.title3).foregroundStyle(.purple)
+                    Image(systemName: "wind").font(.title3).foregroundStyle(.ocean)
                     VStack(alignment: .leading, spacing: 1) {
                         Text("Breathe with the circle").font(.subheadline.weight(.semibold))
                         Text("A visual, haptic-paced 4-7-8 — follow along, no counting.")
@@ -184,8 +184,8 @@ struct WindDownView: View {
                 Label("Track before & after", systemImage: "chart.line.downtrend.xyaxis")
                     .font(.caption.weight(.medium))
                     .frame(maxWidth: .infinity).padding(.vertical, 8)
-                    .background(Color.purple.opacity(0.12), in: Capsule())
-                    .foregroundStyle(.purple)
+                    .background(Color.ocean.opacity(0.12), in: Capsule())
+                    .foregroundStyle(.ocean)
             }
             .buttonStyle(.plain)
         }
@@ -240,7 +240,7 @@ struct WindDownView: View {
 
     private func point(_ icon: String, _ title: String, _ body: String) -> some View {
         HStack(alignment: .top, spacing: 10) {
-            Image(systemName: icon).foregroundStyle(.purple).frame(width: 24)
+            Image(systemName: icon).foregroundStyle(.ocean).frame(width: 24)
             VStack(alignment: .leading, spacing: 1) {
                 Text(title).font(.subheadline.weight(.semibold))
                 Text(body).font(.caption).foregroundStyle(.secondary)
@@ -256,11 +256,11 @@ struct WindDownView: View {
     private var shieldCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Image(systemName: "hand.raised.fill").foregroundStyle(.purple)
+                Image(systemName: "hand.raised.fill").foregroundStyle(.ocean)
                 Text("Block distracting apps").font(.subheadline.weight(.semibold))
                 Spacer()
                 if shield.isShielding {
-                    Text("Blocking").font(.caption.weight(.medium)).foregroundStyle(.purple)
+                    Text("Blocking").font(.caption.weight(.medium)).foregroundStyle(.ocean)
                 }
             }
             Picker("Mode", selection: Binding(get: { shield.mode }, set: { shield.mode = $0 })) {
@@ -285,7 +285,7 @@ struct WindDownView: View {
             }
             if !shield.isAuthorized {
                 Text("Needs Screen Time permission (auto-provisions on a development build) — see docs/WIND_DOWN_MODE.md.")
-                    .font(.caption2).foregroundStyle(.orange)
+                    .font(.caption2).foregroundStyle(.sand)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -309,7 +309,7 @@ struct WindDownView: View {
     private var lightingCard: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Image(systemName: "lightbulb.led.fill").foregroundStyle(.orange)
+                Image(systemName: "lightbulb.led.fill").foregroundStyle(.sand)
                 Text("Warm your lights at wind-down").font(.subheadline.weight(.semibold))
                 Spacer()
                 if lighting.lightCount > 0 {
@@ -324,7 +324,7 @@ struct WindDownView: View {
             }
             Button { lighting.warm() } label: {
                 Label("Warm now", systemImage: "sun.haze.fill").font(.caption2)
-            }.buttonStyle(.bordered).tint(.orange)
+            }.buttonStyle(.bordered).tint(.sand)
             Text("For an all-day daylight curve, use Apple Adaptive Lighting (or your Hue setup) — SleepBank just handles the wind-down moment.")
                 .font(.caption2).foregroundStyle(.secondary)
         }

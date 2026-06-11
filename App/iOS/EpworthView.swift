@@ -141,7 +141,7 @@ struct EpworthView: View {
         switch score {
         case ..<6:    return .green
         case 6...10:  return .mint
-        case 11...15: return .orange
+        case 11...15: return .sand
         default:      return .red
         }
     }

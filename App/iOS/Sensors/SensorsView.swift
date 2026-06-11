@@ -79,7 +79,7 @@ struct SensorsView: View {
             }
             Spacer()
             Circle()
-                .fill(streaming ? .green : (connected ? .yellow : .gray))
+                .fill(streaming ? .green : (connected ? .sand : .gray))
                 .frame(width: 10, height: 10)
         }
     }

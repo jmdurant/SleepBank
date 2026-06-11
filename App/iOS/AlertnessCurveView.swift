@@ -168,7 +168,7 @@ struct AlertnessCurveView: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
                 Button { changeDay(-1) } label: { Image(systemName: "chevron.left").font(.subheadline.weight(.bold)) }
-                    .buttonStyle(.plain).foregroundStyle(.indigo).disabled(dayOffset == 0)
+                    .buttonStyle(.plain).foregroundStyle(.ocean).disabled(dayOffset == 0)
                 Text(dayTitle(now: now, isToday: isToday)).font(.headline)
                     .onTapGesture { showCalendar = true }
                     .popover(isPresented: $showCalendar) {
@@ -178,7 +178,7 @@ struct AlertnessCurveView: View {
                             .presentationCompactAdaptation(.popover)
                     }
                 Button { changeDay(1) } label: { Image(systemName: "chevron.right").font(.subheadline.weight(.bold)) }
-                    .buttonStyle(.plain).foregroundStyle(.indigo).disabled(dayOffset >= 14)
+                    .buttonStyle(.plain).foregroundStyle(.ocean).disabled(dayOffset >= 14)
                 Spacer()
                 if let m = focusedMarker(markers) {
                     HStack(spacing: 4) {
@@ -186,14 +186,14 @@ struct AlertnessCurveView: View {
                         Text(m.start, format: .dateTime.hour().minute())
                             .font(.subheadline.weight(.semibold)).monospacedDigit().contentTransition(.numericText())
                     }
-                    .foregroundStyle(m.late ? .orange : m.kind.tint)
+                    .foregroundStyle(m.late ? .sand : m.kind.tint)
                     scheduleButton(m)
                 } else if items.isEmpty, PlanPreview.shared.scrubTime != nil {
                     // Scrubbing the bare curve, dot moved — offer a reset to now.
                     Button { PlanPreview.shared.scrubTime = nil } label: {
                         Label("Now", systemImage: "arrow.uturn.backward").font(.caption.weight(.semibold))
                     }
-                    .buttonStyle(.plain).foregroundStyle(.indigo)
+                    .buttonStyle(.plain).foregroundStyle(.ocean)
                 }
             }
             Text(isToday ? whyLine(rhythm) : "Planning ahead — assuming a typical night.")
@@ -220,7 +220,7 @@ struct AlertnessCurveView: View {
             }
         } label: {
             Label("Templates", systemImage: "rectangle.stack")
-                .font(.caption.weight(.semibold)).foregroundStyle(.indigo)
+                .font(.caption.weight(.semibold)).foregroundStyle(.ocean)
                 .labelStyle(.titleAndIcon)
         }
         .menuStyle(.button).buttonStyle(.plain).fixedSize()
@@ -264,7 +264,7 @@ struct AlertnessCurveView: View {
 
     private func scheduleButton(_ m: Marker) -> some View {
         let done = scheduledKey == key(m)
-        let tint: Color = done ? .green : (m.late ? .orange : m.kind.tint)
+        let tint: Color = done ? .green : (m.late ? .sand : m.kind.tint)
         return Button {
             Task {
                 let ok: Bool
@@ -359,9 +359,9 @@ struct AlertnessCurveView: View {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(alignment: .top, spacing: 6) {
                     Image(systemName: m.late ? "exclamationmark.triangle.fill" : m.kind.icon)
-                        .font(.caption2).foregroundStyle(m.late ? .orange : m.kind.tint)
+                        .font(.caption2).foregroundStyle(m.late ? .sand : m.kind.tint)
                     Text(readoutText(m, rhythm: rhythm, projection: projection))
-                        .font(.caption2).foregroundStyle(m.late ? .orange : .secondary)
+                        .font(.caption2).foregroundStyle(m.late ? .sand : .secondary)
                 }
                 HStack(spacing: 12) {
                     if f.kind != .nap {
@@ -431,13 +431,13 @@ struct AlertnessCurveView: View {
         Chart {
             ForEach(baseline, id: \.date) { r in
                 AreaMark(x: .value("Time", r.date), y: .value("Alertness", r.level), series: .value("s", "base"))
-                    .foregroundStyle(.linearGradient(colors: [.indigo.opacity(0.16), .indigo.opacity(0.01)],
+                    .foregroundStyle(.linearGradient(colors: [.ocean.opacity(0.16), .ocean.opacity(0.01)],
                                                      startPoint: .top, endPoint: .bottom))
             }
             ForEach(bands) { b in
                 RectangleMark(xStart: .value("From", b.start), xEnd: .value("To", b.end),
                               yStart: .value("lo", yRange.lowerBound), yEnd: .value("hi", yRange.upperBound))
-                    .foregroundStyle((b.late ? Color.orange : .mint).opacity(0.10))
+                    .foregroundStyle((b.late ? Color.sand : .mint).opacity(0.10))
             }
             ForEach(gain, id: \.date) { g in
                 AreaMark(x: .value("Time", g.date), yStart: .value("Floor", g.bare), yEnd: .value("You", g.actual),
@@ -456,12 +456,12 @@ struct AlertnessCurveView: View {
             }
             ForEach(baseline, id: \.date) { r in
                 LineMark(x: .value("Time", r.date), y: .value("Alertness", r.level), series: .value("S", "you"))
-                    .foregroundStyle(.indigo).interpolationMethod(.catmullRom)
+                    .foregroundStyle(.ocean).interpolationMethod(.catmullRom)
             }
             let planLate = markers.contains { $0.late }
             ForEach(projection, id: \.date) { r in
                 LineMark(x: .value("Time", r.date), y: .value("Alertness", r.level), series: .value("S", "plan"))
-                    .foregroundStyle(planLate ? .orange : .mint)
+                    .foregroundStyle(planLate ? .sand : .mint)
                     .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 4])).interpolationMethod(.catmullRom)
             }
             if showNow {
@@ -469,19 +469,19 @@ struct AlertnessCurveView: View {
                     .foregroundStyle(.secondary.opacity(0.4)).lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
                 if scrub == nil {   // when scrubbing, the scrub dot *is* the now dot (moved)
                     PointMark(x: .value("Now", now), y: .value("Alertness", nowLevel)).foregroundStyle(.white).symbolSize(120)
-                    PointMark(x: .value("Now", now), y: .value("Alertness", nowLevel)).foregroundStyle(.indigo).symbolSize(60)
+                    PointMark(x: .value("Now", now), y: .value("Alertness", nowLevel)).foregroundStyle(.ocean).symbolSize(60)
                 }
             }
             if let s = scrub {
                 RuleMark(x: .value("Scrub", s.date))
-                    .foregroundStyle(.indigo.opacity(0.5)).lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
+                    .foregroundStyle(.ocean.opacity(0.5)).lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
                 PointMark(x: .value("Scrub", s.date), y: .value("Alertness", s.level))
                     .foregroundStyle(.white).symbolSize(190)
                 PointMark(x: .value("Scrub", s.date), y: .value("Alertness", s.level))
-                    .foregroundStyle(.indigo).symbolSize(115)
+                    .foregroundStyle(.ocean).symbolSize(115)
                     .annotation(position: .top, spacing: 2) {
                         Text("\(Int((s.level * 100).rounded()))%")
-                            .font(.caption2.weight(.bold)).foregroundStyle(.indigo)
+                            .font(.caption2.weight(.bold)).foregroundStyle(.ocean)
                     }
             }
             ForEach(markers) { m in
@@ -489,10 +489,10 @@ struct AlertnessCurveView: View {
                 PointMark(x: .value("At", m.start), y: .value("Alertness", m.level))
                     .foregroundStyle(.white).symbolSize(isFocused ? 200 : 150)
                 PointMark(x: .value("At", m.start), y: .value("Alertness", m.level))
-                    .foregroundStyle(m.late ? .orange : m.kind.tint).symbolSize(isFocused ? 120 : 80)
+                    .foregroundStyle(m.late ? .sand : m.kind.tint).symbolSize(isFocused ? 120 : 80)
                     .annotation(position: .top, spacing: 2) {
                         Image(systemName: m.late ? "exclamationmark.triangle.fill" : m.kind.icon)
-                            .font(.system(size: 9)).foregroundStyle(m.late ? .orange : m.kind.tint)
+                            .font(.system(size: 9)).foregroundStyle(m.late ? .sand : m.kind.tint)
                     }
             }
         }
@@ -520,8 +520,8 @@ struct AlertnessCurveView: View {
 
     private func legend(hasPlan: Bool, planLate: Bool) -> some View {
         HStack(spacing: 14) {
-            label(color: .indigo, text: "You")
-            if hasPlan { label(color: planLate ? .orange : .mint, text: planLate ? "Too late" : "Your plan") }
+            label(color: .ocean, text: "You")
+            if hasPlan { label(color: planLate ? .sand : .mint, text: planLate ? "Too late" : "Your plan") }
             label(color: .teal, text: "Rested ceiling")
             Spacer()
         }

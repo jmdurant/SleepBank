@@ -89,7 +89,7 @@ struct NapView: View {
 
     private var picker: some View {
         VStack(spacing: 16) {
-            Image(systemName: "moon.zzz.fill").font(.system(size: 44)).foregroundStyle(.indigo)
+            Image(systemName: "moon.zzz.fill").font(.system(size: 44)).foregroundStyle(.ocean)
             ForEach(NapType.allCases, id: \.self) { type in
                 Button {
                     startNap(type)
@@ -101,14 +101,14 @@ struct NapView: View {
                     .frame(maxWidth: .infinity).padding(.vertical, 8)
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(type == .power ? .indigo : .teal)
+                .tint(type == .power ? .ocean : .teal)
             }
 
             Toggle(isOn: $trackAlertness) {
                 Label("Rate alertness before & after", systemImage: "bolt.fill")
                     .font(.caption)
             }
-            .tint(.indigo)
+            .tint(.ocean)
             .padding(.horizontal, 4)
 
             Text("Uses the paired Polar H10 and Muse when connected. Open Sensors to connect them.")
@@ -130,7 +130,7 @@ struct NapView: View {
                 stat("heart.fill", .red, nap.heartRate > 0 ? "\(nap.heartRate)" : "--", "bpm")
                 stat("waveform.path.ecg", .pink, nap.hrv > 0 ? String(format: "%.0f", nap.hrv) : "--", "HRV")
                 stat("lungs.fill", .teal, nap.breathingRate > 0 ? String(format: "%.0f", nap.breathingRate) : "--", "br/min")
-                stat("brain.head.profile", nap.museGood ? .purple : .gray,
+                stat("brain.head.profile", nap.museGood ? .ocean : .gray,
                      nap.museGood ? "EEG" : "—", nap.museGood ? "good" : "no sig")
             }
             if nap.spo2 > 0 {
@@ -150,7 +150,7 @@ struct NapView: View {
             .font(.caption2).foregroundStyle(.secondary).multilineTextAlignment(.center)
 
             HStack(spacing: 8) {
-                Image(systemName: NoiseService.shared.currentOutput.icon).font(.caption).foregroundStyle(.indigo)
+                Image(systemName: NoiseService.shared.currentOutput.icon).font(.caption).foregroundStyle(.ocean)
                 Text(NoiseService.shared.currentOutput.name).font(.caption).foregroundStyle(.secondary).id(routeTick)
                 Spacer()
                 RoutePickerView().frame(width: 34, height: 34)
@@ -167,8 +167,8 @@ struct NapView: View {
                 Label("Breathe with the circle", systemImage: "wind")
                     .font(.subheadline.weight(.medium))
                     .frame(maxWidth: .infinity).padding(.vertical, 10)
-                    .background(Color.indigo.opacity(0.15), in: Capsule())
-                    .foregroundStyle(.indigo)
+                    .background(Color.ocean.opacity(0.15), in: Capsule())
+                    .foregroundStyle(.ocean)
             }
             .buttonStyle(.plain)
             .padding(.top, 4)
@@ -201,7 +201,7 @@ struct NapView: View {
     private var alarmView: some View {
         VStack(spacing: 18) {
             Image(systemName: "alarm.waves.left.and.right.fill")
-                .font(.system(size: 60)).foregroundStyle(.orange).symbolEffect(.pulse)
+                .font(.system(size: 60)).foregroundStyle(.sand).symbolEffect(.pulse)
             Text("Time to wake").font(.title2.bold())
             Button { nap.stop() } label: {
                 Label("I'm up", systemImage: "checkmark").frame(maxWidth: .infinity).padding(.vertical, 6)
@@ -229,7 +229,7 @@ struct NapView: View {
             if let s = ratedSession, let delta = s.delta, let post = s.post {
                 VStack(spacing: 2) {
                     HStack(spacing: 6) {
-                        Image(systemName: "bolt.fill").foregroundStyle(delta < 0 ? .green : .orange)
+                        Image(systemName: "bolt.fill").foregroundStyle(delta < 0 ? .green : .sand)
                         Text("Sleepiness \(s.pre) → \(post)")
                             .font(.subheadline.weight(.semibold).monospacedDigit())
                     }
@@ -244,7 +244,7 @@ struct NapView: View {
                     Label("Rate how alert you feel now", systemImage: "bolt.fill")
                         .font(.subheadline)
                 }
-                .buttonStyle(.bordered).tint(.indigo)
+                .buttonStyle(.bordered).tint(.ocean)
             }
 
             Button { ratedSession = nil; kss.cancelOpenSession(); nap.dismissRecap() } label: {

@@ -69,7 +69,7 @@ struct EnergyRingView: View {
 
     private var titleRow: some View {
         HStack(spacing: 6) {
-            Image(systemName: "bolt.fill").font(.subheadline).foregroundStyle(.yellow)
+            Image(systemName: "bolt.fill").font(.subheadline).foregroundStyle(.sand)
             Text("Alertness Score").font(.headline)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -81,9 +81,9 @@ struct EnergyRingView: View {
         ZStack {
             Circle().stroke(.quaternary, lineWidth: 18)
             VStack(spacing: 4) {
-                Image(systemName: "bed.double.fill").font(.title2).foregroundStyle(.indigo)
+                Image(systemName: "bed.double.fill").font(.title2).foregroundStyle(.ocean)
                 Text("—").font(.system(size: 40, weight: .bold, design: .rounded))
-                Text("Estimate last night").font(.caption.weight(.semibold)).foregroundStyle(.indigo)
+                Text("Estimate last night").font(.caption.weight(.semibold)).foregroundStyle(.ocean)
             }
         }
         .frame(width: 180, height: 180)
@@ -98,7 +98,7 @@ struct EnergyRingView: View {
         return NavigationLink(value: HomeRoute.daylight) {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
-                    Image(systemName: "sun.max.fill").foregroundStyle(.orange)
+                    Image(systemName: "sun.max.fill").foregroundStyle(.sand)
                     Text("\(Int(d.total.rounded())) min daylight today").font(.caption.weight(.medium)).foregroundStyle(.primary)
                     if d.morning >= 1 { Text("· \(Int(d.morning.rounded())) min AM").font(.caption).foregroundStyle(.secondary) }
                     if walkMin >= 1 { Text("· 🚶 \(Int(walkMin.rounded())) min AM").font(.caption).foregroundStyle(.secondary) }
@@ -141,7 +141,7 @@ struct EnergyRingView: View {
                     .contentTransition(.numericText())
                 if let markTime, scrubbing {
                     Label("at \(markTime, format: .dateTime.hour().minute())", systemImage: "hand.draw.fill")
-                        .font(.caption2.weight(.semibold)).foregroundStyle(.indigo)
+                        .font(.caption2.weight(.semibold)).foregroundStyle(.ocean)
                 } else if let markTime {
                     Label("peak \(markTime, format: .dateTime.hour().minute())", systemImage: "bolt.fill")
                         .font(.caption2.weight(.semibold)).foregroundStyle(.mint)
@@ -156,10 +156,10 @@ struct EnergyRingView: View {
 
     private func tint(for level: Double) -> [Color] {
         switch level {
-        case 0.66...:     return [.mint, .teal]      // energized
-        case 0.4..<0.66:  return [.indigo, .blue]    // steady
-        case 0.2..<0.4:   return [.orange, .yellow]  // dipping
-        default:          return [.orange, .pink]    // low
+        case 0.66...:     return [.aqua, .mint]                                   // energized
+        case 0.4..<0.66:  return [.ocean, .tide]                                  // steady
+        case 0.2..<0.4:   return [.sand, Color(red: 0.82, green: 0.64, blue: 0.40)]  // dipping (gold)
+        default:          return [Color(red: 0.72, green: 0.55, blue: 0.32), .sand] // low (bronze)
         }
     }
 
@@ -175,7 +175,7 @@ struct SleepEntrySheet: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 18) {
-                Image(systemName: "bed.double.fill").font(.largeTitle).foregroundStyle(.indigo)
+                Image(systemName: "bed.double.fill").font(.largeTitle).foregroundStyle(.ocean)
                 Text("How was last night?")
                     .font(.title3.bold()).multilineTextAlignment(.center)
                 Text("We didn't find sleep data from Apple Health. Your estimate becomes an Apple-style Sleep Score so your Alertness Score reflects your real night.")
@@ -194,7 +194,7 @@ struct SleepEntrySheet: View {
                     save()
                 } label: {
                     Text("Save").font(.headline).frame(maxWidth: .infinity).padding()
-                        .background(.indigo.gradient, in: RoundedRectangle(cornerRadius: 16))
+                        .background(.ocean.gradient, in: RoundedRectangle(cornerRadius: 16))
                         .foregroundStyle(.white)
                 }
                 .buttonStyle(.plain)
@@ -211,7 +211,7 @@ struct SleepEntrySheet: View {
         HStack {
             VStack(alignment: .leading, spacing: 1) {
                 Text(title).font(.subheadline.weight(.medium))
-                Text(value).font(.title3.monospacedDigit().bold()).foregroundStyle(.indigo)
+                Text(value).font(.title3.monospacedDigit().bold()).foregroundStyle(.ocean)
             }
             Spacer()
             control()

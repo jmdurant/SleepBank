@@ -48,7 +48,7 @@ struct DaylightView: View {
 
     private var hero: some View {
         VStack(spacing: 8) {
-            Image(systemName: "sun.max.fill").font(.largeTitle).foregroundStyle(.orange)
+            Image(systemName: "sun.max.fill").font(.largeTitle).foregroundStyle(.sand)
             Text("\(Int(d.total.rounded())) min").font(.system(.largeTitle, design: .rounded).bold())
             Text("daylight today").font(.caption).foregroundStyle(.secondary)
             HStack(spacing: 16) {
@@ -81,9 +81,9 @@ struct DaylightView: View {
             Text("Morning light counts most — it anchors your body clock.")
                 .font(.caption).foregroundStyle(.secondary)
             let maxMin = max(d.morning, d.afternoon, d.evening, 1)
-            bar("Morning", d.morning, maxMin, .orange, emphasized: true)
-            bar("Afternoon", d.afternoon, maxMin, .yellow)
-            bar("Evening", d.evening, maxMin, .indigo)
+            bar("Morning", d.morning, maxMin, .sand, emphasized: true)
+            bar("Afternoon", d.afternoon, maxMin, .sand)
+            bar("Evening", d.evening, maxMin, .ocean)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding()
@@ -128,7 +128,7 @@ struct DaylightView: View {
 
     private func point(_ icon: String, _ title: String, _ body: String) -> some View {
         HStack(alignment: .top, spacing: 10) {
-            Image(systemName: icon).foregroundStyle(.orange).frame(width: 24)
+            Image(systemName: icon).foregroundStyle(.sand).frame(width: 24)
             VStack(alignment: .leading, spacing: 1) {
                 Text(title).font(.subheadline.weight(.semibold))
                 Text(body).font(.caption).foregroundStyle(.secondary)

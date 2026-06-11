@@ -123,7 +123,7 @@ struct PSASResultView: View {
             let d = post - pre
             Text(d == 0 ? "±0" : (d < 0 ? "\(d)" : "+\(d)"))
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(d < 0 ? .green : (d > 0 ? .orange : .secondary))
+                .foregroundStyle(d < 0 ? .green : (d > 0 ? .sand : .secondary))
         }
     }
 
@@ -189,7 +189,7 @@ struct PSASHistoryView: View {
                                     Text("\(s.post!.total)").font(.headline.monospacedDigit())
                                     Text(delta < 0 ? "\(delta)" : "+\(delta)")
                                         .font(.caption.weight(.semibold))
-                                        .foregroundStyle(delta < 0 ? .green : (delta > 0 ? .orange : .secondary))
+                                        .foregroundStyle(delta < 0 ? .green : (delta > 0 ? .sand : .secondary))
                                 } else {
                                     Text("\(s.pre.total)").font(.headline.monospacedDigit())
                                     Text("check-in").font(.caption).foregroundStyle(.secondary)

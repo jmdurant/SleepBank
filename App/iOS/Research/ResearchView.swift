@@ -111,7 +111,7 @@ struct ResearchView: View {
     private func section(_ title: String, _ icon: String, _ points: [String]) -> some View {
         Section {
             ForEach(points, id: \.self) { p in
-                Label { Text(p).font(.callout) } icon: { Image(systemName: icon).foregroundStyle(.indigo) }
+                Label { Text(p).font(.callout) } icon: { Image(systemName: icon).foregroundStyle(.ocean) }
             }
         } header: { Text(title) }
     }

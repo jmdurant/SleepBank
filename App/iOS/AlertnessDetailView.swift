@@ -77,7 +77,7 @@ struct AlertnessDetailView: View {
                 HStack(alignment: .top, spacing: 8) {
                     Text("\(ref.id)")
                         .font(.caption2.weight(.bold).monospacedDigit())
-                        .foregroundStyle(.indigo)
+                        .foregroundStyle(.ocean)
                         .frame(width: 14, alignment: .trailing)
                     if let url = ref.url {
                         Link(destination: url) {

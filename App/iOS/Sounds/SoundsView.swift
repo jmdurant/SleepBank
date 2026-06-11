@@ -18,7 +18,7 @@ struct SoundsView: View {
         List {
             Section {
                 HStack {
-                    Image(systemName: noise.currentOutput.icon).foregroundStyle(.indigo)
+                    Image(systemName: noise.currentOutput.icon).foregroundStyle(.ocean)
                     Text(noise.currentOutput.name).id(routeTick)
                     Spacer()
                     RoutePickerView().frame(width: 40, height: 40)
@@ -45,7 +45,7 @@ struct SoundsView: View {
                             }
                             Spacer()
                             if noise.isPlaying && noise.color == color {
-                                Image(systemName: "waveform").foregroundStyle(.indigo)
+                                Image(systemName: "waveform").foregroundStyle(.ocean)
                                     .symbolEffect(.variableColor.iterative)
                             } else {
                                 Image(systemName: "play.circle").foregroundStyle(.secondary)

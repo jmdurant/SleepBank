@@ -43,7 +43,7 @@ struct DayPlanView: View {
                     if isToday && plan.napBlockedByCalendar {
                         Label("Your calendar's booked through your dip — grab even 10 min if a gap opens.",
                               systemImage: "calendar.badge.exclamationmark")
-                            .font(.caption).foregroundStyle(.orange)
+                            .font(.caption).foregroundStyle(.sand)
                             .padding(.horizontal, 4)
                     }
                     NavigationLink(value: HomeRoute.windDown) {
@@ -54,8 +54,8 @@ struct DayPlanView: View {
                             Image(systemName: "chevron.right").font(.caption)
                         }
                         .padding()
-                        .background(.purple.opacity(0.15), in: RoundedRectangle(cornerRadius: 16))
-                        .foregroundStyle(.purple)
+                        .background(.ocean.opacity(0.15), in: RoundedRectangle(cornerRadius: 16))
+                        .foregroundStyle(.ocean)
                     }
                     .buttonStyle(.plain)
                     Text("A plan to get through the day well — it helps you cope with a short night, not replace the sleep you need.")
@@ -80,7 +80,7 @@ struct DayPlanView: View {
     private func dayNav(now: Date, isToday: Bool) -> some View {
         HStack(spacing: 8) {
             Button { dayStore.shift(by: -1) } label: { Image(systemName: "chevron.left").font(.headline) }
-                .buttonStyle(.plain).foregroundStyle(.indigo).disabled(dayStore.selectedOffset == 0)
+                .buttonStyle(.plain).foregroundStyle(.ocean).disabled(dayStore.selectedOffset == 0)
             Spacer()
             Text(dayLabel(now: now, isToday: isToday)).font(.headline)
                 .onTapGesture { showCalendar = true }
@@ -93,7 +93,7 @@ struct DayPlanView: View {
                 }
             Spacer()
             Button { dayStore.shift(by: 1) } label: { Image(systemName: "chevron.right").font(.headline) }
-                .buttonStyle(.plain).foregroundStyle(.indigo).disabled(dayStore.selectedOffset >= 14)
+                .buttonStyle(.plain).foregroundStyle(.ocean).disabled(dayStore.selectedOffset >= 14)
         }
         .padding(.horizontal, 4)
     }
@@ -147,7 +147,7 @@ struct DayPlanView: View {
     /// A scheduled walk/workout from the alertness curve, with a one-tap cancel.
     private func scheduledActivityCard(_ item: PlanNotificationService.ScheduledActivity) -> some View {
         let isWalk = item.kind.caseInsensitiveCompare("Walk") == .orderedSame
-        let tint: Color = isWalk ? .orange : .pink
+        let tint: Color = isWalk ? .sand : .pink
         return HStack(spacing: 12) {
             ZStack {
                 Circle().fill(tint.opacity(0.18)).frame(width: 32, height: 32)
@@ -178,8 +178,8 @@ struct DayPlanView: View {
     private func scheduledNapCard(_ napAt: Date) -> some View {
         HStack(spacing: 12) {
             ZStack {
-                Circle().fill(.indigo.opacity(0.18)).frame(width: 32, height: 32)
-                Image(systemName: "moon.zzz.fill").font(.caption).foregroundStyle(.indigo)
+                Circle().fill(.ocean.opacity(0.18)).frame(width: 32, height: 32)
+                Image(systemName: "moon.zzz.fill").font(.caption).foregroundStyle(.ocean)
             }
             VStack(alignment: .leading, spacing: 1) {
                 Text("Nap scheduled for \(clock(napAt))").font(.subheadline.weight(.semibold))
@@ -198,7 +198,7 @@ struct DayPlanView: View {
         }
         .padding()
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.indigo.opacity(0.12), in: RoundedRectangle(cornerRadius: 16))
+        .background(.ocean.opacity(0.12), in: RoundedRectangle(cornerRadius: 16))
     }
 
     // MARK: - Agenda
@@ -243,11 +243,11 @@ struct DayPlanView: View {
 
     private func style(_ kind: DayPlan.Kind) -> (icon: String, tint: Color) {
         switch kind {
-        case .morningLight:    return ("sun.max.fill", .orange)
+        case .morningLight:    return ("sun.max.fill", .sand)
         case .morningMovement: return ("figure.walk", .green)
-        case .nap:             return ("moon.zzz.fill", .indigo)
+        case .nap:             return ("moon.zzz.fill", .ocean)
         case .dip:             return ("arrow.down.right", .red)
-        case .windDown:        return ("bed.double.fill", .purple)
+        case .windDown:        return ("bed.double.fill", .ocean)
         }
     }
 

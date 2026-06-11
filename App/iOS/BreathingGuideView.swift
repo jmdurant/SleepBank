@@ -24,7 +24,7 @@ struct BreathingGuideView: View {
     var body: some View {
         GeometryReader { geo in
             ZStack {
-                LinearGradient(colors: [Color(red: 0.10, green: 0.09, blue: 0.22), .black],
+                LinearGradient(colors: [Color(red: 0.05, green: 0.10, blue: 0.18), .black],
                                startPoint: .top, endPoint: .bottom)
                     .ignoresSafeArea()
 
@@ -81,7 +81,7 @@ struct BreathingGuideView: View {
                         Button { pacer.start(cycles: totalCycles) } label: {
                             Label("Begin", systemImage: "wind").font(.headline)
                                 .frame(maxWidth: .infinity).padding()
-                                .background(.purple.gradient, in: RoundedRectangle(cornerRadius: 16))
+                                .background(.ocean.gradient, in: RoundedRectangle(cornerRadius: 16))
                                 .foregroundStyle(.white)
                         }
                         .buttonStyle(.plain)
@@ -114,19 +114,19 @@ struct BreathingGuideView: View {
 
     private var orbShading: AnyShapeStyle {
         guard pacer.isRunning else {
-            return AnyShapeStyle(.radialGradient(Gradient(colors: [.purple.opacity(0.85), .indigo.opacity(0.25)]),
+            return AnyShapeStyle(.radialGradient(Gradient(colors: [.ocean.opacity(0.9), .tide.opacity(0.35)]),
                                                  center: .center, startRadius: 10, endRadius: 150))
         }
         let colors: [Color] = scheme == .dark
-            ? [Color(white: 0.98), Color(red: 0.92, green: 0.92, blue: 0.82)]                  // moon white
-            : [Color(red: 1, green: 0.97, blue: 0.72), Color(red: 1, green: 0.82, blue: 0.34)]  // sun yellow
+            ? [Color(white: 0.98), Color(red: 0.92, green: 0.92, blue: 0.82)]   // moon white
+            : [Color(red: 0.97, green: 0.91, blue: 0.70), .sand]               // sun gold
         return AnyShapeStyle(.radialGradient(Gradient(colors: colors),
                                              center: .center, startRadius: 4, endRadius: 78))
     }
 
     private var glowColor: Color {
-        guard pacer.isRunning else { return .purple.opacity(0.5) }
-        return scheme == .dark ? Color.white.opacity(0.5) : Color(red: 1, green: 0.85, blue: 0.4).opacity(0.6)
+        guard pacer.isRunning else { return .ocean.opacity(0.5) }
+        return scheme == .dark ? Color.white.opacity(0.5) : Color.sand.opacity(0.65)
     }
 
     /// Baseline vibration strength — turn it up to feel the taps over real-world
