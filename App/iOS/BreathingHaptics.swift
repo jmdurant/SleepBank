@@ -54,8 +54,9 @@ final class BreathingHaptics {
             // A strong swell: starts firm and climbs to a full, slightly sharp peak.
             ramp(seconds: seconds, intensity: (0.4, 1.0), sharpness: (0.35, 0.65))
         case .exhale:
-            // A gentle release: starts soft and eases down to almost nothing.
-            ramp(seconds: seconds, intensity: (0.5, 0.03), sharpness: (0.25, 0.05))
+            // A gentle, *sustained* release: eases down but holds a felt floor through
+            // the whole exhale, so the tail doesn't fade to nothing in the last seconds.
+            ramp(seconds: seconds, intensity: (0.5, 0.32), sharpness: (0.3, 0.2))
         case .hold:
             // A single soft marker tap at the top of the breath, then stillness.
             tap(intensity: 0.5, sharpness: 0.3)
