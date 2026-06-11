@@ -175,7 +175,10 @@ public struct AlertnessRhythm: Sendable {
     private static let tauHomeoCycle: Double = 9.0   // h — a deep nap's discharge lingers to bedtime (why a late one ruins sleep)
     private static let tauNapOnset: Double = 0.7  // h — how fast the benefit comes on (saturating, so the peak is rounded)
     private static let morningLightPeak: Double = 0.12     // raw units (~+0.07 on the 0…1 display)
-    private static let morningActivityPeak: Double = 0.10  // a second, independent morning lift
+    // Exercise is a circadian zeitgeber but only ~⅓ the strength of bright light
+    // (Youngstedt 2019 PRC; docs/MOVEMENT_EVIDENCE.md §5), so morning movement's anchor
+    // credit sits below the light credit, not on par with it.
+    private static let morningActivityPeak: Double = 0.06
     private static let morningLiftCap: Double = 0.18        // combined morning lift stays modest
 
     // MARK: - The two processes
@@ -246,7 +249,11 @@ public struct AlertnessRhythm: Sendable {
     private func arousal(of a: Activity, at date: Date) -> Double {
         let u = date.timeIntervalSince(a.start) / 3600
         guard u > 0 else { return 0 }
-        let coef = a.intensity == .workout ? 0.21 : 0.10
+        // Evidence-graded (docs/MOVEMENT_EVIDENCE.md): the acute lift is intensity-
+        // graded and a brisk walk sits near the floor (cognition g≈0.04), so a workout
+        // is ~3× a walk, not 2×. The benefit lands *after* the bout (the build term)
+        // and fades over ~1.5 h (a placeholder — no clean decay constant is established).
+        let coef = a.intensity == .workout ? 0.20 : 0.06
         return coef * (1 - exp(-u / 0.5)) * exp(-u / 1.6)
     }
 
