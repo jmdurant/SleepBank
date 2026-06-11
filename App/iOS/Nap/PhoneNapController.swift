@@ -24,6 +24,9 @@ class PhoneNapController {
     private let muse = MuseService.shared
     private let store = NapDecisionStore.shared
     private let recorder = NapSessionRecorder()
+    /// Live HR from a phone workout session (e.g. AirPods Pro) — the fallback when
+    /// no chest strap is connected. iOS 26+.
+    let workoutHR = PhoneWorkoutHRService()
 
     private(set) var napType: NapType = .power
     private(set) var phase: NapPhase = .finished
@@ -41,7 +44,7 @@ class PhoneNapController {
     private var tickCount = 0
     private(set) var spo2: Double = 0   // % — spot from HealthKit, completeness only
 
-    var heartRate: Int { polar.currentHeartRate }
+    var heartRate: Int { polar.currentHeartRate > 0 ? polar.currentHeartRate : (workoutHR.freshHeartRate ?? 0) }
     var hrv: Double { polar.hrvRMSSD }
     var breathingRate: Double { polar.breathingRate }
     var museGood: Bool { muse.eeg.hasGoodSignal }
@@ -64,6 +67,9 @@ class PhoneNapController {
         // Keep the app alive in the background for the whole nap (the iOS equivalent of
         // the watch's workout session) — via the audio session, even if sound is off.
         NoiseService.shared.beginKeepAlive()
+        // Also open a workout session for live HR from AirPods Pro (and to keep sensors
+        // hot) — the fallback when no chest strap is connected. iOS 26+.
+        workoutHR.start()
         if NoiseService.shared.autoPlayDuringNap { NoiseService.shared.play() }
         // The phone's nap UI shows the visual breathing guide (which drives the haptic
         // pacer itself), so here we only auto-start the spoken body-scan if selected.
@@ -105,7 +111,7 @@ class PhoneNapController {
         let movement = usingChest ? polar.movementIntensity : motion.movementIntensity
         let still = usingChest ? polar.stillSeconds : motion.stillSeconds
         let signal = OnsetSignal(
-            heartRate: polar.currentHeartRate > 0 ? polar.currentHeartRate : nil,
+            heartRate: polar.currentHeartRate > 0 ? polar.currentHeartRate : workoutHR.freshHeartRate,
             movementIntensity: movement,
             stillSeconds: still,
             hrvRMSSD: polar.hrvRMSSD > 0 ? polar.hrvRMSSD : nil,
@@ -170,6 +176,7 @@ class PhoneNapController {
         motion.stopMonitoring()
         NoiseService.shared.fadeOut()
         NoiseService.shared.endKeepAlive()   // release the background keep-alive
+        workoutHR.stop()
         GuidedRelaxationService.shared.stop()
         LiveActivityManager.shared.end()
         SharedStore.napActive = false
