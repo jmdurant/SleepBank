@@ -10,6 +10,7 @@
 //
 
 import SwiftUI
+import WidgetKit
 import SleepBankCore
 
 struct EnergyRingView: View {
@@ -184,8 +185,7 @@ struct SleepEntrySheet: View {
                 Stepper("", value: $hours, in: 0...14, step: 0.5).labelsHidden()
 
                 Button {
-                    ManualSleepStore.shared.log(hours: hours)
-                    dismiss()
+                    save()
                 } label: {
                     Text("Save").font(.headline).frame(maxWidth: .infinity).padding()
                         .background(.indigo.gradient, in: RoundedRectangle(cornerRadius: 16))
@@ -199,5 +199,22 @@ struct SleepEntrySheet: View {
             }
         }
         .presentationDetents([.medium])
+    }
+
+    /// Log the estimate, then refresh everything downstream of the rhythm — the
+    /// in-app ring/curve update via @Observable on ManualSleepStore, but the widget
+    /// and watch read a saved snapshot, so re-snapshot and reload them too.
+    private func save() {
+        ManualSleepStore.shared.log(hours: hours)
+        let health = HealthKitService.shared
+        let snapshot = RhythmSnapshot(rhythm: AlertnessProvider.rhythm(now: Date()),
+                                      morningLightStreak: health.morningLightStreak, updated: Date())
+        snapshot.save()
+        PhoneConnectivity.shared.sendDailySummary(
+            samples: health.lastNightSamples,
+            morningLightStreak: health.morningLightStreak,
+            rhythmSnapshot: try? JSONEncoder().encode(snapshot))
+        WidgetCenter.shared.reloadAllTimelines()
+        dismiss()
     }
 }
