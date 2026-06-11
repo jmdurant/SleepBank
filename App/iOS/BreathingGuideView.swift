@@ -17,6 +17,7 @@ struct BreathingGuideView: View {
     @Environment(\.dismiss) private var dismiss
     private var pacer = BreathingPacer.shared
     private let totalCycles = 8
+    @AppStorage(BreathingHaptics.intensityKey) private var hapticIntensity = 1.0
 
     var body: some View {
         ZStack {
@@ -62,6 +63,8 @@ struct BreathingGuideView: View {
                     }
                     .buttonStyle(.plain)
                 }
+
+                vibrationControl
             }
             .padding(28)
         }
@@ -72,5 +75,27 @@ struct BreathingGuideView: View {
             .padding()
         }
         .onDisappear { pacer.stop() }
+    }
+
+    /// Baseline vibration strength — turn it up to feel the taps over real-world
+    /// vibration (e.g. napping in a car). Persists; a sample tap plays as you drag.
+    private var vibrationControl: some View {
+        VStack(spacing: 6) {
+            HStack(spacing: 6) {
+                Text("Vibration strength").font(.caption.weight(.medium))
+                Spacer()
+                Text(hapticIntensity < 0.9 ? "Gentle" : (hapticIntensity > 1.4 ? "Strong" : "Normal"))
+                    .font(.caption2).foregroundStyle(.white.opacity(0.6))
+            }
+            HStack(spacing: 10) {
+                Image(systemName: "iphone.gen3.radiowaves.left.and.right").font(.caption2)
+                Slider(value: $hapticIntensity, in: 0.5...2.0, step: 0.1)
+                    .tint(.purple)
+                    .onChange(of: hapticIntensity) { _, _ in BreathingHaptics.shared.previewTap() }
+                Image(systemName: "iphone.gen3.radiowaves.left.and.right").font(.body)
+            }
+            .foregroundStyle(.white.opacity(0.7))
+        }
+        .padding(.horizontal, 4)
     }
 }

@@ -19,6 +19,23 @@ final class BreathingHaptics {
     private var current: CHHapticPatternPlayer?
     private let supported = CHHapticEngine.capabilitiesForHardware().supportsHaptics
 
+    /// User-set baseline strength (0.5…2.0, default 1.0). Lets the user boost the
+    /// floor so the taps are felt over real-world vibration (e.g. napping in a car).
+    /// Read live from the same key the slider writes, clamped, applied to intensity.
+    static let intensityKey = "hapticIntensity"
+    private var intensityScale: Float {
+        let v = UserDefaults.standard.object(forKey: Self.intensityKey) as? Double ?? 1.0
+        return Float(min(max(v, 0.5), 2.0))
+    }
+    private func scaled(_ v: Float) -> Float { min(1.0, max(0.0, v * intensityScale)) }
+
+    /// A sample tap at the current strength — for live feedback while dragging the slider.
+    func previewTap() {
+        guard supported else { return }
+        if engine == nil { start() }
+        tap(intensity: 0.7, sharpness: 0.4)
+    }
+
     /// Spin up the haptic engine for a breathing session. Safe to call repeatedly.
     func start() {
         guard supported, engine == nil else { return }
@@ -69,18 +86,19 @@ final class BreathingHaptics {
 
     private func ramp(seconds: Double, intensity: (Float, Float), sharpness: (Float, Float)) {
         guard let engine else { return }
+        let i0 = scaled(intensity.0), i1 = scaled(intensity.1)
         let event = CHHapticEvent(
             eventType: .hapticContinuous,
             parameters: [
-                CHHapticEventParameter(parameterID: .hapticIntensity, value: intensity.0),
+                CHHapticEventParameter(parameterID: .hapticIntensity, value: i0),
                 CHHapticEventParameter(parameterID: .hapticSharpness, value: sharpness.0),
             ],
             relativeTime: 0, duration: seconds)
         let intensityCurve = CHHapticParameterCurve(
             parameterID: .hapticIntensityControl,
             controlPoints: [
-                .init(relativeTime: 0, value: intensity.0),
-                .init(relativeTime: seconds, value: intensity.1),
+                .init(relativeTime: 0, value: i0),
+                .init(relativeTime: seconds, value: i1),
             ], relativeTime: 0)
         let sharpnessCurve = CHHapticParameterCurve(
             parameterID: .hapticSharpnessControl,
@@ -95,7 +113,7 @@ final class BreathingHaptics {
         let event = CHHapticEvent(
             eventType: .hapticTransient,
             parameters: [
-                CHHapticEventParameter(parameterID: .hapticIntensity, value: intensity),
+                CHHapticEventParameter(parameterID: .hapticIntensity, value: scaled(intensity)),
                 CHHapticEventParameter(parameterID: .hapticSharpness, value: sharpness),
             ],
             relativeTime: 0)
