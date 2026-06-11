@@ -44,6 +44,15 @@ struct WindDownView: View {
     @State private var screensOff = WindDownLog.isMarked()
     @State private var showBreathe = false
     @AppStorage("windDownSounds") private var soundsOn = true
+    // Pre/post Pre-Sleep Arousal check-in bracketing the breathing intervention.
+    @State private var psas = PSASStore.shared
+    @State private var showPre = false
+    @State private var showPost = false
+    @State private var showResult = false
+    @State private var trackedSessionID: UUID?
+    @State private var pendingBreathe = false
+    @State private var pendingPost = false
+    @State private var pendingResult = false
     #if canImport(FamilyControls)
     @State private var shield = WindDownShieldService.shared
     @State private var showAppPicker = false
@@ -153,22 +162,61 @@ struct WindDownView: View {
     // MARK: - Visual breathing guide
 
     private var breatheCard: some View {
-        Button { showBreathe = true } label: {
-            HStack(spacing: 12) {
-                Image(systemName: "wind").font(.title3).foregroundStyle(.purple)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("Breathe with the circle").font(.subheadline.weight(.semibold))
-                    Text("A visual, haptic-paced 4-7-8 — follow along, no counting.")
-                        .font(.caption).foregroundStyle(.secondary)
+        VStack(spacing: 10) {
+            Button { showBreathe = true } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "wind").font(.title3).foregroundStyle(.purple)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Breathe with the circle").font(.subheadline.weight(.semibold))
+                        Text("A visual, haptic-paced 4-7-8 — follow along, no counting.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
                 }
-                Spacer()
-                Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
+                .padding()
+                .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 20))
             }
-            .padding()
-            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 20))
+            .buttonStyle(.plain)
+
+            // Optional: rate how wound-up you are before and after, to see it working.
+            Button { trackedSessionID = nil; showPre = true } label: {
+                Label("Track before & after", systemImage: "chart.line.downtrend.xyaxis")
+                    .font(.caption.weight(.medium))
+                    .frame(maxWidth: .infinity).padding(.vertical, 8)
+                    .background(Color.purple.opacity(0.12), in: Capsule())
+                    .foregroundStyle(.purple)
+            }
+            .buttonStyle(.plain)
         }
-        .buttonStyle(.plain)
-        .fullScreenCover(isPresented: $showBreathe) { BreathingGuideView() }
+        // The before check-in → breathing → after check-in → result, chained so only
+        // one presentation is up at a time.
+        .fullScreenCover(isPresented: $showBreathe, onDismiss: {
+            if pendingPost { pendingPost = false; showPost = true }
+        }) { BreathingGuideView() }
+        .sheet(isPresented: $showPre, onDismiss: {
+            if pendingBreathe { pendingBreathe = false; pendingPost = true; showBreathe = true }
+        }) {
+            PSASSurveyView(title: "Before", subtitle: "How wound-up are you right now — in your body and your mind?") { answers in
+                trackedSessionID = psas.startSession(pre: answers)
+                pendingBreathe = true
+                showPre = false
+            }
+        }
+        .sheet(isPresented: $showPost, onDismiss: {
+            if pendingResult { pendingResult = false; showResult = true }
+        }) {
+            PSASSurveyView(title: "After", subtitle: "And now? Rate the same things after breathing.") { answers in
+                if let id = trackedSessionID { psas.completeSession(id, post: answers) }
+                pendingResult = true
+                showPost = false
+            }
+        }
+        .sheet(isPresented: $showResult) {
+            if let id = trackedSessionID, let session = psas.session(id: id) {
+                PSASResultView(session: session)
+            }
+        }
     }
 
     // MARK: - Checklist

@@ -73,6 +73,7 @@ struct ContentView: View {
         case .nap:       NapView()
         case .settings:  SettingsView()
         case .epworth:   EpworthView()
+        case .psas:      PSASHistoryView()
         }
     }
 
@@ -85,6 +86,7 @@ struct ContentView: View {
         case .nap:                  tab = .nap;      napPath = []
         case .settings:             tab = .settings; settingsPath = []
         case .epworth:              tab = .settings; settingsPath = [.epworth]
+        case .psas:                 tab = .settings; settingsPath = [.psas]
         }
     }
 

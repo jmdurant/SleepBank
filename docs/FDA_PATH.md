@@ -106,19 +106,21 @@ questionnaires.
 
 **Therefore our questionnaire plan:**
 
-| Instrument | Measures | Source | How we handle it |
-|---|---|---|---|
-| **Epworth Sleepiness Scale (ESS)** | Daytime sleepiness — *the* most on-thesis instrument for a nap/alertness app | Self-administer (ResearchKit survey or SwiftUI form); store in our own model | No native HK type — keep in-app |
-| **Pittsburgh Sleep Quality Index (PSQI)** | Sleep quality (last month) | Self-administer; store in-app | No native HK type |
-| **Insomnia Severity Index (ISI)** | Insomnia severity / DTx endpoint | Self-administer; store in-app | No native HK type |
-| **Karolinska Sleepiness Scale (KSS)** | Momentary sleepiness (pre/post nap) | Self-administer; store in-app | No native HK type — pairs with the alertness curve |
-| **PHQ-9 / GAD-7** | Depression / anxiety comorbidity (huge sleep confounders) | **HealthKit read** (if user took them in Health), and **write** if we administer | Native HK type — use the API |
+| Instrument | Measures | Licensing (commercial use) | HealthKit | How we handle it |
+|---|---|---|---|---|
+| **Pre-Sleep Arousal Scale (PSAS)** | Somatic + cognitive arousal *as you fall asleep* — the exact target of the breathing pacer | **Free** — journal scale, no fee gate (confirm vs 1985 source) | None | **Implemented** — pre/post pair around the wind-down breathing; the before→after delta is biofeedback outcome data |
+| **Epworth Sleepiness Scale (ESS)** | Daytime sleepiness — on-thesis for a nap/alertness app | © M. Johns — **commercial license** (MAPI/eProvide) | None | **Implemented** — self-tracking check-in; license before paid release |
+| **Karolinska Sleepiness Scale (KSS)** | Momentary sleepiness (pre/post nap) | **Free** | None | Planned — pairs with the alertness curve / nap recap |
+| **PHQ-9 / GAD-7** | Depression / anxiety comorbidity (huge sleep confounders) | **Free** (Pfizer, explicit public use) | **Native** (read+write, iOS 18+) | Read mood context via the API; write any we administer |
+| **Pittsburgh Sleep Quality Index (PSQI)** | Sleep quality (last month) | © Univ. of Pittsburgh — **commercial license/fee** | None | Skip unless licensed; wrong granularity for a per-session intervention anyway |
+| **Insomnia Severity Index (ISI)** | Insomnia severity / DTx endpoint | © Morin — **commercial license** (MAPI) | None | Only if we pursue the (avoided) DTx route |
 
-Net: administer the sleep instruments ourselves (Epworth first — it literally
-measures the daytime sleepiness our product targets), and use the HealthKit
-PHQ-9/GAD-7 API to pull mood comorbidity context and to write back any we
-administer. Watch future WWDC releases for a native sleep-assessment type; adopt
-it if/when Apple ships one.
+**Licensing reality:** most validated sleep instruments are copyrighted and need a
+paid commercial license (Epworth, PSQI, ISI). The genuinely free ones are **PSAS,
+KSS, and PHQ-9/GAD-7**. We lead with **PSAS** (free *and* mechanism-matched to the
+breathing intervention) and **Epworth** (on-thesis; license flagged in code).
+Watch future WWDC releases for a native sleep-assessment HealthKit type; adopt it
+if Apple ships one.
 
 ---
 
