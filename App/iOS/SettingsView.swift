@@ -14,6 +14,7 @@ struct SettingsView: View {
     @State private var calendar = CalendarService.shared
     @State private var napWindows = NapWindowsStore.shared
     @State private var profile = SleepProfile.shared
+    @State private var showGuidedSetup = false
     @AppStorage("appearanceMode") private var appearance: AppearanceMode = .system
     @AppStorage("sleepBasis") private var sleepBasis: SleepBasis = .auto
     @State private var morningPlan = PlanNotificationService.morningPlanEnabled
@@ -81,6 +82,9 @@ struct SettingsView: View {
                 Stepper(value: needBinding, in: 4...12, step: 0.5) {
                     Text(String(format: "Sleep need: %.1f h", profile.needHours))
                 }
+                Button { showGuidedSetup = true } label: {
+                    Label("Set up my schedule (guided)", systemImage: "sparkles")
+                }
             } header: {
                 Text("Your typical schedule")
             } footer: {
@@ -120,6 +124,9 @@ struct SettingsView: View {
             }
         }
         .navigationTitle("Settings")
+        .fullScreenCover(isPresented: $showGuidedSetup) {
+            WelcomeView { showGuidedSetup = false }
+        }
     }
 
     // MARK: - Typical schedule bindings
