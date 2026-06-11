@@ -68,8 +68,8 @@ struct BeachSceneView: View {
                  with: .linearGradient(Gradient(colors: sea),
                                        startPoint: CGPoint(x: 0, y: horizon), endPoint: CGPoint(x: 0, y: shore)))
 
-        // Moon/sun glint reflection on the water, under where the orb sits.
-        let glintX = w * 0.74
+        // Moon/sun glint reflection on the water, under where the orb sits (centered).
+        let glintX = w * 0.5
         ctx.fill(Path(CGRect(x: glintX - 22, y: horizon, width: 44, height: shore - horizon)),
                  with: .linearGradient(Gradient(colors: [Color.white.opacity(night ? 0.10 : 0.18), .clear]),
                                        startPoint: CGPoint(x: 0, y: horizon), endPoint: CGPoint(x: 0, y: shore)))

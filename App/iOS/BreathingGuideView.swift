@@ -39,9 +39,10 @@ struct BreathingGuideView: View {
                     .ignoresSafeArea()
                     .allowsHitTesting(false)
 
-                // The breathing orb — centered before start; the sun/moon in the sky while running.
+                // The breathing orb — stays centered; rises to the sky height as the
+                // sun/moon when you begin.
                 orb
-                    .position(x: geo.size.width * (pacer.isRunning ? 0.74 : 0.5),
+                    .position(x: geo.size.width * 0.5,
                               y: geo.size.height * (pacer.isRunning ? 0.26 : 0.40))
                     .animation(.easeInOut(duration: 1.6), value: pacer.isRunning)
 
