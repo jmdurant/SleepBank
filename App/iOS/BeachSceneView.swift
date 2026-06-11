@@ -49,28 +49,15 @@ struct BeachSceneView: View {
                  with: .linearGradient(Gradient(colors: sky),
                                        startPoint: .zero, endPoint: CGPoint(x: 0, y: horizon)))
 
+        // The sun/moon itself is the breathing circle (drawn by BreathingGuideView and
+        // animated to this spot), so here we only draw the night stars.
         if night {
-            // Stars
             for s in Self.stars {
                 let tw = 0.35 + 0.65 * abs(sin(t * 1.3 + s.phase))
                 let r = s.size
                 ctx.fill(Path(ellipseIn: CGRect(x: s.x * w, y: s.y * horizon, width: r, height: r)),
                          with: .color(.white.opacity(tw)))
             }
-            // Moon + soft glow
-            let moon = CGPoint(x: w * 0.72, y: horizon * 0.34)
-            let mr: CGFloat = 26
-            ctx.fill(Path(ellipseIn: CGRect(x: moon.x - mr * 2.6, y: moon.y - mr * 2.6, width: mr * 5.2, height: mr * 5.2)),
-                     with: .radialGradient(Gradient(colors: [Color(white: 0.95).opacity(0.35), .clear]),
-                                           center: moon, startRadius: 0, endRadius: mr * 2.6))
-            ctx.fill(Path(ellipseIn: CGRect(x: moon.x - mr, y: moon.y - mr, width: mr * 2, height: mr * 2)),
-                     with: .color(Color(red: 0.96, green: 0.96, blue: 0.88)))
-        } else {
-            // Soft low sun glow
-            let sun = CGPoint(x: w * 0.70, y: horizon * 0.5)
-            ctx.fill(Path(ellipseIn: CGRect(x: sun.x - 90, y: sun.y - 90, width: 180, height: 180)),
-                     with: .radialGradient(Gradient(colors: [Color(red: 1, green: 0.97, blue: 0.85).opacity(0.7), .clear]),
-                                           center: sun, startRadius: 0, endRadius: 95))
         }
 
         // Sea
@@ -81,8 +68,8 @@ struct BeachSceneView: View {
                  with: .linearGradient(Gradient(colors: sea),
                                        startPoint: CGPoint(x: 0, y: horizon), endPoint: CGPoint(x: 0, y: shore)))
 
-        // Moon/sun glint reflection on the water
-        let glintX = night ? w * 0.72 : w * 0.70
+        // Moon/sun glint reflection on the water, under where the orb sits.
+        let glintX = w * 0.74
         ctx.fill(Path(CGRect(x: glintX - 22, y: horizon, width: 44, height: shore - horizon)),
                  with: .linearGradient(Gradient(colors: [Color.white.opacity(night ? 0.10 : 0.18), .clear]),
                                        startPoint: CGPoint(x: 0, y: horizon), endPoint: CGPoint(x: 0, y: shore)))

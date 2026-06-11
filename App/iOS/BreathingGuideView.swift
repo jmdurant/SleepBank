@@ -2,10 +2,11 @@
 //  BreathingGuideView.swift
 //  SleepBank
 //
-//  A visual, haptic-paced breathing guide — the Apple-Watch-Breathe approach rather
-//  than a chatty robotic voice. The circle expands on the inhale, holds, and contracts
-//  on the exhale, with a soft haptic at each phase change, on precise timers (so the
-//  cadence is exact, unlike TTS). We explain the 4-7-8 pattern, then let you follow.
+//  A visual, haptic-paced breathing guide. Before you begin, a soft orb sits centered
+//  with the 4-7-8 explanation. On Begin, a calming beach fades in and the orb glides up
+//  to the sun (day) / moon (night) position in the sky — recolored sun-yellow / moon-
+//  white — and breathes there: expanding on the inhale, holding, contracting on the
+//  exhale, with a haptic at each phase. The cycle count moves to the top-left.
 //
 
 import SwiftUI
@@ -15,70 +16,79 @@ import UIKit
 
 struct BreathingGuideView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var scheme
     private var pacer = BreathingPacer.shared
     private let totalCycles = 8
     @AppStorage(BreathingHaptics.intensityKey) private var hapticIntensity = 1.0
 
     var body: some View {
-        ZStack {
-            LinearGradient(colors: [Color(red: 0.10, green: 0.09, blue: 0.22), .black],
-                           startPoint: .top, endPoint: .bottom)
-                .ignoresSafeArea()
+        GeometryReader { geo in
+            ZStack {
+                LinearGradient(colors: [Color(red: 0.10, green: 0.09, blue: 0.22), .black],
+                               startPoint: .top, endPoint: .bottom)
+                    .ignoresSafeArea()
 
-            // A calming beach fades in behind the circle once you start breathing.
-            BeachSceneView()
-                .opacity(pacer.isRunning ? 1 : 0)
-                .animation(.easeInOut(duration: 3), value: pacer.isRunning)
-                .allowsHitTesting(false)
+                BeachSceneView()
+                    .opacity(pacer.isRunning ? 1 : 0)
+                    .animation(.easeInOut(duration: 3), value: pacer.isRunning)
+                    .allowsHitTesting(false)
 
-            // Keep the text/controls legible over a bright daytime sky.
-            LinearGradient(colors: [.black.opacity(0.35), .clear, .clear, .black.opacity(0.35)],
-                           startPoint: .top, endPoint: .bottom)
-                .ignoresSafeArea()
-                .allowsHitTesting(false)
+                // Keep text/controls legible over a bright daytime sky.
+                LinearGradient(colors: [.black.opacity(0.35), .clear, .clear, .black.opacity(0.45)],
+                               startPoint: .top, endPoint: .bottom)
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
 
-            VStack(spacing: 28) {
-                Text(pacer.isRunning ? "Cycle \(pacer.cycle) of \(totalCycles)" : "4-7-8 breathing")
-                    .font(.subheadline.weight(.medium)).foregroundStyle(.white.opacity(0.65))
-
-                ZStack {
-                    Circle()
-                        .fill(.radialGradient(colors: [.purple.opacity(0.85), .indigo.opacity(0.25)],
-                                              center: .center, startRadius: 10, endRadius: 150))
-                        .frame(width: 240, height: 240)
-                        .scaleEffect(pacer.phase.targetScale)
-                        .shadow(color: .purple.opacity(0.5), radius: 40)
-                        .animation(.easeInOut(duration: max(0.3, pacer.phase.seconds)), value: pacer.phase)
-                    Text(pacer.phase.label)
-                        .font(.title2.weight(.semibold)).foregroundStyle(.white)
-                        .contentTransition(.opacity)
-                }
-                .frame(height: 300)
+                // The breathing orb — centered before start; the sun/moon in the sky while running.
+                orb
+                    .position(x: geo.size.width * (pacer.isRunning ? 0.74 : 0.5),
+                              y: geo.size.height * (pacer.isRunning ? 0.26 : 0.40))
+                    .animation(.easeInOut(duration: 1.6), value: pacer.isRunning)
 
                 if pacer.isRunning {
-                    Button { pacer.stop() } label: {
-                        Label("Stop", systemImage: "stop.fill").font(.headline)
-                            .frame(maxWidth: .infinity).padding()
-                            .background(.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 16))
-                            .foregroundStyle(.white)
-                    }
-                    .buttonStyle(.plain)
-                } else {
-                    Text("Breathe in for 4, hold for 7, breathe out for 8. Follow the circle and the gentle taps — no need to count.")
-                        .font(.callout).foregroundStyle(.white.opacity(0.7))
-                        .multilineTextAlignment(.center)
-                    Button { pacer.start(cycles: totalCycles) } label: {
-                        Label("Begin", systemImage: "wind").font(.headline)
-                            .frame(maxWidth: .infinity).padding()
-                            .background(.purple.gradient, in: RoundedRectangle(cornerRadius: 16))
-                            .foregroundStyle(.white)
-                    }
-                    .buttonStyle(.plain)
+                    Text("Cycle \(pacer.cycle) of \(totalCycles)")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.white.opacity(0.85))
+                        .shadow(color: .black.opacity(0.3), radius: 4)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                        .padding(24)
+                        .allowsHitTesting(false)
+
+                    Text(pacer.phase.label)
+                        .font(.title.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .contentTransition(.opacity)
+                        .shadow(color: .black.opacity(0.4), radius: 8)
                 }
 
-                vibrationControl
+                VStack(spacing: 16) {
+                    Spacer()
+                    if pacer.isRunning {
+                        Button { pacer.stop() } label: {
+                            Label("Stop", systemImage: "stop.fill").font(.headline)
+                                .frame(maxWidth: .infinity).padding()
+                                .background(.white.opacity(0.14), in: RoundedRectangle(cornerRadius: 16))
+                                .foregroundStyle(.white)
+                        }
+                        .buttonStyle(.plain)
+                    } else {
+                        Text("4-7-8 breathing")
+                            .font(.subheadline.weight(.medium)).foregroundStyle(.white.opacity(0.7))
+                        Text("Breathe in for 4, hold for 7, breathe out for 8. Follow the circle and the gentle taps — no need to count.")
+                            .font(.callout).foregroundStyle(.white.opacity(0.7))
+                            .multilineTextAlignment(.center)
+                        Button { pacer.start(cycles: totalCycles) } label: {
+                            Label("Begin", systemImage: "wind").font(.headline)
+                                .frame(maxWidth: .infinity).padding()
+                                .background(.purple.gradient, in: RoundedRectangle(cornerRadius: 16))
+                                .foregroundStyle(.white)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    vibrationControl
+                }
+                .padding(28)
             }
-            .padding(28)
         }
         .overlay(alignment: .topTrailing) {
             Button { pacer.stop(); dismiss() } label: {
@@ -87,6 +97,35 @@ struct BreathingGuideView: View {
             .padding()
         }
         .onDisappear { pacer.stop() }
+    }
+
+    // MARK: - Orb (becomes the sun / moon)
+
+    private var orb: some View {
+        let size: CGFloat = pacer.isRunning ? 150 : 240
+        return Circle()
+            .fill(orbShading)
+            .frame(width: size, height: size)
+            .scaleEffect(pacer.phase.targetScale)
+            .shadow(color: glowColor, radius: pacer.isRunning ? 38 : 40)
+            .animation(.easeInOut(duration: max(0.3, pacer.phase.seconds)), value: pacer.phase)
+    }
+
+    private var orbShading: AnyShapeStyle {
+        guard pacer.isRunning else {
+            return AnyShapeStyle(.radialGradient(Gradient(colors: [.purple.opacity(0.85), .indigo.opacity(0.25)]),
+                                                 center: .center, startRadius: 10, endRadius: 150))
+        }
+        let colors: [Color] = scheme == .dark
+            ? [Color(white: 0.98), Color(red: 0.92, green: 0.92, blue: 0.82)]                  // moon white
+            : [Color(red: 1, green: 0.97, blue: 0.72), Color(red: 1, green: 0.82, blue: 0.34)]  // sun yellow
+        return AnyShapeStyle(.radialGradient(Gradient(colors: colors),
+                                             center: .center, startRadius: 4, endRadius: 78))
+    }
+
+    private var glowColor: Color {
+        guard pacer.isRunning else { return .purple.opacity(0.5) }
+        return scheme == .dark ? Color.white.opacity(0.5) : Color(red: 1, green: 0.85, blue: 0.4).opacity(0.6)
     }
 
     /// Baseline vibration strength — turn it up to feel the taps over real-world
