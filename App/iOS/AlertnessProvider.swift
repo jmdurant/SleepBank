@@ -31,14 +31,28 @@ enum AlertnessProvider {
         let typical = summary?.averageLast7Days ?? health.sleepAverage7Day
         let need = max(typical > 0 ? typical : 7.5, 6)
         let healthAsleep = summary?.totalHours ?? 0
-        let efficiency = summary?.efficiency ?? 0
         let wake = summary?.wakeTime ?? Calendar.current.date(bySettingHour: 7, minute: 0, second: 0, of: now) ?? now
 
         // Fall back to a manual "how long did you sleep" entry when HealthKit has none.
         let manual = ManualSleepStore.shared.today
+        let usingManual = healthAsleep == 0 && manual != nil
         let asleep = healthAsleep > 0 ? healthAsleep : (manual ?? 0)
-        // Manual entries have no efficiency, so force the hours basis for them.
-        let basis: SleepBasis = healthAsleep > 0 ? SleepBasis.current : .hours
+
+        // A manual estimate now carries an interruptions estimate too (the reported
+        // awakenings, ~7 min each → an efficiency proxy), so it can drive a real
+        // *estimated Sleep Score* rather than duration-only debt. Honor the user's
+        // basis setting: explicit Hours stays duration-only; Auto/Sleep Score use the
+        // estimated score. Consistency is left neutral (we can't know last night's
+        // bedtime without a tracker).
+        let manualEfficiency: Double = {
+            let awakenings = ManualSleepStore.shared.todayAwakenings ?? 0
+            let inBed = asleep + Double(awakenings) * 7.0 / 60.0   // ~7 min awake per awakening
+            return inBed > 0 ? asleep / inBed : 1.0
+        }()
+        let efficiency = usingManual ? manualEfficiency : (summary?.efficiency ?? 0)
+        let basis: SleepBasis = usingManual
+            ? (SleepBasis.current == .hours ? .hours : .sleepScore)
+            : SleepBasis.current
 
         // Bedtime consistency (Apple's 3rd factor) — last night's bedtime vs the
         // rolling normal. Only available with HealthKit sleep + enough history.

@@ -15,21 +15,27 @@ final class ManualSleepStore {
     static let shared = ManualSleepStore()
 
     private var hours: Double = UserDefaults.standard.double(forKey: "manualSleepHours")
+    private var awakenings: Int = UserDefaults.standard.integer(forKey: "manualSleepAwakenings")
     private var dayStamp: Double = UserDefaults.standard.double(forKey: "manualSleepDay")
 
     private static func todayStamp() -> Double {
         Calendar.current.startOfDay(for: Date()).timeIntervalSinceReferenceDate
     }
 
-    /// Manually-logged hours for last night, if entered today.
-    var today: Double? {
-        (dayStamp == Self.todayStamp() && hours > 0) ? hours : nil
-    }
+    private var isToday: Bool { dayStamp == Self.todayStamp() && hours > 0 }
 
-    func log(hours: Double) {
+    /// Manually-logged hours for last night, if entered today.
+    var today: Double? { isToday ? hours : nil }
+
+    /// Estimated awakenings for last night, if entered today.
+    var todayAwakenings: Int? { isToday ? awakenings : nil }
+
+    func log(hours: Double, awakenings: Int = 0) {
         self.hours = hours
+        self.awakenings = awakenings
         self.dayStamp = Self.todayStamp()
         UserDefaults.standard.set(hours, forKey: "manualSleepHours")
+        UserDefaults.standard.set(awakenings, forKey: "manualSleepAwakenings")
         UserDefaults.standard.set(dayStamp, forKey: "manualSleepDay")
     }
 }

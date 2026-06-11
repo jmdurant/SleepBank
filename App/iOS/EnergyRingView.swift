@@ -170,19 +170,25 @@ struct EnergyRingView: View {
 struct SleepEntrySheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var hours: Double = 7.0
+    @State private var awakenings: Int = 2
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 22) {
+            VStack(spacing: 18) {
                 Image(systemName: "bed.double.fill").font(.largeTitle).foregroundStyle(.indigo)
-                Text("How long did you sleep last night?")
+                Text("How was last night?")
                     .font(.title3.bold()).multilineTextAlignment(.center)
-                Text("We didn't find sleep data from Apple Health. Give your best estimate so your Alert Score reflects your real night — until then we can't show it.")
+                Text("We didn't find sleep data from Apple Health. Your estimate becomes an Apple-style Sleep Score so your Alert Score reflects your real night.")
                     .font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
 
-                Text(String(format: "%.1f hours", hours))
-                    .font(.system(size: 40, weight: .bold, design: .rounded)).monospacedDigit()
-                Stepper("", value: $hours, in: 0...14, step: 0.5).labelsHidden()
+                entryRow("Hours slept", value: String(format: "%.1f h", hours)) {
+                    Stepper("", value: $hours, in: 0...14, step: 0.5).labelsHidden()
+                }
+                entryRow("Times you woke up", value: "\(awakenings)") {
+                    Stepper("", value: $awakenings, in: 0...12).labelsHidden()
+                }
+                Text("Roughly how many times you remember waking — it sets the interruptions part of the score.")
+                    .font(.caption2).foregroundStyle(.secondary).multilineTextAlignment(.center)
 
                 Button {
                     save()
@@ -201,11 +207,22 @@ struct SleepEntrySheet: View {
         .presentationDetents([.medium])
     }
 
+    private func entryRow(_ title: String, value: String, @ViewBuilder control: () -> some View) -> some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title).font(.subheadline.weight(.medium))
+                Text(value).font(.title3.monospacedDigit().bold()).foregroundStyle(.indigo)
+            }
+            Spacer()
+            control()
+        }
+    }
+
     /// Log the estimate, then refresh everything downstream of the rhythm — the
     /// in-app ring/curve update via @Observable on ManualSleepStore, but the widget
     /// and watch read a saved snapshot, so re-snapshot and reload them too.
     private func save() {
-        ManualSleepStore.shared.log(hours: hours)
+        ManualSleepStore.shared.log(hours: hours, awakenings: awakenings)
         let health = HealthKitService.shared
         let snapshot = RhythmSnapshot(rhythm: AlertnessProvider.rhythm(now: Date()),
                                       morningLightStreak: health.morningLightStreak, updated: Date())
