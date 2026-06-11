@@ -62,6 +62,10 @@ class HealthKitService {
             HKQuantityType(.heartRate),
             HKQuantityType(.timeInDaylight),
             HKQuantityType(.appleExerciseTime),
+            // Mood comorbidity context: depression/anxiety strongly affect sleep.
+            // These are the only questionnaires Apple exposes natively (iOS 18+).
+            HKScoredAssessmentType(.PHQ9),
+            HKScoredAssessmentType(.GAD7),
         ]
         do {
             try await store.requestAuthorization(toShare: [], read: readTypes)
@@ -70,6 +74,66 @@ class HealthKitService {
         } catch {
             print("[HealthKit] Authorization error: \(error)")
             return false
+        }
+    }
+
+    // MARK: - Mood assessments (read-only context)
+
+    /// A PHQ-9 or GAD-7 result the user took in the Health app — reflected read-only
+    /// as sleep comorbidity context. We don't administer or score these; Apple does.
+    struct MoodAssessment: Identifiable {
+        let id = UUID()
+        let title: String     // "Depression (PHQ-9)" / "Anxiety (GAD-7)"
+        let score: Int
+        let scoreMax: Int
+        let risk: String      // Apple's computed risk band
+        let date: Date
+    }
+
+    /// Most recent PHQ-9 and GAD-7 the user has in Apple Health, if any.
+    func latestMoodAssessments() async -> [MoodAssessment] {
+        guard HKHealthStore.isHealthDataAvailable() else { return [] }
+        var out: [MoodAssessment] = []
+        if let phq = await latestSample(HKScoredAssessmentType(.PHQ9)) as? HKPHQ9Assessment {
+            out.append(MoodAssessment(title: "Depression (PHQ-9)", score: phq.score, scoreMax: 27,
+                                      risk: Self.riskLabel(phq.risk), date: phq.endDate))
+        }
+        if let gad = await latestSample(HKScoredAssessmentType(.GAD7)) as? HKGAD7Assessment {
+            out.append(MoodAssessment(title: "Anxiety (GAD-7)", score: gad.score, scoreMax: 21,
+                                      risk: Self.riskLabel(gad.risk), date: gad.endDate))
+        }
+        return out
+    }
+
+    private func latestSample(_ type: HKSampleType) async -> HKSample? {
+        await withCheckedContinuation { cont in
+            let sort = [NSSortDescriptor(key: HKSampleSortIdentifierEndDate, ascending: false)]
+            let query = HKSampleQuery(sampleType: type, predicate: nil, limit: 1,
+                                      sortDescriptors: sort) { _, samples, _ in
+                cont.resume(returning: samples?.first)
+            }
+            store.execute(query)
+        }
+    }
+
+    private static func riskLabel(_ r: HKPHQ9Assessment.Risk) -> String {
+        switch r {
+        case .noneToMinimal:    return "None–minimal"
+        case .mild:             return "Mild"
+        case .moderate:         return "Moderate"
+        case .moderatelySevere: return "Moderately severe"
+        case .severe:           return "Severe"
+        @unknown default:       return "—"
+        }
+    }
+
+    private static func riskLabel(_ r: HKGAD7Assessment.Risk) -> String {
+        switch r {
+        case .noneToMinimal: return "None–minimal"
+        case .mild:          return "Mild"
+        case .moderate:      return "Moderate"
+        case .severe:        return "Severe"
+        @unknown default:    return "—"
         }
     }
 

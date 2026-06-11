@@ -13,6 +13,12 @@ import SleepBankCore
 
 struct NapView: View {
     @State private var nap = PhoneNapController.shared
+    @State private var kss = KSSStore.shared
+    @AppStorage("napTrackAlertness") private var trackAlertness = false
+    @State private var showKSSPre = false
+    @State private var showKSSPost = false
+    @State private var pendingNapType: NapType?
+    @State private var ratedSession: KSSSession?
 
     var body: some View {
         Group {
@@ -27,6 +33,35 @@ struct NapView: View {
             }
         }
         .padding(.horizontal)
+        // Before the nap: rate sleepiness, then start (Skip starts it anyway).
+        .sheet(isPresented: $showKSSPre, onDismiss: {
+            if let t = pendingNapType { nap.start(type: t); pendingNapType = nil }
+        }) {
+            KSSPickerView(title: "Before your nap",
+                          prompt: "How sleepy do you feel right now?") { value in
+                kss.startSession(pre: value)
+                showKSSPre = false
+            }
+        }
+        // At the recap: rate it again to see the change.
+        .sheet(isPresented: $showKSSPost) {
+            KSSPickerView(title: "Now you're up",
+                          prompt: "How sleepy do you feel now?") { value in
+                kss.completeOpenSession(post: value)
+                ratedSession = kss.latest
+                showKSSPost = false
+            }
+        }
+    }
+
+    private func startNap(_ type: NapType) {
+        ratedSession = nil
+        if trackAlertness {
+            pendingNapType = type
+            showKSSPre = true
+        } else {
+            nap.start(type: type)
+        }
     }
 
     // MARK: - Pick a nap
@@ -36,7 +71,7 @@ struct NapView: View {
             Image(systemName: "moon.zzz.fill").font(.system(size: 44)).foregroundStyle(.indigo)
             ForEach(NapType.allCases, id: \.self) { type in
                 Button {
-                    nap.start(type: type)
+                    startNap(type)
                 } label: {
                     VStack(spacing: 2) {
                         Text(type.title).font(.headline)
@@ -47,6 +82,14 @@ struct NapView: View {
                 .buttonStyle(.borderedProminent)
                 .tint(type == .power ? .indigo : .teal)
             }
+
+            Toggle(isOn: $trackAlertness) {
+                Label("Rate alertness before & after", systemImage: "bolt.fill")
+                    .font(.caption)
+            }
+            .tint(.indigo)
+            .padding(.horizontal, 4)
+
             Text("Uses the paired Polar H10 and Muse when connected. Open Sensors to connect them.")
                 .font(.caption2).foregroundStyle(.secondary).multilineTextAlignment(.center)
         }
@@ -130,7 +173,29 @@ struct NapView: View {
             } else {
                 Text("Didn't detect sleep this time").font(.subheadline).foregroundStyle(.secondary)
             }
-            Button { nap.dismissRecap() } label: {
+
+            if let s = ratedSession, let delta = s.delta, let post = s.post {
+                VStack(spacing: 2) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "bolt.fill").foregroundStyle(delta < 0 ? .green : .orange)
+                        Text("Sleepiness \(s.pre) → \(post)")
+                            .font(.subheadline.weight(.semibold).monospacedDigit())
+                    }
+                    Text(delta < 0 ? "More alert than before your nap." :
+                            (delta > 0 ? "A bit groggy — give it a few minutes to lift."
+                                       : "About the same right now."))
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 4)
+            } else if kss.hasOpenSession {
+                Button { showKSSPost = true } label: {
+                    Label("Rate how alert you feel now", systemImage: "bolt.fill")
+                        .font(.subheadline)
+                }
+                .buttonStyle(.bordered).tint(.indigo)
+            }
+
+            Button { ratedSession = nil; kss.cancelOpenSession(); nap.dismissRecap() } label: {
                 Label("Done", systemImage: "checkmark").frame(maxWidth: .infinity).padding(.vertical, 6)
             }
             .buttonStyle(.borderedProminent).tint(.green)

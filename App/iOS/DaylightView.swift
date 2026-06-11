@@ -22,6 +22,7 @@ enum HomeRoute: Hashable {
     case settings
     case epworth
     case psas
+    case kss
 }
 
 struct DaylightView: View {

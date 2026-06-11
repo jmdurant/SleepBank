@@ -98,6 +98,7 @@ struct SettingsView: View {
                 NavigationLink(value: HomeRoute.alertness) { Label("Alert Score", systemImage: "bolt.fill") }
                 NavigationLink(value: HomeRoute.epworth) { Label("Daytime Sleepiness check-in", systemImage: "checklist") }
                 NavigationLink(value: HomeRoute.psas) { Label("Pre-Sleep Arousal check-in", systemImage: "chart.line.downtrend.xyaxis") }
+                NavigationLink(value: HomeRoute.kss) { Label("Sleepiness (nap before/after)", systemImage: "bolt.fill") }
             }
 
             Section {

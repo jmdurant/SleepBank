@@ -142,9 +142,27 @@ struct PSASHistoryView: View {
     @State private var store = PSASStore.shared
     @State private var snapshot = false
     @State private var resultSession: PSASSession?
+    @State private var moods: [HealthKitService.MoodAssessment] = []
 
     var body: some View {
         Form {
+            if !moods.isEmpty {
+                Section {
+                    ForEach(moods) { m in
+                        HStack {
+                            Text(m.title)
+                            Spacer()
+                            Text("\(m.score)/\(m.scoreMax)").monospacedDigit().foregroundStyle(.secondary)
+                            Text(m.risk).font(.caption.weight(.medium))
+                        }
+                    }
+                } header: {
+                    Text("From Apple Health")
+                } footer: {
+                    Text("Your latest depression/anxiety check-ins, read from Apple Health — both strongly affect sleep and pre-sleep arousal. SleepBank only reflects them; it doesn't score them.")
+                }
+            }
+
             Section {
                 Text("Rate how wound-up you feel — in your body and your mind — as you try to fall asleep. Best taken as a *before & after* around the wind-down breathing, but you can take a one-off snapshot too.")
                     .font(.callout).foregroundStyle(.secondary)
@@ -185,6 +203,7 @@ struct PSASHistoryView: View {
         }
         .navigationTitle("Pre-Sleep Arousal")
         .navigationBarTitleDisplayMode(.inline)
+        .task { moods = await HealthKitService.shared.latestMoodAssessments() }
         .sheet(isPresented: $snapshot) {
             PSASSurveyView(title: "Check-in", subtitle: "How wound-up are you right now?") { answers in
                 store.startSession(pre: answers)

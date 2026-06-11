@@ -110,8 +110,8 @@ questionnaires.
 |---|---|---|---|---|
 | **Pre-Sleep Arousal Scale (PSAS)** | Somatic + cognitive arousal *as you fall asleep* — the exact target of the breathing pacer | **Free** — journal scale, no fee gate (confirm vs 1985 source) | None | **Implemented** — pre/post pair around the wind-down breathing; the before→after delta is biofeedback outcome data |
 | **Epworth Sleepiness Scale (ESS)** | Daytime sleepiness — on-thesis for a nap/alertness app | © M. Johns — **commercial license** (MAPI/eProvide) | None | **Implemented** — self-tracking check-in; license before paid release |
-| **Karolinska Sleepiness Scale (KSS)** | Momentary sleepiness (pre/post nap) | **Free** | None | Planned — pairs with the alertness curve / nap recap |
-| **PHQ-9 / GAD-7** | Depression / anxiety comorbidity (huge sleep confounders) | **Free** (Pfizer, explicit public use) | **Native** (read+write, iOS 18+) | Read mood context via the API; write any we administer |
+| **Karolinska Sleepiness Scale (KSS)** | Momentary sleepiness (pre/post nap) | **Free** | None | **Implemented** — single 1–9 item rated before a nap and at the recap; before→after delta |
+| **PHQ-9 / GAD-7** | Depression / anxiety comorbidity (huge sleep confounders) | **Free** (Pfizer, explicit public use) | **Native** (read+write, iOS 18+) | **Implemented (read)** — latest PHQ-9/GAD-7 reflected read-only from Apple Health in the PSAS screen |
 | **Pittsburgh Sleep Quality Index (PSQI)** | Sleep quality (last month) | © Univ. of Pittsburgh — **commercial license/fee** | None | Skip unless licensed; wrong granularity for a per-session intervention anyway |
 | **Insomnia Severity Index (ISI)** | Insomnia severity / DTx endpoint | © Morin — **commercial license** (MAPI) | None | Only if we pursue the (avoided) DTx route |
 
