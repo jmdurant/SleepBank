@@ -16,7 +16,6 @@ import SleepBankCore
 struct EnergyRingView: View {
     var health = HealthKitService.shared
     @State private var showSleepEntry = false
-    @State private var promptedThisLaunch = false
 
     /// No real sleep basis yet, and HealthKit has finished loading — so it's a true
     /// "no data" state, not just "still loading."
@@ -64,13 +63,7 @@ struct EnergyRingView: View {
             .padding(.horizontal)
             .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 24))
         }
-        // Popup on load when there's no sleep data — once per launch.
-        .onChange(of: needsSleepEntry) { _, needs in
-            if needs && !promptedThisLaunch { promptedThisLaunch = true; showSleepEntry = true }
-        }
-        .onAppear {
-            if needsSleepEntry && !promptedThisLaunch { promptedThisLaunch = true; showSleepEntry = true }
-        }
+        // Not forced — the "Estimate last night" ring is tappable to open this.
         .sheet(isPresented: $showSleepEntry) { SleepEntrySheet() }
     }
 
