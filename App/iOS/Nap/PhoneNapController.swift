@@ -61,6 +61,9 @@ class PhoneNapController {
         engine = NapEngine(type: type, sessionStart: now, detector: detector)
         recorder.begin(at: now)
         motion.startMonitoring()
+        // Keep the app alive in the background for the whole nap (the iOS equivalent of
+        // the watch's workout session) — via the audio session, even if sound is off.
+        NoiseService.shared.beginKeepAlive()
         if NoiseService.shared.autoPlayDuringNap { NoiseService.shared.play() }
         // The phone's nap UI shows the visual breathing guide (which drives the haptic
         // pacer itself), so here we only auto-start the spoken body-scan if selected.
@@ -166,6 +169,7 @@ class PhoneNapController {
         alarm.stop()
         motion.stopMonitoring()
         NoiseService.shared.fadeOut()
+        NoiseService.shared.endKeepAlive()   // release the background keep-alive
         GuidedRelaxationService.shared.stop()
         LiveActivityManager.shared.end()
         SharedStore.napActive = false

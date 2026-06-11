@@ -104,6 +104,11 @@ class NoiseService {
     @ObservationIgnored private let engine = AVAudioEngine()
     @ObservationIgnored private var sourceNode: AVAudioSourceNode?
     @ObservationIgnored private var fadeTimer: Timer?
+    /// While true, keep the audio engine rendering (silently if not playing) so the
+    /// phone nap stays alive in the background even with the relaxing sound off — the
+    /// iOS equivalent of the watch's workout session. The session isn't torn down
+    /// until keep-alive ends, so the nap survives the onset fade-out too.
+    @ObservationIgnored private var keepAlive = false
 
     // Realtime-safe PRNG (xorshift) and filter state for pink/brown shaping.
     @ObservationIgnored private var rng: UInt32 = 0x9E3779B9
@@ -134,9 +139,34 @@ class NoiseService {
         fadeTimer?.invalidate(); fadeTimer = nil
         duckTimer?.invalidate(); duckTimer = nil
         engine.mainMixerNode.outputVolume = 0
-        engine.pause()
         isPlaying = false
         duckLevel = 1
+        // Keep the (now silent) engine + session up if a nap is relying on it to stay
+        // alive; only fully tear down when keep-alive is off.
+        guard !keepAlive else { return }
+        engine.pause()
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+    }
+
+    /// Hold the audio session active (silently if needed) for the duration of a phone
+    /// nap, so the loop + smart alarm survive screen-lock/backgrounding regardless of
+    /// the relaxing-sound toggle. Idempotent.
+    func beginKeepAlive() {
+        keepAlive = true
+        configureSession()
+        if sourceNode == nil { installSourceNode() }
+        do { if !engine.isRunning { try engine.start() } } catch {
+            print("[Noise] keep-alive start failed: \(error)")
+        }
+        applyVolume()   // stays silent while isPlaying == false
+    }
+
+    /// Release the keep-alive at nap end. If sound is fading out, the fade's own stop()
+    /// will deactivate once it finishes; otherwise tear down now.
+    func endKeepAlive() {
+        keepAlive = false
+        guard !isPlaying else { return }
+        engine.pause()
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 

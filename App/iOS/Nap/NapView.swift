@@ -144,6 +144,12 @@ struct NapView: View {
             }
             .font(.caption2).foregroundStyle(.secondary).multilineTextAlignment(.center)
 
+            Label("Turn on a Focus (or Do Not Disturb) so nothing interrupts you — your wake alarm still sounds through it.",
+                  systemImage: "moon.fill")
+                .font(.caption2).foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.top, 4)
+
             Button { showBreathe = true } label: {
                 Label("Breathe with the circle", systemImage: "wind")
                     .font(.subheadline.weight(.medium))
