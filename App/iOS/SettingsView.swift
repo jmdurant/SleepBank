@@ -119,6 +119,12 @@ struct SettingsView: View {
             }
 
             Section {
+                NavigationLink(value: HomeRoute.research) { Label("Research participation", systemImage: "flask.fill") }
+            } footer: {
+                Text("Optional. Let your de-identified check-in data help research into non-drug ways to manage daytime alertness.")
+            }
+
+            Section {
                 Text("SleepBank is an investigational wellness prototype — it helps you cope with and optimize a short-sleep day, not replace the sleep you need. Not a medical device.")
                     .font(.caption).foregroundStyle(.secondary)
             }

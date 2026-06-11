@@ -86,6 +86,7 @@ struct ContentView: View {
         case .epworth:   EpworthView()
         case .psas:      PSASHistoryView()
         case .kss:       KSSHistoryView()
+        case .research:  ResearchView()
         }
     }
 
@@ -100,6 +101,7 @@ struct ContentView: View {
         case .epworth:              tab = .settings; settingsPath = [.epworth]
         case .psas:                 tab = .settings; settingsPath = [.psas]
         case .kss:                  tab = .settings; settingsPath = [.kss]
+        case .research:             tab = .settings; settingsPath = [.research]
         }
     }
 
