@@ -38,22 +38,21 @@ struct EnergyRingView: View {
             let shown = scrubLevel ?? (charging ? (preview.level ?? nowLevel) : nowLevel)
             let markTime: Date? = preview.scrubTime ?? (charging ? preview.peakTime : nil)
             VStack(spacing: 14) {
-                HStack(spacing: 6) {
-                    Image(systemName: "bolt.fill").font(.subheadline).foregroundStyle(.yellow)
-                    Text("Alertness Score").font(.headline)
-                }
+                // Tapping the score (title + ring) opens the Alertness Score details.
+                // Scrubbing is reset by the dedicated "Now" control on the curve card —
+                // tapping the battery to reset was unintuitive, so it's gone.
                 if needsSleepEntry {
                     // No sleep basis → don't show a (misleadingly high) number; ask.
-                    Button { showSleepEntry = true } label: { noDataRing }
-                        .buttonStyle(.plain)
-                } else if scrubLevel != nil {
-                    Button { PlanPreview.shared.scrubTime = nil } label: {
-                        ring(level: shown, now: now, markTime: markTime, scrubbing: true)
+                    Button { showSleepEntry = true } label: {
+                        VStack(spacing: 14) { titleRow; noDataRing }
                     }
                     .buttonStyle(.plain)
                 } else {
                     NavigationLink(value: HomeRoute.alertness) {
-                        ring(level: shown, now: now, markTime: markTime, scrubbing: false)
+                        VStack(spacing: 14) {
+                            titleRow
+                            ring(level: shown, now: now, markTime: markTime, scrubbing: scrubLevel != nil)
+                        }
                     }
                     .buttonStyle(.plain)
                 }
@@ -73,6 +72,13 @@ struct EnergyRingView: View {
             if needsSleepEntry && !promptedThisLaunch { promptedThisLaunch = true; showSleepEntry = true }
         }
         .sheet(isPresented: $showSleepEntry) { SleepEntrySheet() }
+    }
+
+    private var titleRow: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "bolt.fill").font(.subheadline).foregroundStyle(.yellow)
+            Text("Alertness Score").font(.headline)
+        }
     }
 
     // MARK: - No-data state
