@@ -53,6 +53,7 @@ targets:
         NSCalendarsFullAccessUsageDescription: "SleepBank checks your calendar for busy times so it suggests a nap when you're actually free."
         NSLocationWhenInUseUsageDescription: "SleepBank uses your approximate location only to know your local sunrise and sunset, so it can tell daylight from after-dark when timing your light and activity advice."
         NSBluetoothAlwaysUsageDescription: "SleepBank connects to a Muse headband and Polar H10 to read EEG and continuous heart rate for sleep-onset detection."
+        NSMotionUsageDescription: "SleepBank reads motion — including AirPods head-stillness — to detect when you've settled and fallen asleep."
         # Keep H10/Muse streaming and relaxing-sound playback alive while the
         # phone is backgrounded/locked during a nap.
         UIBackgroundModes:

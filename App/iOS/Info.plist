@@ -30,6 +30,8 @@
 	<string>SleepBank warms your HomeKit lights at wind-down to help you sleep.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>SleepBank uses your approximate location only to know your local sunrise and sunset, so it can tell daylight from after-dark when timing your light and activity advice.</string>
+	<key>NSMotionUsageDescription</key>
+	<string>SleepBank reads motion — including AirPods head-stillness — to detect when you've settled and fallen asleep.</string>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
 	<key>NSUbiquitousContainers</key>
