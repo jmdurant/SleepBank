@@ -119,6 +119,9 @@ struct LastNightBox: View {
 struct AlertnessScoreBox: View {
     var health = HealthKitService.shared
     @State private var showSleepEntry = false
+    /// Off until just after load, so the initial value settling in doesn't "draw on"
+    /// — only genuine changes during the day (dip, scrub, nap preview) animate.
+    @State private var animateRing = false
 
     private var needsSleepEntry: Bool {
         AlertnessProvider.sleepDataLoaded(health: health) && !AlertnessProvider.hasSleepData(health: health)
@@ -148,6 +151,11 @@ struct AlertnessScoreBox: View {
             }
         }
         .sheet(isPresented: $showSleepEntry) { SleepEntrySheet() }
+        .task {
+            // Let the level settle on load without animating, then enable it.
+            try? await Task.sleep(for: .milliseconds(800))
+            animateRing = true
+        }
     }
 
     private func box<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
@@ -191,7 +199,7 @@ struct AlertnessScoreBox: View {
                     style: StrokeStyle(lineWidth: 11, lineCap: .round)
                 )
                 .rotationEffect(.degrees(-90))
-                .animation(.easeInOut(duration: 0.6), value: level)
+                .animation(animateRing ? .easeInOut(duration: 0.6) : nil, value: level)
             VStack(spacing: 0) {
                 Text("\(AlertnessProvider.pct(level))")
                     .font(.system(size: 34, weight: .bold, design: .rounded))
