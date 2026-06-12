@@ -19,11 +19,11 @@ struct HomeDashboard: View {
             LastNightBox()
             // Equal-size pair: identical width and height; content centered in each so
             // neither overflows nor floats. Ring is sized to fit this height exactly.
-            HStack(spacing: 14) {
+            HStack(spacing: 10) {
                 AlertnessScoreBox().frame(maxWidth: .infinity)
                 DaylightBox().frame(maxWidth: .infinity)
             }
-            .frame(height: 150)
+            .frame(height: 166)
         }
     }
 }
@@ -175,7 +175,7 @@ struct AlertnessScoreBox: View {
                 Text("Estimate").font(.caption2.weight(.semibold)).foregroundStyle(.ocean)
             }
         }
-        .frame(width: 100, height: 100)
+        .frame(width: 110, height: 110)
     }
 
     private func ring(level: Double, now: Date, markTime: Date?, scrubbing: Bool) -> some View {
@@ -206,7 +206,7 @@ struct AlertnessScoreBox: View {
                 }
             }
         }
-        .frame(width: 100, height: 100)
+        .frame(width: 110, height: 110)
     }
 
     private func tint(for level: Double) -> [Color] {
