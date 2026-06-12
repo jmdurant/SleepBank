@@ -157,6 +157,7 @@ private struct HomeView: View {
             VStack(alignment: .leading, spacing: 20) {
                 EnergyRingView()
                 AlertnessCurveView()
+                SensorStatusView()
             }
             .padding()
         }
