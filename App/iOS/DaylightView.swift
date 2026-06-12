@@ -17,6 +17,7 @@ enum HomeRoute: Hashable {
     case plan
     case daylight
     case alertness
+    case history
     case windDown
     case nap
     case settings

@@ -70,9 +70,6 @@ struct ContentView: View {
             if let route = note.object as? HomeRoute { open(route) }
             PlanNotificationService.shared.clearPending()
         }
-        .onReceive(NotificationCenter.default.publisher(for: .openHistory)) { _ in
-            tab = .history
-        }
     }
 
     // MARK: - Navigation
@@ -83,6 +80,7 @@ struct ContentView: View {
         case .plan:      DayPlanView()
         case .daylight:  DaylightView()
         case .alertness: AlertnessDetailView()
+        case .history:   HistoryView()
         case .windDown:  WindDownView()
         case .nap:       NapView()
         case .settings:  SettingsView()
@@ -96,7 +94,7 @@ struct ContentView: View {
     /// Route to the right tab (and push within it) for a deep link / notification.
     private func open(_ route: HomeRoute) {
         switch route {
-        case .alertness, .daylight: tab = .home;     homePath = [route]
+        case .alertness, .daylight, .history: tab = .home; homePath = [route]
         case .plan:                 tab = .today;    todayPath = []
         case .windDown:             tab = .today;    todayPath = [.windDown]
         case .nap:                  tab = .nap;      napPath = []

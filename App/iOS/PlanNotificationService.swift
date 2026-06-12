@@ -14,7 +14,6 @@ import SleepBankCore
 
 extension Notification.Name {
     static let openPlan = Notification.Name("sleepbank.openPlan")
-    static let openHistory = Notification.Name("sleepbank.openHistory")
 }
 
 final class PlanNotificationService: NSObject, UNUserNotificationCenterDelegate {

@@ -43,9 +43,9 @@ struct LastNightBox: View {
             if needsEntry {
                 Button { showSleepEntry = true } label: { card }.buttonStyle(.plain)
             } else {
-                // Tap into History to review the night in detail.
-                Button { NotificationCenter.default.post(name: .openHistory, object: nil) } label: { card }
-                    .buttonStyle(.plain)
+                // Push a detail page for the night (with a back button), like the
+                // other home cards — not a tab switch.
+                NavigationLink(value: HomeRoute.history) { card }.buttonStyle(.plain)
             }
         }
         .sheet(isPresented: $showSleepEntry) { SleepEntrySheet() }
