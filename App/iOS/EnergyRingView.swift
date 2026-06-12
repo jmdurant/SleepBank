@@ -17,19 +17,13 @@ struct HomeDashboard: View {
     var body: some View {
         VStack(spacing: 14) {
             LastNightBox()
-            // Alertness gets the wider share, daylight the narrower — a 57/43 split
-            // so the ring tile reads as the primary of the pair.
-            GeometryReader { geo in
-                let gap: CGFloat = 14
-                let w = geo.size.width - gap
-                // Top-aligned: the ring tile sets the height; daylight sizes to its
-                // own content so it isn't padded out with empty space.
-                HStack(alignment: .top, spacing: gap) {
-                    AlertnessScoreBox().frame(width: w * 0.57, height: 168)
-                    DaylightBox().frame(width: w * 0.43)
-                }
+            // Equal-size pair: same width and height. The ring fills its tile (so no
+            // wasted space around it) and daylight anchors its content top-and-bottom.
+            HStack(spacing: 14) {
+                AlertnessScoreBox().frame(maxWidth: .infinity)
+                DaylightBox().frame(maxWidth: .infinity)
             }
-            .frame(height: 168)
+            .frame(height: 176)
         }
     }
 }
@@ -157,16 +151,18 @@ struct AlertnessScoreBox: View {
     }
 
     private func box<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
-        VStack(spacing: 10) {
+        VStack(spacing: 8) {
             HStack(spacing: 5) {
                 Image(systemName: "bolt.fill").font(.caption).foregroundStyle(.sand)
                 Text("Alertness").font(.subheadline.weight(.semibold))
                 Spacer()
             }
+            Spacer(minLength: 0)
             content()
+            Spacer(minLength: 0)
         }
         .padding()
-        .frame(maxWidth: .infinity, minHeight: 168)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 20))
     }
 
@@ -179,7 +175,7 @@ struct AlertnessScoreBox: View {
                 Text("Estimate").font(.caption2.weight(.semibold)).foregroundStyle(.ocean)
             }
         }
-        .frame(width: 104, height: 104)
+        .frame(width: 124, height: 124)
     }
 
     private func ring(level: Double, now: Date, markTime: Date?, scrubbing: Bool) -> some View {
@@ -210,7 +206,7 @@ struct AlertnessScoreBox: View {
                 }
             }
         }
-        .frame(width: 104, height: 104)
+        .frame(width: 124, height: 124)
     }
 
     private func tint(for level: Double) -> [Color] {
@@ -249,14 +245,13 @@ struct DaylightBox: View {
                 } else {
                     Text("none yet this morning").font(.caption).foregroundStyle(.secondary)
                 }
-                if streak > 0 || walkMin >= 1 {
-                    HStack(spacing: 10) {
-                        if streak > 0 { Text("🌅 \(streak)").font(.caption.weight(.semibold)) }
-                        if walkMin >= 1 { Text("🚶 \(Int(walkMin.rounded())) min AM").font(.caption).foregroundStyle(.secondary) }
-                    }
+                Spacer(minLength: 0)
+                HStack(spacing: 10) {
+                    if streak > 0 { Text("🌅 \(streak)").font(.caption.weight(.semibold)) }
+                    if walkMin >= 1 { Text("🚶 \(Int(walkMin.rounded())) min AM").font(.caption).foregroundStyle(.secondary) }
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .topLeading)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .padding()
             .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 20))
         }
