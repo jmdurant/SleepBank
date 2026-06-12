@@ -43,12 +43,16 @@ struct SensorsView: View {
     private var watchSection: some View {
         Section {
             let napActive = PhoneNapController.shared.isNapping
-            statusRow(
+            sensorHeader(
                 name: watch.isStreaming ? "Reading heart rate" : (watch.requested ? "Waiting for watch…" : "Off"),
                 connected: watch.requested,
                 streaming: watch.isStreaming,
-                detail: napActive ? "Active during your nap" : "Wear your Apple Watch (app open), then Check"
-            )
+                detail: napActive ? "Active during your nap" : "Wear your Apple Watch (app open), then Check",
+                buttonTitle: napActive ? nil : (watch.requested ? "Stop" : "Check")
+            ) {
+                if watch.requested { watch.requestStop(); checkingWatch = false }
+                else { watch.requestStart(); checkingWatch = true }
+            }
             if let hr = watch.freshHeartRate {
                 LabeledContent("Heart rate", value: "\(hr) bpm")
             }
@@ -57,11 +61,6 @@ struct SensorsView: View {
             }
             if napActive {
                 Text("Your nap is requesting wrist heart rate from the watch.").font(.caption2).foregroundStyle(.secondary)
-            } else {
-                Button(watch.requested ? "Stop" : "Check heart rate") {
-                    if watch.requested { watch.requestStop(); checkingWatch = false }
-                    else { watch.requestStart(); checkingWatch = true }
-                }
             }
             if watch.heartRateHistory.count > 1 {
                 VStack(alignment: .leading, spacing: 6) {
@@ -84,15 +83,13 @@ struct SensorsView: View {
 
     private var museSection: some View {
         Section("Muse — EEG") {
-            statusRow(
+            sensorHeader(
                 name: muse.deviceName ?? (muse.isScanning ? "Scanning…" : "Not connected"),
                 connected: muse.isConnected,
                 streaming: muse.isStreaming,
-                detail: muse.isConnected ? (muse.eeg.hasGoodSignal ? "Good contact" : "Adjust fit") : nil
-            )
-            Button(muse.isConnected ? "Disconnect" : "Connect Muse") {
-                muse.isConnected ? muse.disconnect() : muse.startScanning()
-            }
+                detail: muse.isConnected ? (muse.eeg.hasGoodSignal ? "Good contact" : "Adjust fit") : nil,
+                buttonTitle: muse.isConnected ? "Disconnect" : "Connect"
+            ) { muse.isConnected ? muse.disconnect() : muse.startScanning() }
             NavigationLink("EEG detail") { MuseMonitorView(muse: muse) }
 
             if muse.eeg.traceSamples.count > 1 {
@@ -130,12 +127,13 @@ struct SensorsView: View {
 
     private var polarSection: some View {
         Section("Polar H10 — Heart rate") {
-            statusRow(
+            sensorHeader(
                 name: polar.deviceName ?? "Not connected",
                 connected: polar.isConnected,
                 streaming: polar.isStreaming,
-                detail: polar.batteryLevel >= 0 ? "Battery \(polar.batteryLevel)%" : nil
-            )
+                detail: polar.batteryLevel >= 0 ? "Battery \(polar.batteryLevel)%" : nil,
+                buttonTitle: polar.isConnected ? "Disconnect" : "Connect"
+            ) { polar.isConnected ? polar.disconnect() : polar.autoConnect() }
             if polar.isStreaming {
                 LabeledContent("Heart rate", value: polar.currentHeartRate > 0 ? "\(polar.currentHeartRate) bpm" : "—")
                 LabeledContent("HRV (RMSSD)", value: polar.hrvRMSSD > 0 ? String(format: "%.0f ms", polar.hrvRMSSD) : "—")
@@ -146,9 +144,6 @@ struct SensorsView: View {
                     LabeledContent("Orientation",
                         value: String(format: "x %.2f  y %.2f  z %.2f", polar.accelX, polar.accelY, polar.accelZ))
                 }
-            }
-            Button(polar.isConnected ? "Disconnect" : "Connect H10") {
-                polar.isConnected ? polar.disconnect() : polar.autoConnect()
             }
             if let err = polar.lastStreamError {
                 Text(err).font(.caption2).foregroundStyle(.red)
@@ -171,13 +166,17 @@ struct SensorsView: View {
     private var airpodsSection: some View {
         Section {
             let napActive = PhoneNapController.shared.isNapping
-            statusRow(
+            sensorHeader(
                 name: airpods.isActive ? "Reading heart rate" : "Off",
                 connected: airpods.isActive,
                 streaming: airpods.freshHeartRate != nil,
                 detail: napActive ? "Active during your nap"
-                                  : (airpods.isActive ? "Keep AirPods Pro in" : "Put AirPods Pro in, then Check")
-            )
+                                  : (airpods.isActive ? "Keep AirPods Pro in" : "Put AirPods Pro in, then Check"),
+                buttonTitle: napActive ? nil : (airpods.isActive ? "Stop" : "Check")
+            ) {
+                if airpods.isActive { airpods.stop(); airpodsMotion.stop(); checking = false }
+                else { airpods.start(); airpodsMotion.start(); checking = true }
+            }
             if airpods.isActive {
                 LabeledContent("Heart rate", value: airpods.freshHeartRate.map { "\($0) bpm" } ?? "waiting…")
             }
@@ -186,11 +185,6 @@ struct SensorsView: View {
             }
             if napActive {
                 Text("Your nap session is reading heart rate and head stillness.").font(.caption2).foregroundStyle(.secondary)
-            } else {
-                Button(airpods.isActive ? "Stop" : "Check heart rate") {
-                    if airpods.isActive { airpods.stop(); airpodsMotion.stop(); checking = false }
-                    else { airpods.start(); airpodsMotion.start(); checking = true }
-                }
             }
             if airpods.heartRateHistory.count > 1 {
                 VStack(alignment: .leading, spacing: 6) {
@@ -211,16 +205,24 @@ struct SensorsView: View {
 
     // MARK: - Helpers
 
-    private func statusRow(name: String, connected: Bool, streaming: Bool, detail: String?) -> some View {
-        HStack {
+    /// One combined header row per sensor — status dot + name/detail + the connect
+    /// control on a single line, instead of three stacked rows.
+    private func sensorHeader(name: String, connected: Bool, streaming: Bool,
+                              detail: String?, buttonTitle: String?,
+                              action: (() -> Void)? = nil) -> some View {
+        HStack(spacing: 12) {
+            Circle()
+                .fill(streaming ? .green : (connected ? .sand : .gray))
+                .frame(width: 10, height: 10)
             VStack(alignment: .leading, spacing: 2) {
                 Text(name)
                 if let detail { Text(detail).font(.caption2).foregroundStyle(.secondary) }
             }
             Spacer()
-            Circle()
-                .fill(streaming ? .green : (connected ? .sand : .gray))
-                .frame(width: 10, height: 10)
+            if let buttonTitle, let action {
+                Button(buttonTitle, action: action)
+                    .buttonStyle(.bordered).controlSize(.small)
+            }
         }
     }
 
