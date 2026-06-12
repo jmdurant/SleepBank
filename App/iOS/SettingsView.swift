@@ -15,6 +15,7 @@ struct SettingsView: View {
     @State private var napWindows = NapWindowsStore.shared
     @State private var profile = SleepProfile.shared
     @State private var showGuidedSetup = false
+    @State private var showPermissions = false
     @AppStorage("appearanceMode") private var appearance: AppearanceMode = .system
     @AppStorage("sleepBasis") private var sleepBasis: SleepBasis = .auto
     @AppStorage("napTrackAlertness") private var trackAlertness = false
@@ -121,6 +122,14 @@ struct SettingsView: View {
             }
 
             Section {
+                Button { showPermissions = true } label: {
+                    Label("Permissions", systemImage: "checklist")
+                }
+            } footer: {
+                Text("Review what SleepBank can use — Health, notifications, motion, location. All optional.")
+            }
+
+            Section {
                 NavigationLink(value: HomeRoute.research) { Label("Research participation", systemImage: "flask.fill") }
             } footer: {
                 Text("Optional. Let your de-identified check-in data help research into non-drug ways to manage daytime alertness.")
@@ -134,6 +143,9 @@ struct SettingsView: View {
         .navigationTitle("Settings")
         .fullScreenCover(isPresented: $showGuidedSetup) {
             WelcomeView { showGuidedSetup = false }
+        }
+        .sheet(isPresented: $showPermissions) {
+            NavigationStack { PermissionsPrimingView { showPermissions = false } }
         }
     }
 

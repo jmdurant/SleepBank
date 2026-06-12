@@ -19,6 +19,12 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
 
     private let manager = CLLocationManager()
 
+    /// Current authorization (for the permissions priming screen).
+    var authStatus: CLAuthorizationStatus { manager.authorizationStatus }
+    var isAuthorized: Bool {
+        authStatus == .authorizedWhenInUse || authStatus == .authorizedAlways
+    }
+
     override init() {
         super.init()
         manager.delegate = self

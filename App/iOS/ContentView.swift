@@ -64,7 +64,7 @@ struct ContentView: View {
         .fullScreenCover(isPresented: Binding(get: { !didOnboard }, set: { if !$0 { didOnboard = true } })) {
             WelcomeView { didOnboard = true }
         }
-        .task { await bootstrap() }
+        .task(id: didOnboard) { await bootstrap() }
         .onOpenURL { open(host: $0.host) }
         .onReceive(NotificationCenter.default.publisher(for: .openPlan)) { note in
             if let route = note.object as? HomeRoute { open(route) }
@@ -120,6 +120,10 @@ struct ContentView: View {
     // MARK: - Bootstrap (once, app-wide)
 
     private func bootstrap() async {
+        // Hold off until the user has been through onboarding's permissions primer —
+        // otherwise these calls fire a stack of system prompts behind the Welcome
+        // screen on first launch. Re-runs (via .task(id:)) once didOnboard flips.
+        guard didOnboard else { return }
         if let route = PlanNotificationService.shared.pendingRoute {   // cold-start from a notification
             open(route)
             PlanNotificationService.shared.clearPending()

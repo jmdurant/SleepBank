@@ -26,7 +26,9 @@ struct WelcomeView: View {
     var body: some View {
         NavigationStack {
             Group {
-                if step == 0 { scheduleStep } else { epworthStep }
+                if step == 0 { scheduleStep }
+                else if step == 1 { epworthStep }
+                else { PermissionsPrimingView(onDone: onDone) }
             }
             .task { if !loaded { prefill(); loaded = true } }
         }
@@ -74,7 +76,7 @@ struct WelcomeView: View {
                 }
                 .buttonStyle(.plain)
 
-                Button("Skip for now") { onDone() }
+                Button("Skip for now") { step = 2 }
                     .font(.subheadline).foregroundStyle(.secondary)
             }
             .padding()
@@ -104,12 +106,12 @@ struct WelcomeView: View {
             Section {
                 Button {
                     if !ess.contains(-1) { EpworthStore.shared.record(answers: ess) }
-                    onDone()
+                    step = 2
                 } label: {
-                    Text(ess.contains(-1) ? "Answer all 8 to finish" : "Finish").frame(maxWidth: .infinity)
+                    Text(ess.contains(-1) ? "Answer all 8 to continue" : "Next").frame(maxWidth: .infinity)
                 }
                 .disabled(ess.contains(-1))
-                Button("Skip this") { onDone() }
+                Button("Skip this") { step = 2 }
                     .frame(maxWidth: .infinity)
             }
         }
