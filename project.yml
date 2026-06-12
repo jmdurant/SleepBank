@@ -163,6 +163,8 @@ targets:
         buildPhase: sources
       - path: App/Shared/RhythmSnapshot.swift
         buildPhase: sources
+      - path: App/iOS/Theme.swift
+        buildPhase: sources
     dependencies:
       - package: SleepChartKit
         product: SleepBankCore

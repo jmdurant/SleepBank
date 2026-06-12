@@ -14,6 +14,7 @@ struct SleepBankWidgetBundle: WidgetBundle {
     var body: some Widget {
         SleepBankHomeWidget()
         AlertnessWidget()
+        DaylightWidget()
         NapLiveActivityWidget()
     }
 }

@@ -39,6 +39,19 @@ enum SharedStore {
         get { defaults?.integer(forKey: "morningLightStreak") ?? 0 }
         set { defaults?.set(newValue, forKey: "morningLightStreak") }
     }
+    /// Today's daylight + morning movement (minutes) for the Daylight widget.
+    static var daylightTotalMin: Int {
+        get { defaults?.integer(forKey: "daylightTotalMin") ?? 0 }
+        set { defaults?.set(newValue, forKey: "daylightTotalMin") }
+    }
+    static var daylightMorningMin: Int {
+        get { defaults?.integer(forKey: "daylightMorningMin") ?? 0 }
+        set { defaults?.set(newValue, forKey: "daylightMorningMin") }
+    }
+    static var morningActivityMin: Int {
+        get { defaults?.integer(forKey: "morningActivityMin") ?? 0 }
+        set { defaults?.set(newValue, forKey: "morningActivityMin") }
+    }
     /// JSON snapshot of the day's alertness-rhythm inputs, so the widget can compute
     /// the live "you are here" % itself at each timeline entry. Decoded by
     /// `RhythmSnapshot` (kept out of this pure-Foundation file so the watch widget,

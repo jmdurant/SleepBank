@@ -70,19 +70,49 @@ struct AlertnessWidgetView: View {
         }
     }
 
+    // Mirrors the app's Alertness tile: header + the score ring with the live %.
     private var small: some View {
-        VStack(spacing: 3) {
-            Image(systemName: "bolt.fill").font(.caption).foregroundStyle(.yellow)
-            Text(entry.hasData ? "\(pct)%" : "—")
-                .font(.system(.largeTitle, design: .rounded).bold()).monospacedDigit()
-            Text("alert").font(.caption2).foregroundStyle(.secondary)
-            Text(entry.phase).font(.caption2).foregroundStyle(.secondary)
-                .multilineTextAlignment(.center).lineLimit(2)
-            if entry.streak > 0 {
-                Text("🌅 \(entry.streak)-day").font(.caption2)
+        VStack(spacing: 0) {
+            HStack(spacing: 4) {
+                Image(systemName: "bolt.fill").font(.caption2).foregroundStyle(.sand)
+                Text("Alertness").font(.caption.weight(.semibold))
+                Spacer()
             }
+            Spacer(minLength: 0)
+            ring
+            Spacer(minLength: 0)
         }
         .containerBackground(.fill.tertiary, for: .widget)
+    }
+
+    private var ring: some View {
+        ZStack {
+            Circle().stroke(.quaternary, lineWidth: 9)
+            Circle()
+                .trim(from: 0, to: max(0.001, entry.hasData ? entry.level : 0.001))
+                .stroke(
+                    AngularGradient(colors: Self.tint(for: entry.level), center: .center,
+                                    startAngle: .degrees(-90), endAngle: .degrees(270)),
+                    style: StrokeStyle(lineWidth: 9, lineCap: .round)
+                )
+                .rotationEffect(.degrees(-90))
+            VStack(spacing: 0) {
+                Text(entry.hasData ? "\(pct)" : "—")
+                    .font(.system(size: 30, weight: .bold, design: .rounded)).monospacedDigit()
+                Text(entry.phase).font(.system(size: 9, weight: .semibold)).foregroundStyle(.secondary)
+                    .lineLimit(1).minimumScaleFactor(0.7)
+            }
+        }
+        .frame(width: 96, height: 96)
+    }
+
+    static func tint(for level: Double) -> [Color] {
+        switch level {
+        case 0.66...:     return [.aqua, .mint]
+        case 0.4..<0.66:  return [.ocean, .tide]
+        case 0.2..<0.4:   return [.sand, Color(red: 0.82, green: 0.64, blue: 0.40)]
+        default:          return [Color(red: 0.72, green: 0.55, blue: 0.32), .sand]
+        }
     }
 
     private var medium: some View {

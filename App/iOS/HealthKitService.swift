@@ -11,6 +11,7 @@
 
 import Foundation
 import HealthKit
+import WidgetKit
 import SleepChartKit
 import SleepBankCore
 
@@ -172,6 +173,12 @@ class HealthKitService {
             morningActivityMinutes = morningExercise
             sleepAverage7Day = sleepResult?.averageLast7Days ?? 0
             lastRefresh = Date()
+            // Mirror today's daylight to the App Group so the Daylight widget matches.
+            SharedStore.daylightTotalMin = Int(daylightDay.total.rounded())
+            SharedStore.daylightMorningMin = Int(daylightDay.morning.rounded())
+            SharedStore.morningActivityMin = Int(morningExercise.rounded())
+            SharedStore.morningLightStreak = streak
+            WidgetCenter.shared.reloadAllTimelines()
         }
     }
 
