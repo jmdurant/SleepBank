@@ -247,11 +247,12 @@ struct DaylightBox: View {
                 } else {
                     Text("none yet this morning").font(.caption).foregroundStyle(.secondary)
                 }
-                Spacer(minLength: 0)
-                // Activity and streak on their own separate lines to fill the tile.
+                // Activity reads parallel to the daylight line, right beneath it.
                 if walkMin >= 1 {
-                    Text("🚶 \(Int(walkMin.rounded())) min walk AM").font(.caption).foregroundStyle(.secondary)
+                    Text("\(Int(walkMin.rounded())) min activity this morning").font(.caption).foregroundStyle(.secondary)
                 }
+                Spacer(minLength: 0)
+                // Streak fills the bottom of the tile.
                 if streak > 0 {
                     Text("🌅 \(streak)-day streak").font(.caption.weight(.semibold))
                 }
