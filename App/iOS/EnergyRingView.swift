@@ -22,12 +22,14 @@ struct HomeDashboard: View {
             GeometryReader { geo in
                 let gap: CGFloat = 14
                 let w = geo.size.width - gap
-                HStack(spacing: gap) {
-                    AlertnessScoreBox().frame(width: w * 0.57, height: 172)
-                    DaylightBox().frame(width: w * 0.43, height: 172)
+                // Top-aligned: the ring tile sets the height; daylight sizes to its
+                // own content so it isn't padded out with empty space.
+                HStack(alignment: .top, spacing: gap) {
+                    AlertnessScoreBox().frame(width: w * 0.57, height: 168)
+                    DaylightBox().frame(width: w * 0.43)
                 }
             }
-            .frame(height: 172)
+            .frame(height: 168)
         }
     }
 }
@@ -231,14 +233,13 @@ struct DaylightBox: View {
         let streak = health.morningLightStreak
         let walkMin = health.morningActivityMinutes
         NavigationLink(value: HomeRoute.daylight) {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 5) {
                     Image(systemName: "sun.max.fill").font(.caption).foregroundStyle(.sand)
                     Text("Daylight").font(.subheadline.weight(.semibold))
                     Spacer()
                     Image(systemName: "chevron.right").font(.caption2).foregroundStyle(.tertiary)
                 }
-                Spacer(minLength: 0)
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
                     Text("\(Int(d.total.rounded()))").font(.system(size: 34, weight: .bold, design: .rounded)).monospacedDigit()
                     Text("min").font(.subheadline).foregroundStyle(.secondary)
@@ -248,13 +249,14 @@ struct DaylightBox: View {
                 } else {
                     Text("none yet this morning").font(.caption).foregroundStyle(.secondary)
                 }
-                HStack(spacing: 10) {
-                    if streak > 0 { Text("🌅 \(streak)").font(.caption.weight(.semibold)) }
-                    if walkMin >= 1 { Text("🚶 \(Int(walkMin.rounded())) min AM").font(.caption).foregroundStyle(.secondary) }
+                if streak > 0 || walkMin >= 1 {
+                    HStack(spacing: 10) {
+                        if streak > 0 { Text("🌅 \(streak)").font(.caption.weight(.semibold)) }
+                        if walkMin >= 1 { Text("🚶 \(Int(walkMin.rounded())) min AM").font(.caption).foregroundStyle(.secondary) }
+                    }
                 }
-                Spacer(minLength: 0)
             }
-            .frame(maxWidth: .infinity, minHeight: 168, alignment: .topLeading)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
             .padding()
             .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 20))
         }
