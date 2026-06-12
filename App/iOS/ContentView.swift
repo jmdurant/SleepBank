@@ -158,8 +158,8 @@ struct ContentView: View {
 private struct HomeView: View {
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                EnergyRingView()
+            VStack(alignment: .leading, spacing: 16) {
+                HomeDashboard()
                 AlertnessCurveView()
             }
             .padding()
