@@ -15,6 +15,7 @@ struct SensorsView: View {
     @State private var muse = MuseService.shared
     @State private var polar = PolarH10Service.shared
     @State private var airpods = PhoneWorkoutHRService.shared
+    @State private var airpodsMotion = AirPodsMotionService.shared
     @State private var watch = WatchHRService.shared
     @State private var checking = false        // this screen opened the AirPods session
     @State private var checkingWatch = false   // this screen requested the watch relay
@@ -30,7 +31,7 @@ struct SensorsView: View {
         .onDisappear {
             // Close anything we opened — unless a nap now owns it.
             if !PhoneNapController.shared.isNapping {
-                if checking { airpods.stop() }
+                if checking { airpods.stop(); airpodsMotion.stop() }
                 if checkingWatch { watch.requestStop() }
             }
             checking = false; checkingWatch = false
@@ -180,12 +181,15 @@ struct SensorsView: View {
             if airpods.isActive {
                 LabeledContent("Heart rate", value: airpods.freshHeartRate.map { "\($0) bpm" } ?? "waiting…")
             }
+            if let hm = airpodsMotion.freshMovement {
+                LabeledContent("Head movement", value: String(format: "%.0f%%", hm * 100))
+            }
             if napActive {
-                Text("Your nap session is reading heart rate.").font(.caption2).foregroundStyle(.secondary)
+                Text("Your nap session is reading heart rate and head stillness.").font(.caption2).foregroundStyle(.secondary)
             } else {
                 Button(airpods.isActive ? "Stop" : "Check heart rate") {
-                    if airpods.isActive { airpods.stop(); checking = false }
-                    else { airpods.start(); checking = true }
+                    if airpods.isActive { airpods.stop(); airpodsMotion.stop(); checking = false }
+                    else { airpods.start(); airpodsMotion.start(); checking = true }
                 }
             }
             if airpods.heartRateHistory.count > 1 {

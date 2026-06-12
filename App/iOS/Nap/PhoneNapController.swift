@@ -29,6 +29,9 @@ class PhoneNapController {
     let workoutHR = PhoneWorkoutHRService.shared
     /// Live wrist HR forwarded from a paired Apple Watch. Shared with the Sensors screen.
     let watchHR = WatchHRService.shared
+    /// Head-stillness from AirPods — the real immobility signal in the AirPods-only
+    /// config (the phone on a nightstand barely moves). iOS, AirPods Pro/Max/3rd-gen+.
+    private let airpodsMotion = AirPodsMotionService.shared
 
     private(set) var napType: NapType = .power
     private(set) var phase: NapPhase = .finished
@@ -87,6 +90,9 @@ class PhoneNapController {
         // Also open a workout session for live HR from AirPods Pro (and to keep sensors
         // hot) — the fallback when no chest strap is connected. iOS 26+.
         workoutHR.start()
+        // Track head-stillness from the AirPods (the immobility signal when they're
+        // the only sensor — no-op if no motion-capable AirPods are in.)
+        airpodsMotion.start()
         // And ask a paired Apple Watch to relay wrist HR (best-effort if reachable).
         watchHR.requestStart()
         if NoiseService.shared.autoPlayDuringNap { NoiseService.shared.play() }
@@ -125,8 +131,9 @@ class PhoneNapController {
             }
         }
         // Immobility source, best → worst: H10 chest accelerometer, then the Apple
-        // Watch's wrist motion (forwarded), then the phone's own motion (the phone may
-        // sit still on a nightstand, so its motion is the weakest signal).
+        // Watch's wrist motion (forwarded), then AirPods head-stillness, then the
+        // phone's own motion (the phone may sit still on a nightstand, so its motion
+        // is the weakest signal). The first three are on the body; the phone isn't.
         let usingChest = polar.isAccStreaming
         let movement: Double
         let still: Double
@@ -134,6 +141,8 @@ class PhoneNapController {
             movement = polar.movementIntensity; still = polar.stillSeconds
         } else if let wm = watchHR.freshMovement, let ws = watchHR.freshStillSeconds {
             movement = wm; still = ws
+        } else if let hm = airpodsMotion.freshMovement, let hs = airpodsMotion.freshStillSeconds {
+            movement = hm; still = hs
         } else {
             movement = motion.movementIntensity; still = motion.stillSeconds
         }
@@ -218,6 +227,7 @@ class PhoneNapController {
         NoiseService.shared.fadeOut()
         NoiseService.shared.endKeepAlive()   // release the background keep-alive
         workoutHR.stop()
+        airpodsMotion.stop()
         watchHR.requestStop()
         GuidedRelaxationService.shared.stop()
         LiveActivityManager.shared.end()
