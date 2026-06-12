@@ -177,7 +177,7 @@ struct AlertnessScoreBox: View {
                 Text("Estimate").font(.caption2.weight(.semibold)).foregroundStyle(.ocean)
             }
         }
-        .frame(width: 102, height: 102)
+        .frame(width: 110, height: 110)
     }
 
     private func ring(level: Double, now: Date, markTime: Date?, scrubbing: Bool) -> some View {
@@ -208,7 +208,7 @@ struct AlertnessScoreBox: View {
                 }
             }
         }
-        .frame(width: 102, height: 102)
+        .frame(width: 110, height: 110)
     }
 
     private func tint(for level: Double) -> [Color] {
