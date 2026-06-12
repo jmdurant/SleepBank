@@ -134,10 +134,15 @@ struct NapView: View {
 
             HStack(spacing: 18) {
                 stat("heart.fill", .red, nap.heartRate > 0 ? "\(nap.heartRate)" : "--", nap.heartRateSource ?? "bpm")
-                stat("waveform.path.ecg", .pink, nap.hrv > 0 ? String(format: "%.0f", nap.hrv) : "--", "HRV")
-                stat("lungs.fill", .teal, nap.breathingRate > 0 ? String(format: "%.0f", nap.breathingRate) : "--", "br/min")
-                stat("brain.head.profile", nap.museGood ? .ocean : .gray,
-                     nap.museGood ? "EEG" : "—", nap.museGood ? "good" : "no sig")
+                // HRV + breathing are live only from the H10 chest strap.
+                if nap.hasChestStrap {
+                    stat("waveform.path.ecg", .pink, nap.hrv > 0 ? String(format: "%.0f", nap.hrv) : "--", "HRV")
+                    stat("lungs.fill", .teal, nap.breathingRate > 0 ? String(format: "%.0f", nap.breathingRate) : "--", "br/min")
+                }
+                if nap.hasMuse {
+                    stat("brain.head.profile", nap.museGood ? .ocean : .gray,
+                         nap.museGood ? "EEG" : "—", nap.museGood ? "good" : "no sig")
+                }
             }
             if nap.spo2 > 0 {
                 Label(String(format: "SpO₂ %.0f%%", nap.spo2), systemImage: "drop.fill")

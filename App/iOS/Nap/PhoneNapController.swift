@@ -61,6 +61,10 @@ class PhoneNapController {
     var hrv: Double { polar.hrvRMSSD }
     var breathingRate: Double { polar.breathingRate }
     var museGood: Bool { muse.eeg.hasGoodSignal }
+    /// Whether a chest strap is providing HRV + breathing (the only live source).
+    var hasChestStrap: Bool { polar.isConnected }
+    /// Whether the Muse is providing EEG.
+    var hasMuse: Bool { muse.isConnected }
     var isAlarming: Bool { alarm.isAlarming }
 
     func start(type: NapType) {
