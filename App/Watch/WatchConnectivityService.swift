@@ -57,12 +57,13 @@ class WatchConnectivityService: NSObject, WCSessionDelegate {
         WCSession.default.transferUserInfo(info)
     }
 
-    /// Forward a wrist-HR reading to the phone (for a phone nap using the Watch as a
-    /// live HR sensor). Best-effort, only when reachable.
-    func sendWatchHR(_ bpm: Int) {
+    /// Forward wrist HR + motion to the phone (for a phone nap using the Watch as a
+    /// live sensor). Best-effort, only when reachable.
+    func sendWatchSensors(bpm: Int, movement: Double, stillSeconds: Double) {
         let s = WCSession.default
-        guard s.activationState == .activated, s.isReachable, bpm > 0 else { return }
-        s.sendMessage(["watchHR": bpm], replyHandler: nil, errorHandler: nil)
+        guard s.activationState == .activated, s.isReachable else { return }
+        s.sendMessage(["watchHR": bpm, "watchMove": movement, "watchStill": stillSeconds],
+                      replyHandler: nil, errorHandler: nil)
     }
 
     /// Send a completed nap's decision + feature trace to the phone as a file

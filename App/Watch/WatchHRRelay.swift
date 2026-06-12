@@ -2,15 +2,14 @@
 //  WatchHRRelay.swift
 //  SleepBank Watch App
 //
-//  Lets a *phone* nap use the Apple Watch's wrist heart rate. The phone asks the
-//  watch (over WCSession) to start a lightweight workout session purely to read HR,
-//  and the watch forwards each reading back to the phone. We never save the workout
-//  (discard on end). This is the watch→phone counterpart of the phone's H10/AirPods
-//  HR — the Watch becomes a live HR sensor for phone-side naps.
+//  Lets a *phone* nap use the Apple Watch as a live sensor: wrist **heart rate**
+//  (via a brief, never-saved workout session) and wrist **motion** (CoreMotion —
+//  movement intensity + stillness, the stronger onset signal for a phone that's
+//  sitting on a nightstand). Both are forwarded to the phone over WCSession every
+//  couple of seconds while requested.
 //
 //  Note: the watch app must be reachable for the phone to start this (WCSession can't
-//  cold-launch a watch workout); when it isn't, the phone simply falls back to its
-//  own sensors.
+//  cold-launch a watch workout); otherwise the phone falls back to its own sensors.
 //
 
 import Foundation
@@ -24,8 +23,34 @@ final class WatchHRRelay: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutBuild
     private var session: HKWorkoutSession?
     private var builder: HKLiveWorkoutBuilder?
     private let healthStore = HKHealthStore()
+    private let motion = MotionService()
+    private var latestHR = 0
+    private var timer: Timer?
 
     func start() {
+        guard !isActive else { return }
+        isActive = true
+        latestHR = 0
+        motion.startMonitoring()
+        startWorkout()   // for HR; motion works regardless
+        // Forward HR + wrist motion to the phone on a steady cadence.
+        timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
+            guard let self else { return }
+            WatchConnectivityService.shared.sendWatchSensors(
+                bpm: self.latestHR,
+                movement: self.motion.movementIntensity,
+                stillSeconds: self.motion.stillSeconds)
+        }
+    }
+
+    func stop() {
+        timer?.invalidate(); timer = nil
+        motion.stopMonitoring()
+        session?.end()
+        isActive = false
+    }
+
+    private func startWorkout() {
         guard HKHealthStore.isHealthDataAvailable(), session == nil else { return }
         let config = HKWorkoutConfiguration()
         config.activityType = .mindAndBody
@@ -41,15 +66,9 @@ final class WatchHRRelay: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutBuild
             b.beginCollection(withStart: now) { _, _ in }
             session = s
             builder = b
-            isActive = true
         } catch {
-            print("[WatchHRRelay] start failed: \(error)")
+            print("[WatchHRRelay] workout start failed: \(error)")
         }
-    }
-
-    func stop() {
-        session?.end()
-        isActive = false
     }
 
     // MARK: - Delegates
@@ -65,7 +84,7 @@ final class WatchHRRelay: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutBuild
         }
     }
 
-    func workoutSession(_ s: HKWorkoutSession, didFailWithError error: Error) { isActive = false }
+    func workoutSession(_ s: HKWorkoutSession, didFailWithError error: Error) {}
     func workoutBuilderDidCollectEvent(_ b: HKLiveWorkoutBuilder) {}
 
     func workoutBuilder(_ b: HKLiveWorkoutBuilder, didCollectDataOf types: Set<HKSampleType>) {
@@ -73,7 +92,6 @@ final class WatchHRRelay: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutBuild
         let bpm = b.statistics(for: HKQuantityType(.heartRate))?
             .mostRecentQuantity()?
             .doubleValue(for: .count().unitDivided(by: .minute())) ?? 0
-        guard bpm > 0 else { return }
-        WatchConnectivityService.shared.sendWatchHR(Int(bpm))
+        if bpm > 0 { latestHR = Int(bpm) }
     }
 }

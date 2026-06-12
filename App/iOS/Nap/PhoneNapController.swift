@@ -120,11 +120,19 @@ class PhoneNapController {
                 await MainActor.run { self?.spo2 = value }
             }
         }
-        // Prefer the H10 chest accelerometer for immobility (the phone may be on a
-        // nightstand and never move); fall back to the phone's own motion.
+        // Immobility source, best → worst: H10 chest accelerometer, then the Apple
+        // Watch's wrist motion (forwarded), then the phone's own motion (the phone may
+        // sit still on a nightstand, so its motion is the weakest signal).
         let usingChest = polar.isAccStreaming
-        let movement = usingChest ? polar.movementIntensity : motion.movementIntensity
-        let still = usingChest ? polar.stillSeconds : motion.stillSeconds
+        let movement: Double
+        let still: Double
+        if usingChest {
+            movement = polar.movementIntensity; still = polar.stillSeconds
+        } else if let wm = watchHR.freshMovement, let ws = watchHR.freshStillSeconds {
+            movement = wm; still = ws
+        } else {
+            movement = motion.movementIntensity; still = motion.stillSeconds
+        }
         let signal = OnsetSignal(
             heartRate: polar.currentHeartRate > 0 ? polar.currentHeartRate : (watchHR.freshHeartRate ?? workoutHR.freshHeartRate),
             movementIntensity: movement,

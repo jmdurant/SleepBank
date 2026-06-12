@@ -51,6 +51,9 @@ struct SensorsView: View {
             if let hr = watch.freshHeartRate {
                 LabeledContent("Heart rate", value: "\(hr) bpm")
             }
+            if let mv = watch.freshMovement {
+                LabeledContent("Wrist movement", value: String(format: "%.0f%%", mv * 100))
+            }
             if napActive {
                 Text("Your nap is requesting wrist heart rate from the watch.").font(.caption2).foregroundStyle(.secondary)
             } else {

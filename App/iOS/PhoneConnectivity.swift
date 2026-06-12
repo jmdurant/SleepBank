@@ -141,11 +141,13 @@ class PhoneConnectivity: NSObject, WCSessionDelegate {
         )
     }
 
-    /// Live wrist-HR readings forwarded from the watch (for a phone nap).
+    /// Live wrist HR + motion forwarded from the watch (for a phone nap).
     func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
-        if let bpm = message["watchHR"] as? Int {
-            DispatchQueue.main.async { WatchHRService.shared.update(bpm: bpm) }
-        }
+        guard message["watchHR"] != nil || message["watchMove"] != nil else { return }
+        let bpm = message["watchHR"] as? Int ?? 0
+        let move = message["watchMove"] as? Double
+        let still = message["watchStill"] as? Double
+        DispatchQueue.main.async { WatchHRService.shared.update(bpm: bpm, movement: move, stillSeconds: still) }
     }
 
     // MARK: - WCSessionDelegate (iOS requires all three lifecycle methods)

@@ -19,17 +19,25 @@ final class WatchHRService {
 
     private(set) var requested = false        // we asked the watch to relay
     private(set) var currentHeartRate = 0
-    private(set) var lastUpdate: Date?
+    private(set) var movementIntensity = 0.0  // wrist movement (0…1)
+    private(set) var stillSeconds = 0.0       // wrist stillness
     private(set) var heartRateHistory: [HeartRateSample] = []
+    private var lastHRAt: Date?
+    private var lastMotionAt: Date?
 
-    /// Fresh HR only — nil if no reading in the last 10 s.
-    var freshHeartRate: Int? {
-        guard currentHeartRate > 0, let t = lastUpdate, Date().timeIntervalSince(t) <= 10 else { return nil }
-        return currentHeartRate
+    private func fresh(_ at: Date?) -> Bool {
+        guard let at else { return false }
+        return Date().timeIntervalSince(at) <= 10
     }
 
+    /// Fresh HR — nil if no reading in the last 10 s.
+    var freshHeartRate: Int? { (currentHeartRate > 0 && fresh(lastHRAt)) ? currentHeartRate : nil }
+    /// Fresh wrist motion — the immobility signal for a phone nap.
+    var freshMovement: Double? { fresh(lastMotionAt) ? movementIntensity : nil }
+    var freshStillSeconds: Double? { fresh(lastMotionAt) ? stillSeconds : nil }
+
     /// True once readings are actually arriving from the watch.
-    var isStreaming: Bool { freshHeartRate != nil }
+    var isStreaming: Bool { freshHeartRate != nil || fresh(lastMotionAt) }
 
     func requestStart() {
         requested = true
@@ -42,12 +50,16 @@ final class WatchHRService {
         PhoneConnectivity.shared.requestWatchHR(false)
     }
 
-    /// Called when a forwarded reading arrives from the watch.
-    func update(bpm: Int) {
-        guard bpm > 0 else { return }
-        currentHeartRate = bpm
-        lastUpdate = Date()
-        heartRateHistory.append(HeartRateSample(timestamp: Date(), bpm: bpm))
-        if heartRateHistory.count > 240 { heartRateHistory.removeFirst() }
+    /// Called when a forwarded reading (HR + wrist motion) arrives from the watch.
+    func update(bpm: Int, movement: Double?, stillSeconds: Double?) {
+        let now = Date()
+        if bpm > 0 {
+            currentHeartRate = bpm
+            lastHRAt = now
+            heartRateHistory.append(HeartRateSample(timestamp: now, bpm: bpm))
+            if heartRateHistory.count > 240 { heartRateHistory.removeFirst() }
+        }
+        if let movement { movementIntensity = movement; lastMotionAt = now }
+        if let stillSeconds { self.stillSeconds = stillSeconds; lastMotionAt = now }
     }
 }
