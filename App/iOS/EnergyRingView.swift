@@ -157,9 +157,11 @@ struct AlertnessScoreBox: View {
                 Text("Alertness").font(.subheadline.weight(.semibold))
                 Spacer()
             }
+            // Bias the ring down: open the slack between the title and the ring, and
+            // cap the space below it so it sits lower in the tile (not floating high).
             Spacer(minLength: 0)
             content()
-            Spacer(minLength: 0)
+            Spacer(minLength: 0).frame(maxHeight: 4)
         }
         .padding(14)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -175,7 +177,7 @@ struct AlertnessScoreBox: View {
                 Text("Estimate").font(.caption2.weight(.semibold)).foregroundStyle(.ocean)
             }
         }
-        .frame(width: 110, height: 110)
+        .frame(width: 102, height: 102)
     }
 
     private func ring(level: Double, now: Date, markTime: Date?, scrubbing: Bool) -> some View {
@@ -206,7 +208,7 @@ struct AlertnessScoreBox: View {
                 }
             }
         }
-        .frame(width: 110, height: 110)
+        .frame(width: 102, height: 102)
     }
 
     private func tint(for level: Double) -> [Color] {
