@@ -17,10 +17,17 @@ struct HomeDashboard: View {
     var body: some View {
         VStack(spacing: 14) {
             LastNightBox()
-            HStack(spacing: 14) {
-                AlertnessScoreBox()
-                DaylightBox()
+            // Alertness gets the wider share, daylight the narrower — a 57/43 split
+            // so the ring tile reads as the primary of the pair.
+            GeometryReader { geo in
+                let gap: CGFloat = 14
+                let w = geo.size.width - gap
+                HStack(spacing: gap) {
+                    AlertnessScoreBox().frame(width: w * 0.57, height: 172)
+                    DaylightBox().frame(width: w * 0.43, height: 172)
+                }
             }
+            .frame(height: 172)
         }
     }
 }
@@ -40,7 +47,9 @@ struct LastNightBox: View {
             if needsEntry {
                 Button { showSleepEntry = true } label: { card }.buttonStyle(.plain)
             } else {
-                NavigationLink(value: HomeRoute.alertness) { card }.buttonStyle(.plain)
+                // Tap into History to review the night in detail.
+                Button { NotificationCenter.default.post(name: .openHistory, object: nil) } label: { card }
+                    .buttonStyle(.plain)
             }
         }
         .sheet(isPresented: $showSleepEntry) { SleepEntrySheet() }
@@ -124,16 +133,20 @@ struct AlertnessScoreBox: View {
             let now = context.date
             let rhythm = AlertnessProvider.rhythm(now: now)
             let nowLevel = rhythm.level(at: now)
-            // Reflect a previewed nap lift if the plan is charging the curve.
+            // The curve card scrubs to a time (preview.scrubTime) and previews a plan's
+            // peak (preview.level). Reflect both on the ring: scrub wins, else the
+            // charging preview, else the right-now level.
             let preview = PlanPreview.shared
+            let scrubLevel: Double? = preview.scrubTime.map { rhythm.level(at: $0) }
             let charging = (preview.level ?? -1) > nowLevel + 0.01
-            let shown = charging ? (preview.level ?? nowLevel) : nowLevel
+            let shown = scrubLevel ?? (charging ? (preview.level ?? nowLevel) : nowLevel)
+            let markTime: Date? = preview.scrubTime ?? (charging ? preview.peakTime : nil)
             Group {
                 if needsSleepEntry {
                     Button { showSleepEntry = true } label: { box { noDataRing } }.buttonStyle(.plain)
                 } else {
                     NavigationLink(value: HomeRoute.alertness) {
-                        box { ring(level: shown, now: now) }
+                        box { ring(level: shown, now: now, markTime: markTime, scrubbing: scrubLevel != nil) }
                     }.buttonStyle(.plain)
                 }
             }
@@ -167,7 +180,7 @@ struct AlertnessScoreBox: View {
         .frame(width: 104, height: 104)
     }
 
-    private func ring(level: Double, now: Date) -> some View {
+    private func ring(level: Double, now: Date, markTime: Date?, scrubbing: Bool) -> some View {
         ZStack {
             Circle().stroke(.quaternary, lineWidth: 11)
             Circle()
@@ -183,8 +196,16 @@ struct AlertnessScoreBox: View {
                 Text("\(AlertnessProvider.pct(level))")
                     .font(.system(size: 34, weight: .bold, design: .rounded))
                     .monospacedDigit().contentTransition(.numericText())
-                Text(AlertnessProvider.phaseLabel(now))
-                    .font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
+                if let markTime, scrubbing {
+                    Text(markTime, format: .dateTime.hour().minute())
+                        .font(.caption2.weight(.semibold)).foregroundStyle(.ocean)
+                } else if let markTime {
+                    Label(markTime.formatted(.dateTime.hour().minute()), systemImage: "bolt.fill")
+                        .font(.caption2.weight(.semibold)).foregroundStyle(.mint)
+                } else {
+                    Text(AlertnessProvider.phaseLabel(now))
+                        .font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
+                }
             }
         }
         .frame(width: 104, height: 104)

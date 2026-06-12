@@ -70,6 +70,9 @@ struct ContentView: View {
             if let route = note.object as? HomeRoute { open(route) }
             PlanNotificationService.shared.clearPending()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .openHistory)) { _ in
+            tab = .history
+        }
     }
 
     // MARK: - Navigation
