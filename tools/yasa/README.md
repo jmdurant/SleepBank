@@ -22,10 +22,18 @@ cd tools/yasa
      - **`<name>_hypnogram.png`** (the hypnogram),
    - merges YASA stages onto the sensor features → `labeled-*.csv` + a combined
      `training.csv`,
-   - builds **`report.html`** and opens it — a dashboard with one card per nap:
-     hypnogram, stage breakdown, and **SleepBank's calls vs YASA** (onset latency,
-     deep-sleep timing, asleep/awake agreement %).
+   - builds **`report.html`** and opens it — a dashboard with a top **aggregate
+     card** (pooled onset MAE, sensitivity/specificity, Cohen's κ across all naps)
+     and one card per nap: hypnogram, stage breakdown, and **SleepBank's calls vs
+     YASA** (onset-latency error, sleep/wake sens/spec + κ, deep-sleep timing).
    - Re-running only stages *new* naps; the report always rebuilds from all.
+
+**Just the numbers?** Double-click **`Validate.command`** (or `./validate.py`) for a
+text report — the same metrics as the HTML, printed in the terminal. This is the
+"measuring stick": how well the detector tracks the EEG truth, per nap and pooled.
+Metrics follow `docs/REGULATORY/HYPOTHESES_AND_ANALYSIS_PLAN.md` Aim 1 (onset MAE,
+sensitivity/specificity, κ). Per-30-s-epoch scoring (PSG convention); YASA is a
+*silver* standard, so these calibrate — only the PSG pilot validates.
 
 That's it — nap on the phone, batch-process on the Mac later. No Python commands.
 The `report.html` is your validation view: how well the app's detector tracks the
