@@ -229,13 +229,15 @@ struct DaylightBox: View {
         let streak = health.morningLightStreak
         let walkMin = health.morningActivityMinutes
         NavigationLink(value: HomeRoute.daylight) {
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 4) {
+                // Header pinned to the top so it lines up with "Alertness"; no chevron
+                // (Alertness has none).
                 HStack(spacing: 5) {
                     Image(systemName: "sun.max.fill").font(.caption).foregroundStyle(.sand)
                     Text("Daylight").font(.subheadline.weight(.semibold))
                     Spacer()
-                    Image(systemName: "chevron.right").font(.caption2).foregroundStyle(.tertiary)
                 }
+                Spacer(minLength: 0)
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
                     Text("\(Int(d.total.rounded()))").font(.system(size: 34, weight: .bold, design: .rounded)).monospacedDigit()
                     Text("min").font(.subheadline).foregroundStyle(.secondary)
@@ -245,14 +247,16 @@ struct DaylightBox: View {
                 } else {
                     Text("none yet this morning").font(.caption).foregroundStyle(.secondary)
                 }
-                if streak > 0 || walkMin >= 1 {
-                    HStack(spacing: 10) {
-                        if streak > 0 { Text("🌅 \(streak)").font(.caption.weight(.semibold)) }
-                        if walkMin >= 1 { Text("🚶 \(Int(walkMin.rounded())) min AM").font(.caption).foregroundStyle(.secondary) }
-                    }
+                Spacer(minLength: 0)
+                // Activity and streak on their own separate lines to fill the tile.
+                if walkMin >= 1 {
+                    Text("🚶 \(Int(walkMin.rounded())) min walk AM").font(.caption).foregroundStyle(.secondary)
+                }
+                if streak > 0 {
+                    Text("🌅 \(streak)-day streak").font(.caption.weight(.semibold))
                 }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .padding(14)
             .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 20))
         }
