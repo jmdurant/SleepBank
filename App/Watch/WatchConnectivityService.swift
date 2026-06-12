@@ -57,6 +57,14 @@ class WatchConnectivityService: NSObject, WCSessionDelegate {
         WCSession.default.transferUserInfo(info)
     }
 
+    /// Forward a wrist-HR reading to the phone (for a phone nap using the Watch as a
+    /// live HR sensor). Best-effort, only when reachable.
+    func sendWatchHR(_ bpm: Int) {
+        let s = WCSession.default
+        guard s.activationState == .activated, s.isReachable, bpm > 0 else { return }
+        s.sendMessage(["watchHR": bpm], replyHandler: nil, errorHandler: nil)
+    }
+
     /// Send a completed nap's decision + feature trace to the phone as a file
     /// (transferFile handles the larger payload and delivers in the background).
     func sendDecision(_ record: NapDecisionRecord) {
@@ -140,6 +148,10 @@ class WatchConnectivityService: NSObject, WCSessionDelegate {
             // Reminder action on the phone asked us to start a real workout.
             if let kind = message["startWorkout"] as? String {
                 ActivityWorkoutService.shared.start(kind: kind)
+            }
+            // A phone nap wants the Watch's wrist HR: start/stop the relay session.
+            if let on = message["watchHRMirror"] as? Bool {
+                on ? WatchHRRelay.shared.start() : WatchHRRelay.shared.stop()
             }
         }
     }

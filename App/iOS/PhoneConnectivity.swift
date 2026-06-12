@@ -66,6 +66,14 @@ class PhoneConnectivity: NSObject, WCSessionDelegate {
         }
     }
 
+    /// Ask the watch to start/stop relaying its wrist HR for a phone nap. Best-effort:
+    /// only works when the watch app is reachable (it can't be cold-launched here).
+    func requestWatchHR(_ on: Bool) {
+        let session = WCSession.default
+        guard session.activationState == .activated, session.isReachable else { return }
+        session.sendMessage(["watchHRMirror": on], replyHandler: nil, errorHandler: nil)
+    }
+
     /// Forward the Muse EEG onset signal to the watch nap loop.
     func sendEEG(onsetConfidence: Double, deepApproaching: Bool) {
         let session = WCSession.default
@@ -131,6 +139,13 @@ class PhoneConnectivity: NSObject, WCSessionDelegate {
             heartRate: info["hr"] as? Int ?? 0,
             onsetDetected: info["onset"] as? Bool ?? false
         )
+    }
+
+    /// Live wrist-HR readings forwarded from the watch (for a phone nap).
+    func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
+        if let bpm = message["watchHR"] as? Int {
+            DispatchQueue.main.async { WatchHRService.shared.update(bpm: bpm) }
+        }
     }
 
     // MARK: - WCSessionDelegate (iOS requires all three lifecycle methods)

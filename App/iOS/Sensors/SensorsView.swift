@@ -15,19 +15,64 @@ struct SensorsView: View {
     @State private var muse = MuseService.shared
     @State private var polar = PolarH10Service.shared
     @State private var airpods = PhoneWorkoutHRService.shared
-    @State private var checking = false   // this screen opened the check session
+    @State private var watch = WatchHRService.shared
+    @State private var checking = false        // this screen opened the AirPods session
+    @State private var checkingWatch = false   // this screen requested the watch relay
 
     var body: some View {
         List {
             museSection
             polarSection
+            watchSection
             airpodsSection
         }
         .navigationTitle("Sensors")
         .onDisappear {
-            // Close a check session we opened — unless a nap now owns it.
-            if checking && !PhoneNapController.shared.isNapping { airpods.stop() }
-            checking = false
+            // Close anything we opened — unless a nap now owns it.
+            if !PhoneNapController.shared.isNapping {
+                if checking { airpods.stop() }
+                if checkingWatch { watch.requestStop() }
+            }
+            checking = false; checkingWatch = false
+        }
+    }
+
+    // MARK: - Apple Watch (wrist HR relayed over to the phone)
+
+    private var watchSection: some View {
+        Section {
+            let napActive = PhoneNapController.shared.isNapping
+            statusRow(
+                name: watch.isStreaming ? "Reading heart rate" : (watch.requested ? "Waiting for watch…" : "Off"),
+                connected: watch.requested,
+                streaming: watch.isStreaming,
+                detail: napActive ? "Active during your nap" : "Wear your Apple Watch (app open), then Check"
+            )
+            if let hr = watch.freshHeartRate {
+                LabeledContent("Heart rate", value: "\(hr) bpm")
+            }
+            if napActive {
+                Text("Your nap is requesting wrist heart rate from the watch.").font(.caption2).foregroundStyle(.secondary)
+            } else {
+                Button(watch.requested ? "Stop" : "Check heart rate") {
+                    if watch.requested { watch.requestStop(); checkingWatch = false }
+                    else { watch.requestStart(); checkingWatch = true }
+                }
+            }
+            if watch.heartRateHistory.count > 1 {
+                VStack(alignment: .leading, spacing: 6) {
+                    Label("Heart rate", systemImage: "heart.fill").font(.caption).foregroundStyle(.red)
+                    Chart(watch.heartRateHistory, id: \.self) { sample in
+                        LineMark(x: .value("Time", sample.timestamp), y: .value("BPM", sample.bpm))
+                            .foregroundStyle(.red).interpolationMethod(.monotone)
+                    }
+                    .chartYScale(domain: hrDomain(watch.heartRateHistory)).frame(height: 120)
+                }
+            }
+        } header: {
+            Text("Apple Watch — Heart rate")
+        } footer: {
+            Text("Needs the SleepBank watch app open/reachable — the phone can't wake it. It runs a brief workout to read wrist HR (discarded, not saved).")
         }
     }
 
