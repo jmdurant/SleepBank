@@ -133,7 +133,7 @@ struct NapView: View {
                 .font(.caption).foregroundStyle(.secondary)
 
             HStack(spacing: 18) {
-                stat("heart.fill", .red, nap.heartRate > 0 ? "\(nap.heartRate)" : "--", "bpm")
+                stat("heart.fill", .red, nap.heartRate > 0 ? "\(nap.heartRate)" : "--", nap.heartRateSource ?? "bpm")
                 stat("waveform.path.ecg", .pink, nap.hrv > 0 ? String(format: "%.0f", nap.hrv) : "--", "HRV")
                 stat("lungs.fill", .teal, nap.breathingRate > 0 ? String(format: "%.0f", nap.breathingRate) : "--", "br/min")
                 stat("brain.head.profile", nap.museGood ? .ocean : .gray,

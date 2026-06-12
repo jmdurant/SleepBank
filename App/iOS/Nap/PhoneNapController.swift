@@ -25,8 +25,8 @@ class PhoneNapController {
     private let store = NapDecisionStore.shared
     private let recorder = NapSessionRecorder()
     /// Live HR from a phone workout session (e.g. AirPods Pro) — the fallback when
-    /// no chest strap is connected. iOS 26+.
-    let workoutHR = PhoneWorkoutHRService()
+    /// no chest strap is connected. iOS 26+. Shared with the Sensors screen.
+    let workoutHR = PhoneWorkoutHRService.shared
 
     private(set) var napType: NapType = .power
     private(set) var phase: NapPhase = .finished
@@ -45,6 +45,12 @@ class PhoneNapController {
     private(set) var spo2: Double = 0   // % — spot from HealthKit, completeness only
 
     var heartRate: Int { polar.currentHeartRate > 0 ? polar.currentHeartRate : (workoutHR.freshHeartRate ?? 0) }
+    /// Which sensor is driving the live heart rate right now (for the nap readout).
+    var heartRateSource: String? {
+        if polar.currentHeartRate > 0 { return "H10" }
+        if workoutHR.freshHeartRate != nil { return "AirPods" }
+        return nil
+    }
     var hrv: Double { polar.hrvRMSSD }
     var breathingRate: Double { polar.breathingRate }
     var museGood: Bool { muse.eeg.hasGoodSignal }

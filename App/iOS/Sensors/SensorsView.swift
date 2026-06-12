@@ -14,13 +14,21 @@ import Charts
 struct SensorsView: View {
     @State private var muse = MuseService.shared
     @State private var polar = PolarH10Service.shared
+    @State private var airpods = PhoneWorkoutHRService.shared
+    @State private var checking = false   // this screen opened the check session
 
     var body: some View {
         List {
             museSection
             polarSection
+            airpodsSection
         }
         .navigationTitle("Sensors")
+        .onDisappear {
+            // Close a check session we opened — unless a nap now owns it.
+            if checking && !PhoneNapController.shared.isNapping { airpods.stop() }
+            checking = false
+        }
     }
 
     // MARK: - Muse (connect + live EEG)
@@ -103,9 +111,49 @@ struct SensorsView: View {
                         LineMark(x: .value("Time", sample.timestamp), y: .value("BPM", sample.bpm))
                             .foregroundStyle(.red).interpolationMethod(.monotone)
                     }
-                    .chartYScale(domain: hrDomain).frame(height: 120)
+                    .chartYScale(domain: hrDomain(polar.heartRateHistory)).frame(height: 120)
                 }
             }
+        }
+    }
+
+    // MARK: - AirPods Pro (on-demand HR via a workout session)
+
+    private var airpodsSection: some View {
+        Section {
+            let napActive = PhoneNapController.shared.isNapping
+            statusRow(
+                name: airpods.isActive ? "Reading heart rate" : "Off",
+                connected: airpods.isActive,
+                streaming: airpods.freshHeartRate != nil,
+                detail: napActive ? "Active during your nap"
+                                  : (airpods.isActive ? "Keep AirPods Pro in" : "Put AirPods Pro in, then Check")
+            )
+            if airpods.isActive {
+                LabeledContent("Heart rate", value: airpods.freshHeartRate.map { "\($0) bpm" } ?? "waiting…")
+            }
+            if napActive {
+                Text("Your nap session is reading heart rate.").font(.caption2).foregroundStyle(.secondary)
+            } else {
+                Button(airpods.isActive ? "Stop" : "Check heart rate") {
+                    if airpods.isActive { airpods.stop(); checking = false }
+                    else { airpods.start(); checking = true }
+                }
+            }
+            if airpods.heartRateHistory.count > 1 {
+                VStack(alignment: .leading, spacing: 6) {
+                    Label("Heart rate", systemImage: "heart.fill").font(.caption).foregroundStyle(.red)
+                    Chart(airpods.heartRateHistory, id: \.self) { sample in
+                        LineMark(x: .value("Time", sample.timestamp), y: .value("BPM", sample.bpm))
+                            .foregroundStyle(.red).interpolationMethod(.monotone)
+                    }
+                    .chartYScale(domain: hrDomain(airpods.heartRateHistory)).frame(height: 120)
+                }
+            }
+        } header: {
+            Text("AirPods Pro — Heart rate")
+        } footer: {
+            Text("AirPods Pro stream heart rate only during a workout session — we open one to read it (and discard it, so nothing is saved).")
         }
     }
 
@@ -145,8 +193,8 @@ struct SensorsView: View {
         ]
     }
 
-    private var hrDomain: ClosedRange<Int> {
-        let bpms = polar.heartRateHistory.map(\.bpm)
+    private func hrDomain(_ history: [HeartRateSample]) -> ClosedRange<Int> {
+        let bpms = history.map(\.bpm)
         let lo = (bpms.min() ?? 50) - 8
         let hi = (bpms.max() ?? 100) + 8
         return max(30, lo)...min(200, hi)

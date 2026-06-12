@@ -23,9 +23,13 @@ private let log = Logger(subsystem: "com.doctordurant.sleepbank", category: "Pho
 @Observable
 final class PhoneWorkoutHRService: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutBuilderDelegate {
 
+    /// Shared so the nap loop and the Sensors screen drive/observe the same session.
+    static let shared = PhoneWorkoutHRService()
+
     private(set) var isActive = false
     private(set) var currentHeartRate = 0      // bpm, 0 until first reading
     private(set) var lastUpdate: Date?
+    private(set) var heartRateHistory: [HeartRateSample] = []   // rolling, for charting
 
     private var session: HKWorkoutSession?
     private var builder: HKLiveWorkoutBuilder?
@@ -55,6 +59,7 @@ final class PhoneWorkoutHRService: NSObject, HKWorkoutSessionDelegate, HKLiveWor
             requestPermissions()
         }
         cleanupStrayWorkouts()   // clear any leftover from a prior crashed session
+        heartRateHistory = []
         let config = HKWorkoutConfiguration()
         config.activityType = .mindAndBody     // a nap, not exercise
         config.locationType = .indoor
@@ -133,6 +138,8 @@ final class PhoneWorkoutHRService: NSObject, HKWorkoutSessionDelegate, HKLiveWor
         DispatchQueue.main.async {
             self.currentHeartRate = Int(bpm)
             self.lastUpdate = Date()
+            self.heartRateHistory.append(HeartRateSample(timestamp: Date(), bpm: Int(bpm)))
+            if self.heartRateHistory.count > 240 { self.heartRateHistory.removeFirst() }
         }
     }
 }
