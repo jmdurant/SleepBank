@@ -173,7 +173,6 @@ private struct NapTabView: View {
                 NapView()   // the two nap types (or the active session) — no extra hop
                 VStack(spacing: 12) {
                     link("Sensors — connect & live data", "sensor.tag.radiowaves.forward") { SensorsView() }
-                    link("Relaxing Sounds", "speaker.wave.2.fill") { SoundsView() }
                 }
                 .padding(.horizontal)
             }
