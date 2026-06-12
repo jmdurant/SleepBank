@@ -15,6 +15,7 @@ import SleepBankCore
 struct NapView: View {
     @State private var nap = PhoneNapController.shared
     @State private var kss = KSSStore.shared
+    @State private var noise = NoiseService.shared
     @State private var routeTick = 0   // bumps to refresh the output label on route change
     @AppStorage("napTrackAlertness") private var trackAlertness = false
     @State private var showKSSPre = false
@@ -104,11 +105,16 @@ struct NapView: View {
                 .tint(type == .power ? .ocean : .teal)
             }
 
-            Toggle(isOn: $trackAlertness) {
-                Label("Rate alertness before & after", systemImage: "bolt.fill")
-                    .font(.caption)
+            HStack(spacing: 10) {
+                Toggle(isOn: Binding(get: { noise.autoPlayDuringNap }, set: { noise.autoPlayDuringNap = $0 })) {
+                    Label("Relaxing sounds", systemImage: noise.autoPlayDuringNap ? "speaker.wave.2.fill" : "speaker.slash.fill")
+                        .font(.subheadline)
+                }
+                .tint(.ocean)
+                NavigationLink { SoundsView() } label: {
+                    Image(systemName: "slider.horizontal.3").font(.body).foregroundStyle(.ocean)
+                }
             }
-            .tint(.ocean)
             .padding(.horizontal, 4)
 
             Text("Uses the paired Polar H10 and Muse when connected. Open Sensors to connect them.")

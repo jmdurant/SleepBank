@@ -17,6 +17,7 @@ struct SettingsView: View {
     @State private var showGuidedSetup = false
     @AppStorage("appearanceMode") private var appearance: AppearanceMode = .system
     @AppStorage("sleepBasis") private var sleepBasis: SleepBasis = .auto
+    @AppStorage("napTrackAlertness") private var trackAlertness = false
     @State private var morningPlan = PlanNotificationService.morningPlanEnabled
     @State private var windDownReminder = PlanNotificationService.windDownReminderEnabled
 
@@ -42,6 +43,7 @@ struct SettingsView: View {
             Section("During a nap") {
                 Toggle("Play relaxing sounds", isOn: Binding(
                     get: { noise.autoPlayDuringNap }, set: { noise.autoPlayDuringNap = $0 }))
+                Toggle("Rate alertness before & after", isOn: $trackAlertness)
                 Picker("Guided relaxation", selection: Binding(
                     get: { relax.guide }, set: { relax.guide = $0 })) {
                     ForEach(RelaxationGuide.allCases) { g in Text(g.title).tag(g) }
