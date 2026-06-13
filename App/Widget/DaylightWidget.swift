@@ -28,18 +28,25 @@ struct DaylightProviderWidget: TimelineProvider {
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<DaylightEntry>) -> Void) {
-        // Daylight changes slowly; one entry, refresh in an hour (the app also reloads
-        // the timeline on every HealthKit refresh).
-        let refresh = Calendar.current.date(byAdding: .hour, value: 1, to: Date()) ?? Date()
-        completion(Timeline(entries: [entry()], policy: .after(refresh)))
+        // Daylight changes slowly; reload hourly, but no later than the next midnight
+        // so the day rollover zeros yesterday's numbers (the app repopulates real
+        // values on its next foreground/refresh).
+        let now = Date()
+        let cal = Calendar.current
+        let hourly = cal.date(byAdding: .hour, value: 1, to: now) ?? now
+        let midnight = cal.startOfDay(for: cal.date(byAdding: .day, value: 1, to: now) ?? now)
+        completion(Timeline(entries: [entry()], policy: .after(min(hourly, midnight))))
     }
 
     private func entry() -> DaylightEntry {
-        DaylightEntry(date: .now,
-                      totalMin: SharedStore.daylightTotalMin,
-                      morningMin: SharedStore.daylightMorningMin,
-                      activityMin: SharedStore.morningActivityMin,
-                      streak: SharedStore.morningLightStreak)
+        // If the stored values weren't written today, they're yesterday's — show today
+        // zeros ("none yet") rather than stale minutes. The streak still stands.
+        let fresh = Calendar.current.isDateInToday(Date(timeIntervalSince1970: SharedStore.lastRefreshAt))
+        return DaylightEntry(date: .now,
+                             totalMin: fresh ? SharedStore.daylightTotalMin : 0,
+                             morningMin: fresh ? SharedStore.daylightMorningMin : 0,
+                             activityMin: fresh ? SharedStore.morningActivityMin : 0,
+                             streak: SharedStore.morningLightStreak)
     }
 }
 

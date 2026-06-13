@@ -34,12 +34,16 @@ struct AlertnessProviderWidget: TimelineProvider {
         // curve without needing the app to refresh.
         var entries: [AlertnessEntry] = []
         let now = Date()
+        let cal = Calendar.current
         for step in 0..<32 {
-            let date = Calendar.current.date(byAdding: .minute, value: step * 30, to: now) ?? now
+            let date = cal.date(byAdding: .minute, value: step * 30, to: now) ?? now
             entries.append(entry(at: date))
         }
-        let refresh = Calendar.current.date(byAdding: .hour, value: 2, to: now) ?? now
-        completion(Timeline(entries: entries, policy: .after(refresh)))
+        // Reload in 2 h, but no later than the next midnight so a new day re-anchors
+        // promptly (and the app's foreground/refresh will repopulate real values).
+        let twoHours = cal.date(byAdding: .hour, value: 2, to: now) ?? now
+        let midnight = cal.startOfDay(for: cal.date(byAdding: .day, value: 1, to: now) ?? now)
+        completion(Timeline(entries: entries, policy: .after(min(twoHours, midnight))))
     }
 
     private func entry(at date: Date) -> AlertnessEntry {
@@ -47,7 +51,7 @@ struct AlertnessProviderWidget: TimelineProvider {
             return AlertnessEntry(date: date, level: 0, phase: AlertnessRhythm.phaseLabel(at: date),
                                   streak: SharedStore.morningLightStreak, hasData: false)
         }
-        let rhythm = snap.rebuild()
+        let rhythm = snap.rebuild(asOf: date)
         return AlertnessEntry(date: date, level: rhythm.level(at: date),
                               phase: AlertnessRhythm.phaseLabel(at: date),
                               streak: snap.morningLightStreak, hasData: true)

@@ -178,6 +178,7 @@ class HealthKitService {
             SharedStore.daylightMorningMin = Int(daylightDay.morning.rounded())
             SharedStore.morningActivityMin = Int(morningExercise.rounded())
             SharedStore.morningLightStreak = streak
+            SharedStore.lastRefreshAt = Date().timeIntervalSince1970
             WidgetCenter.shared.reloadAllTimelines()
         }
     }

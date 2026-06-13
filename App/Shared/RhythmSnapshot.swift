@@ -42,13 +42,32 @@ struct RhythmSnapshot: Codable {
     }
 
     /// Rebuild the rhythm so the widget can evaluate `level(at:)` for any entry date.
-    func rebuild() -> AlertnessRhythm {
-        let naps = naps.map {
+    /// If the snapshot is from a *different day* than `date` (e.g. a widget rendering
+    /// on a new morning before the app has refreshed), re-anchor the wake time to the
+    /// same clock time on `date` and drop day-specific inputs (yesterday's naps and
+    /// morning light/activity don't apply today) — so the curve is at least
+    /// today-shaped instead of computing pressure since yesterday's wake.
+    func rebuild(asOf date: Date = Date()) -> AlertnessRhythm {
+        let cal = Calendar.current
+        var wake = wakeTime
+        var napInputs = naps
+        var lightDose = morningLightDose
+        var activityDose = morningActivityDose
+
+        if !cal.isDate(updated, inSameDayAs: date) {
+            let c = cal.dateComponents([.hour, .minute], from: wakeTime)
+            wake = cal.date(bySettingHour: c.hour ?? 7, minute: c.minute ?? 0, second: 0, of: date) ?? wakeTime
+            napInputs = []
+            lightDose = 0
+            activityDose = 0
+        }
+
+        let naps = napInputs.map {
             AlertnessRhythm.Nap(end: $0.end, type: NapType(rawValue: $0.typeRaw) ?? .power, fullness: $0.fullness)
         }
-        return AlertnessRhythm(wakeTime: wakeTime, sleepDebt: sleepDebt, naps: naps,
-                               isShortNight: isShortNight, morningLightDose: morningLightDose,
-                               morningActivityDose: morningActivityDose,
+        return AlertnessRhythm(wakeTime: wake, sleepDebt: sleepDebt, naps: naps,
+                               isShortNight: isShortNight, morningLightDose: lightDose,
+                               morningActivityDose: activityDose,
                                circadianShiftHours: circadianShiftHours)
     }
 

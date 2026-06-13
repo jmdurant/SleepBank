@@ -16,6 +16,7 @@ import SleepBankCore
 
 struct ContentView: View {
     @State private var health = HealthKitService.shared
+    @Environment(\.scenePhase) private var scenePhase
     @AppStorage("appearanceMode") private var appearance: AppearanceMode = .system
     @AppStorage("didOnboard") private var didOnboard = false
 
@@ -65,6 +66,11 @@ struct ContentView: View {
             WelcomeView { didOnboard = true }
         }
         .task(id: didOnboard) { await bootstrap() }
+        // Re-refresh when returning to the app (a new day's data, widgets included).
+        // .task above fires on launch/onboarding; onChange covers later foregrounds.
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { Task { await bootstrap() } }
+        }
         .onOpenURL { open(host: $0.host) }
         .onReceive(NotificationCenter.default.publisher(for: .openPlan)) { note in
             if let route = note.object as? HomeRoute { open(route) }

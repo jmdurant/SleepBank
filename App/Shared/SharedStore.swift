@@ -52,6 +52,12 @@ enum SharedStore {
         get { defaults?.integer(forKey: "morningActivityMin") ?? 0 }
         set { defaults?.set(newValue, forKey: "morningActivityMin") }
     }
+    /// When the app last refreshed health data (epoch seconds). Widgets use it to
+    /// detect day-stale daylight values and show "today" zeros instead of yesterday's.
+    static var lastRefreshAt: Double {
+        get { defaults?.double(forKey: "lastRefreshAt") ?? 0 }
+        set { defaults?.set(newValue, forKey: "lastRefreshAt") }
+    }
     /// JSON snapshot of the day's alertness-rhythm inputs, so the widget can compute
     /// the live "you are here" % itself at each timeline entry. Decoded by
     /// `RhythmSnapshot` (kept out of this pure-Foundation file so the watch widget,
