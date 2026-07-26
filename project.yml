@@ -45,6 +45,10 @@ targets:
     info:
       path: App/iOS/Info.plist
       properties:
+        CFBundleDisplayName: SleepBank
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        ITSAppUsesNonExemptEncryption: false
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
@@ -115,6 +119,9 @@ targets:
     info:
       path: App/Watch/Info.plist
       properties:
+        CFBundleDisplayName: SleepBank
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         WKApplication: true
         WKCompanionAppBundleIdentifier: com.doctordurant.sleepbank
         WKBackgroundModes:
@@ -149,6 +156,8 @@ targets:
       path: App/WatchWidget/Info.plist
       properties:
         CFBundleDisplayName: SleepBank
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     settings:
@@ -181,6 +190,8 @@ targets:
       path: App/Widget/Info.plist
       properties:
         CFBundleDisplayName: SleepBank
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     settings:
@@ -203,6 +214,9 @@ targets:
     info:
       path: App/DeviceMonitor/Info.plist
       properties:
+        CFBundleDisplayName: SleepBank
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         NSExtension:
           NSExtensionPointIdentifier: com.apple.deviceactivity.monitor-extension
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).WindDownMonitor

@@ -4,6 +4,8 @@
 <dict>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>CFBundleDisplayName</key>
+	<string>SleepBank</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -15,13 +17,15 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0</string>
+	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
-	<string>20</string>
-	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>SleepBank connects to a Muse headband and Polar H10 to read EEG and continuous heart rate for sleep-onset detection.</string>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>NSAlarmKitUsageDescription</key>
 	<string>SleepBank schedules your smart wake as a system alarm so it can wake you even when the app is not visible.</string>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>SleepBank connects to a Muse headband and Polar H10 to read EEG and continuous heart rate for sleep-onset detection.</string>
 	<key>NSCalendarsFullAccessUsageDescription</key>
 	<string>SleepBank checks your calendar for busy times so it suggests a nap when you're actually free.</string>
 	<key>NSHealthShareUsageDescription</key>
