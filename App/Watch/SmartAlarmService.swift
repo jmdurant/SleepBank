@@ -31,9 +31,11 @@ class SmartAlarmService: NSObject, WKExtendedRuntimeSessionDelegate {
     private var escalationTimer: Timer?
     private var alarmStart: Date?
     private var audioPlayer: AVAudioPlayer?
+    private var systemAlertActive = false
 
-    /// Schedule the guaranteed-wake extended runtime session at `date`. Called
-    /// once onset is detected and the wake target is known.
+    /// Schedule the guaranteed-wake extended runtime session at `date` while the
+    /// watch app is active. SleepBank uses the absolute session ceiling here;
+    /// the live workout loop remains free to wake earlier when appropriate.
     func scheduleWake(at date: Date) {
         // Re-scheduling: tear down any prior session first.
         session?.invalidate()
@@ -44,17 +46,41 @@ class SmartAlarmService: NSObject, WKExtendedRuntimeSessionDelegate {
         log.info("Scheduled smart-alarm wake at \(date)")
     }
 
+    /// Reconnect a scheduled/running smart-alarm session handed back to us when
+    /// watchOS relaunches the app in the background. The delegate must be assigned
+    /// synchronously from WKApplicationDelegate or watchOS ends the session.
+    func adopt(_ recoveredSession: WKExtendedRuntimeSession) {
+        session = recoveredSession
+        recoveredSession.delegate = self
+        if recoveredSession.state == .running {
+            beginSystemAlert(using: recoveredSession)
+            startAlarm()
+        }
+        log.info("Recovered smart-alarm session in state \(recoveredSession.state.rawValue)")
+    }
+
     /// Begin (or continue) sounding the alarm now. Idempotent.
     func startAlarm() {
         guard !isAlarming else { return }
         isAlarming = true
         alarmStart = Date()
         configureAudioSession()
-        fireTier()
+        if !systemAlertActive { fireTier() }
         escalationTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
-            self?.fireTier()
+            self?.advanceAlarm()
         }
         log.info("Alarm started")
+    }
+
+    private func advanceAlarm() {
+        let elapsed = alarmStart.map { Date().timeIntervalSince($0) } ?? 0
+        if systemAlertActive {
+            // The OS owns the repeating haptics and alert UI. Add bundled audio
+            // only at the final tier instead of playing duplicate haptics.
+            if elapsed >= 25 { playAudioFallback() }
+        } else {
+            fireTier()
+        }
     }
 
     /// Play the appropriate alert tier based on how long the alarm has been
@@ -76,6 +102,7 @@ class SmartAlarmService: NSObject, WKExtendedRuntimeSessionDelegate {
     /// Stop everything and release the wake session.
     func stop() {
         isAlarming = false
+        systemAlertActive = false
         escalationTimer?.invalidate()
         escalationTimer = nil
         alarmStart = nil
@@ -117,8 +144,33 @@ class SmartAlarmService: NSObject, WKExtendedRuntimeSessionDelegate {
     // MARK: - WKExtendedRuntimeSessionDelegate
 
     func extendedRuntimeSessionDidStart(_ extendedRuntimeSession: WKExtendedRuntimeSession) {
-        // The scheduled wake time arrived — start sounding immediately.
-        DispatchQueue.main.async { self.startAlarm() }
+        // Use watchOS's repeating alarm path. If the app isn't visible, this also
+        // presents the system Stop/Open alarm UI.
+        DispatchQueue.main.async {
+            self.beginSystemAlert(using: extendedRuntimeSession)
+            self.startAlarm()
+        }
+    }
+
+    private func beginSystemAlert(using extendedRuntimeSession: WKExtendedRuntimeSession) {
+        guard extendedRuntimeSession.state == .running, !systemAlertActive else { return }
+        systemAlertActive = true
+        let started = Date()
+        extendedRuntimeSession.notifyUser(hapticType: .click) { outHaptic in
+            let elapsed = Date().timeIntervalSince(started)
+            switch elapsed {
+            case ..<10:
+                outHaptic.pointee = .click
+                return 4
+            case 10..<25:
+                outHaptic.pointee = .notification
+                return 3
+            default:
+                outHaptic.pointee = .failure
+                return 2
+            }
+        }
+        log.info("System smart-alarm alert started")
     }
 
     func extendedRuntimeSessionWillExpire(_ extendedRuntimeSession: WKExtendedRuntimeSession) {
@@ -128,6 +180,14 @@ class SmartAlarmService: NSObject, WKExtendedRuntimeSessionDelegate {
     func extendedRuntimeSession(_ extendedRuntimeSession: WKExtendedRuntimeSession,
                                 didInvalidateWith reason: WKExtendedRuntimeSessionInvalidationReason,
                                 error: Error?) {
+        let userClearedAlarm = isAlarming
+        systemAlertActive = false
         log.info("Extended runtime session invalidated: reason=\(reason.rawValue), error=\(error?.localizedDescription ?? "none")")
+        if userClearedAlarm {
+            // A Stop tap in the system alarm UI invalidates the session. Complete
+            // the nap too, otherwise the engine would immediately start fallback
+            // haptics again on its next tick.
+            DispatchQueue.main.async { NapController.shared.stop() }
+        }
     }
 }

@@ -14,7 +14,8 @@ import SleepBankCore
 struct AlertnessIntent: AppIntent {
     static var title: LocalizedStringResource = "Check My Alertness"
     static var description = IntentDescription("Your predicted alertness right now, and whether a nap would help.")
-    static var openAppWhenRun: Bool = false
+    static var supportedModes: IntentModes { .background }
+    static var allowedExecutionTargets: IntentExecutionTargets { .main }
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
         guard let snap = RhythmSnapshot.load() else {

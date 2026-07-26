@@ -22,6 +22,9 @@ class HealthKitService {
 
     let store = HKHealthStore()
     var isAuthorized = false
+    /// iOS 27 lets users expose only a bounded slice of Health history. Keep the
+    /// per-type lower bounds so every historical query honors that choice.
+    private var earliestAuthorizedDates: [HKObjectType: Date] = [:]
 
     /// Real last-night stage samples, ready for SleepChartKit. Empty until fetched.
     var lastNightSamples: [SleepSample] = []
@@ -70,6 +73,14 @@ class HealthKitService {
         ]
         do {
             try await store.requestAuthorization(toShare: [], read: readTypes)
+            do {
+                earliestAuthorizedDates = try await store.earliestAuthorizedSampleDate(for: readTypes)
+            } catch {
+                // Authorization still succeeded. An empty map has the same
+                // semantics as full-history access for query construction.
+                earliestAuthorizedDates = [:]
+                print("[HealthKit] Limited-history bounds unavailable: \(error)")
+            }
             isAuthorized = true
             return true
         } catch {
@@ -187,7 +198,11 @@ class HealthKitService {
     /// the last `days` days, as plain intervals for `Daylight` to bucket and streak.
     func fetchDaylight(days: Int) async -> [Daylight.Interval] {
         let type = HKQuantityType(.timeInDaylight)
-        let start = Calendar.current.date(byAdding: .day, value: -days, to: Calendar.current.startOfDay(for: Date())) ?? Date()
+        let requestedStart = Calendar.current.date(
+            byAdding: .day, value: -days, to: Calendar.current.startOfDay(for: Date())
+        ) ?? Date()
+        let start = authorizedStart(for: type, requested: requestedStart)
+        guard start < Date() else { return [] }
         let predicate = HKQuery.predicateForSamples(withStart: start, end: Date(), options: .strictStartDate)
         return await withCheckedContinuation { continuation in
             let query = HKSampleQuery(sampleType: type, predicate: predicate, limit: HKObjectQueryNoLimit,
@@ -207,10 +222,12 @@ class HealthKitService {
     func fetchMorningExerciseMinutes(wake: Date) async -> Double {
         let now = Date()
         let end = min(now, wake.addingTimeInterval(4 * 3600))
-        guard end > wake else { return 0 }
-        let predicate = HKQuery.predicateForSamples(withStart: wake, end: end, options: .strictStartDate)
+        let type = HKQuantityType(.appleExerciseTime)
+        let start = authorizedStart(for: type, requested: wake)
+        guard end > start else { return 0 }
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: end, options: .strictStartDate)
         return await withCheckedContinuation { continuation in
-            let query = HKStatisticsQuery(quantityType: HKQuantityType(.appleExerciseTime),
+            let query = HKStatisticsQuery(quantityType: type,
                                           quantitySamplePredicate: predicate, options: .cumulativeSum) { _, result, _ in
                 continuation.resume(returning: result?.sumQuantity()?.doubleValue(for: .minute()) ?? 0)
             }
@@ -256,7 +273,9 @@ class HealthKitService {
     func fetchLastNightSamples(window: (start: Date, end: Date)? = nil) async -> [SleepSample] {
         let sleepType = HKCategoryType(.sleepAnalysis)
         let window = window ?? lastNightWindow()
-        let predicate = HKQuery.predicateForSamples(withStart: window.start, end: window.end, options: .strictStartDate)
+        let start = authorizedStart(for: sleepType, requested: window.start)
+        guard start < window.end else { return [] }
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: window.end, options: .strictStartDate)
         guard let raw = try? await querySamples(sleepType, predicate: predicate) else { return [] }
         if #available(iOS 16.0, *) {
             return SleepSample.samples(from: raw)
@@ -269,7 +288,9 @@ class HealthKitService {
     private func fetchSleep(window: (start: Date, end: Date)? = nil) async -> SleepSummary? {
         let sleepType = HKCategoryType(.sleepAnalysis)
         let window = window ?? lastNightWindow()
-        let predicate = HKQuery.predicateForSamples(withStart: window.start, end: window.end, options: .strictStartDate)
+        let start = authorizedStart(for: sleepType, requested: window.start)
+        guard start < window.end else { return nil }
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: window.end, options: .strictStartDate)
 
         do {
             let samples = try await querySamples(sleepType, predicate: predicate)
@@ -331,7 +352,9 @@ class HealthKitService {
         let sleepType = HKCategoryType(.sleepAnalysis)
         let now = Date()
         let weekAgo = Calendar.current.date(byAdding: .day, value: -7, to: now)!
-        let predicate = HKQuery.predicateForSamples(withStart: weekAgo, end: now, options: .strictStartDate)
+        let start = authorizedStart(for: sleepType, requested: weekAgo)
+        guard start < now else { return 0 }
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: now, options: .strictStartDate)
 
         do {
             let samples = try await querySamples(sleepType, predicate: predicate)
@@ -341,7 +364,10 @@ class HealthKitService {
                 default: return false
                 }
             }.reduce(0.0) { $0 + $1.endDate.timeIntervalSince($1.startDate) }
-            return (totalSleep / 3600) / 7.0
+            // Don't divide a two-day authorized slice by seven; that would turn
+            // privacy-limited history into an artificially poor sleep average.
+            let authorizedDays = min(7, max(1, now.timeIntervalSince(start) / 86_400))
+            return (totalSleep / 3600) / authorizedDays
         } catch {
             return 0
         }
@@ -355,7 +381,11 @@ class HealthKitService {
     func fetchBedtimeHistory(nights: Int = 14) async -> [(day: Date, bedtime: Date)] {
         let sleepType = HKCategoryType(.sleepAnalysis)
         let now = Date()
-        guard let start = Calendar.current.date(byAdding: .day, value: -nights, to: now),
+        guard let requestedStart = Calendar.current.date(byAdding: .day, value: -nights, to: now) else {
+            return []
+        }
+        let start = authorizedStart(for: sleepType, requested: requestedStart)
+        guard start < now,
               let raw = try? await querySamples(sleepType,
                   predicate: HKQuery.predicateForSamples(withStart: start, end: now, options: .strictStartDate))
         else { return [] }
@@ -404,11 +434,13 @@ class HealthKitService {
         let now = Date()
         let twoWeeksAgo = Calendar.current.date(byAdding: .day, value: -14, to: now)!
         let oneWeekAgo = Calendar.current.date(byAdding: .day, value: -7, to: now)!
+        let authorizedTwoWeeksAgo = authorizedStart(for: type, requested: twoWeeksAgo)
+        let authorizedOneWeekAgo = authorizedStart(for: type, requested: oneWeekAgo)
 
         async let thisWeek = fetchAverage(type, unit: unit,
-            predicate: HKQuery.predicateForSamples(withStart: oneWeekAgo, end: now))
+            predicate: HKQuery.predicateForSamples(withStart: authorizedOneWeekAgo, end: now))
         async let lastWeek = fetchAverage(type, unit: unit,
-            predicate: HKQuery.predicateForSamples(withStart: twoWeeksAgo, end: oneWeekAgo))
+            predicate: HKQuery.predicateForSamples(withStart: authorizedTwoWeeksAgo, end: oneWeekAgo))
 
         let (tw, lw) = await (thisWeek, lastWeek)
         guard lw > 0 else { return "insufficient_data" }
@@ -419,6 +451,11 @@ class HealthKitService {
     }
 
     // MARK: - Query helpers
+
+    private func authorizedStart(for type: HKObjectType, requested: Date) -> Date {
+        guard let lowerBound = earliestAuthorizedDates[type] else { return requested }
+        return max(requested, lowerBound)
+    }
 
     private func querySamples(_ type: HKCategoryType, predicate: NSPredicate) async throws -> [HKCategorySample] {
         try await withCheckedThrowingContinuation { continuation in
@@ -433,8 +470,11 @@ class HealthKitService {
 
     private func fetchLatestQuantity(_ type: HKQuantityTypeIdentifier, unit: HKUnit) async -> Double {
         let quantityType = HKQuantityType(type)
+        let requestedStart = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date()
+        let start = authorizedStart(for: quantityType, requested: requestedStart)
+        guard start < Date() else { return 0 }
         let predicate = HKQuery.predicateForSamples(
-            withStart: Calendar.current.date(byAdding: .day, value: -7, to: Date()), end: Date(), options: .strictStartDate)
+            withStart: start, end: Date(), options: .strictStartDate)
         do {
             return try await withCheckedThrowingContinuation { continuation in
                 let query = HKSampleQuery(sampleType: quantityType, predicate: predicate, limit: 1,

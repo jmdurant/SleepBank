@@ -12,14 +12,25 @@ import SwiftUI
 
 struct BeachSceneView: View {
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.systemPrefersReducedResourceUsage) private var reduceResourceUsage
 
     var body: some View {
-        TimelineView(.animation) { tl in
-            Canvas { ctx, size in
-                draw(&ctx, size: size, t: tl.date.timeIntervalSinceReferenceDate, night: scheme == .dark)
+        Group {
+            if reduceResourceUsage {
+                beachFrame(at: Date())
+            } else {
+                TimelineView(.animation) { timeline in
+                    beachFrame(at: timeline.date)
+                }
             }
         }
         .ignoresSafeArea()
+    }
+
+    private func beachFrame(at date: Date) -> some View {
+        Canvas { ctx, size in
+            draw(&ctx, size: size, t: date.timeIntervalSinceReferenceDate, night: scheme == .dark)
+        }
     }
 
     // MARK: - Layout (fractions of height)

@@ -3,7 +3,7 @@ import Foundation
 import HealthKit
 #endif
 
-public struct SleepSample: Hashable {
+public struct SleepSample: Hashable, Sendable {
     public let stage: SleepStage
     public let startDate: Date
     public let endDate: Date

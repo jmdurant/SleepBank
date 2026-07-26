@@ -27,7 +27,8 @@ enum NapKind: String, AppEnum {
 struct StartNapIntent: AppIntent {
     static var title: LocalizedStringResource = "Start Nap"
     static var description = IntentDescription("Start a SleepBank nap and its smart wake.")
-    static var openAppWhenRun: Bool = true
+    static var supportedModes: IntentModes { .foreground(.immediate) }
+    static var allowedExecutionTargets: IntentExecutionTargets { .main }
 
     @Parameter(title: "Nap type", default: .power)
     var kind: NapKind
@@ -41,7 +42,8 @@ struct StartNapIntent: AppIntent {
 struct StopNapIntent: AppIntent {
     static var title: LocalizedStringResource = "Stop Nap"
     static var description = IntentDescription("End the current SleepBank nap.")
-    static var openAppWhenRun: Bool = true
+    static var supportedModes: IntentModes { .foreground(.immediate) }
+    static var allowedExecutionTargets: IntentExecutionTargets { .main }
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
         await MainActor.run { NapController.shared.stop() }

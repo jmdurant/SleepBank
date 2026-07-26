@@ -46,6 +46,7 @@ class PhoneNapController {
     private var lastOnset: Date?
     private var lastReason: WakeReason?
     private var wakeTarget: Date?
+    private var armedWakeTarget: Date?
     private var tickCount = 0
     private(set) var spo2: Double = 0   // % — spot from HealthKit, completeness only
 
@@ -82,6 +83,12 @@ class PhoneNapController {
         self.detector = detector
         let now = Date()
         engine = NapEngine(type: type, sessionStart: now, detector: detector)
+        if let ceiling = engine?.ceiling {
+            // Arm the hard ceiling immediately while the user is awake. Onset
+            // later replaces it with the more precise smart-wake target.
+            armedWakeTarget = ceiling
+            Task { [alarm] in await alarm.scheduleWake(at: ceiling, napTitle: type.title) }
+        }
         recorder.begin(at: now)
         motion.startMonitoring()
         // Keep the app alive in the background for the whole nap (the iOS equivalent of
@@ -125,9 +132,9 @@ class PhoneNapController {
         // Refresh the spot SpO2 occasionally (it's not a live stream).
         tickCount += 1
         if tickCount % 30 == 1 {
-            Task { [weak self] in
+            Task { @MainActor [weak self] in
                 let value = await HealthKitService.shared.latestOxygenSaturation()
-                await MainActor.run { self?.spo2 = value }
+                self?.spo2 = value
             }
         }
         // Immobility source, best → worst: H10 chest accelerometer, then the Apple
@@ -178,6 +185,15 @@ class PhoneNapController {
         if onsetDetected && !wasOnset {
             NoiseService.shared.fadeOut()
             GuidedRelaxationService.shared.stop()   // asleep — the wind-down is done
+        }
+
+        // Arm a real system alarm as soon as onset establishes the smart target.
+        // Re-arm only if the engine materially changes that target.
+        if let target = result.wakeTarget,
+           armedWakeTarget.map({ abs($0.timeIntervalSince(target)) > 1 }) ?? true {
+            armedWakeTarget = target
+            let title = napType.title
+            Task { [alarm] in await alarm.scheduleWake(at: target, napTitle: title) }
         }
         if result.isAlarming { alarm.start() }
 
@@ -238,6 +254,7 @@ class PhoneNapController {
         phase = .finished
         timeUntilWake = 0
         onsetDetected = false
+        armedWakeTarget = nil
         engine = nil
     }
 

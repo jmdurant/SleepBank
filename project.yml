@@ -2,8 +2,8 @@ name: SleepBank
 options:
   bundleIdPrefix: com.doctordurant.sleepbank
   deploymentTarget:
-    iOS: "26.0"
-    watchOS: "26.0"
+    iOS: "27.0"
+    watchOS: "27.0"
   createIntermediateGroups: true
 
 packages:
@@ -46,6 +46,13 @@ targets:
       path: App/iOS/Info.plist
       properties:
         UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
         NSSupportsLiveActivities: true
         NSHealthShareUsageDescription: "SleepBank reads your sleep and heart-rate data to study your naps and validate nap-onset detection."
         NSHealthUpdateUsageDescription: "SleepBank records your naps to Apple Health."
@@ -54,6 +61,7 @@ targets:
         NSLocationWhenInUseUsageDescription: "SleepBank uses your approximate location only to know your local sunrise and sunset, so it can tell daylight from after-dark when timing your light and activity advice."
         NSBluetoothAlwaysUsageDescription: "SleepBank connects to a Muse headband and Polar H10 to read EEG and continuous heart rate for sleep-onset detection."
         NSMotionUsageDescription: "SleepBank reads motion — including AirPods head-stillness — to detect when you've settled and fallen asleep."
+        NSAlarmKitUsageDescription: "SleepBank schedules your smart wake as a system alarm so it can wake you even when the app is not visible."
         # Keep H10/Muse streaming and relaxing-sound playback alive while the
         # phone is backgrounded/locked during a nap.
         UIBackgroundModes:
@@ -110,6 +118,7 @@ targets:
         WKApplication: true
         WKCompanionAppBundleIdentifier: com.doctordurant.sleepbank
         WKBackgroundModes:
+          - alarm
           - workout-processing
         NSHealthShareUsageDescription: "SleepBank reads your heart rate during a nap to detect sleep onset."
         NSHealthUpdateUsageDescription: "SleepBank records your naps to Apple Health."

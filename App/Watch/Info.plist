@@ -17,7 +17,7 @@
 	<key>CFBundleShortVersionString</key>
 	<string>1.0</string>
 	<key>CFBundleVersion</key>
-	<string>1</string>
+	<string>20</string>
 	<key>NSHealthShareUsageDescription</key>
 	<string>SleepBank reads your heart rate during a nap to detect sleep onset.</string>
 	<key>NSHealthUpdateUsageDescription</key>
@@ -28,6 +28,7 @@
 	<true/>
 	<key>WKBackgroundModes</key>
 	<array>
+		<string>alarm</string>
 		<string>workout-processing</string>
 	</array>
 	<key>WKCompanionAppBundleIdentifier</key>

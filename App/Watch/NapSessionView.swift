@@ -10,6 +10,7 @@ import SwiftUI
 import SleepBankCore
 
 struct NapSessionView: View {
+    @Environment(\.systemPrefersReducedResourceUsage) private var reduceResourceUsage
     @State private var nap = NapController.shared
 
     var body: some View {
@@ -143,7 +144,7 @@ struct NapSessionView: View {
             Image(systemName: "alarm.waves.left.and.right.fill")
                 .font(.system(size: 40))
                 .foregroundStyle(.orange)
-                .symbolEffect(.pulse)
+                .symbolEffect(.pulse, isActive: !reduceResourceUsage)
             Text("Time to wake")
                 .font(.headline)
             Button { nap.stop() } label: {

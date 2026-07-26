@@ -17,9 +17,11 @@
 	<key>CFBundleShortVersionString</key>
 	<string>1.0</string>
 	<key>CFBundleVersion</key>
-	<string>1</string>
+	<string>20</string>
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>SleepBank connects to a Muse headband and Polar H10 to read EEG and continuous heart rate for sleep-onset detection.</string>
+	<key>NSAlarmKitUsageDescription</key>
+	<string>SleepBank schedules your smart wake as a system alarm so it can wake you even when the app is not visible.</string>
 	<key>NSCalendarsFullAccessUsageDescription</key>
 	<string>SleepBank checks your calendar for busy times so it suggests a nap when you're actually free.</string>
 	<key>NSHealthShareUsageDescription</key>
@@ -53,5 +55,16 @@
 	</array>
 	<key>UILaunchScreen</key>
 	<dict/>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+	</array>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
 </dict>
 </plist>

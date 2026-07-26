@@ -49,7 +49,6 @@ class NapController {
 
     private var engine: NapEngine?
     private var timer: Timer?
-    private var wakeScheduled = false
     private var lastOnset: Date?
     private var lastWakeReason: WakeReason?
     private var lastSentPhase: NapPhase?
@@ -75,8 +74,13 @@ class NapController {
         self.detector = detector
         let now = Date()
         engine = NapEngine(type: type, sessionStart: now, detector: detector)
+        if let ceiling = engine?.ceiling {
+            // watchOS requires start(at:) while the app is active. Schedule the
+            // absolute safety ceiling now; the live workout loop can still wake
+            // earlier at the onset-relative or deepening target.
+            alarm.scheduleWake(at: ceiling)
+        }
         recorder.begin(at: now)
-        wakeScheduled = false
         onsetDetected = false
         lastOnset = nil
         lastWakeReason = nil
@@ -164,11 +168,6 @@ class NapController {
             lastSentPhase = result.phase
         }
 
-        // Schedule the guaranteed-wake session as soon as onset gives us a target.
-        if !wakeScheduled, let target = result.wakeTarget {
-            alarm.scheduleWake(at: target)
-            wakeScheduled = true
-        }
         // Sound the alarm once the engine says so (idempotent).
         if result.isAlarming {
             alarm.startAlarm()
@@ -218,7 +217,6 @@ class NapController {
         phase = .finished
         timeUntilWake = 0
         onsetDetected = false
-        wakeScheduled = false
         engine = nil
     }
 

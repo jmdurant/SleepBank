@@ -4,9 +4,18 @@
 //
 
 import SwiftUI
+import WatchKit
+
+final class SleepBankWatchDelegate: NSObject, WKApplicationDelegate {
+    func handle(_ extendedRuntimeSession: WKExtendedRuntimeSession) {
+        NapController.shared.alarm.adopt(extendedRuntimeSession)
+    }
+}
 
 @main
 struct SleepBankWatchApp: App {
+    @WKApplicationDelegateAdaptor(SleepBankWatchDelegate.self) private var appDelegate
+
     var body: some Scene {
         WindowGroup {
             WatchRootView()

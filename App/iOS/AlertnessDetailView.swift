@@ -65,7 +65,7 @@ struct AlertnessDetailView: View {
             .font(.system(size: 9, weight: .bold))
             .baselineOffset(5)
             .foregroundColor(f.tint)
-        return base + Text(" ").font(.caption) + supers
+        return Text("\(base) \(supers)")
     }
 
     // MARK: - References

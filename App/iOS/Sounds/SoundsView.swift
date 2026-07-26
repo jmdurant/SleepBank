@@ -10,6 +10,7 @@ import SwiftUI
 import AVFoundation
 
 struct SoundsView: View {
+    @Environment(\.systemPrefersReducedResourceUsage) private var reduceResourceUsage
     @State private var noise = NoiseService.shared
     @State private var relax = GuidedRelaxationService.shared
     @State private var routeTick = 0   // bumps to refresh the output label
@@ -46,7 +47,7 @@ struct SoundsView: View {
                             Spacer()
                             if noise.isPlaying && noise.color == color {
                                 Image(systemName: "waveform").foregroundStyle(.ocean)
-                                    .symbolEffect(.variableColor.iterative)
+                                    .symbolEffect(.variableColor.iterative, isActive: !reduceResourceUsage)
                             } else {
                                 Image(systemName: "play.circle").foregroundStyle(.secondary)
                             }

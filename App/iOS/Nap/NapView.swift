@@ -13,6 +13,7 @@ import SleepChartKit
 import SleepBankCore
 
 struct NapView: View {
+    @Environment(\.systemPrefersReducedResourceUsage) private var reduceResourceUsage
     @State private var nap = PhoneNapController.shared
     @State private var kss = KSSStore.shared
     @State private var noise = NoiseService.shared
@@ -212,7 +213,9 @@ struct NapView: View {
     private var alarmView: some View {
         VStack(spacing: 18) {
             Image(systemName: "alarm.waves.left.and.right.fill")
-                .font(.system(size: 60)).foregroundStyle(.sand).symbolEffect(.pulse)
+                .font(.system(size: 60))
+                .foregroundStyle(.sand)
+                .symbolEffect(.pulse, isActive: !reduceResourceUsage)
             Text("Time to wake").font(.title2.bold())
             Button { nap.stop() } label: {
                 Label("I'm up", systemImage: "checkmark").frame(maxWidth: .infinity).padding(.vertical, 6)

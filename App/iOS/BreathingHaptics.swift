@@ -85,7 +85,7 @@ final class BreathingHaptics {
     // MARK: - Patterns
 
     private func ramp(seconds: Double, intensity: (Float, Float), sharpness: (Float, Float)) {
-        guard let engine else { return }
+        guard engine != nil else { return }
         let i0 = scaled(intensity.0), i1 = scaled(intensity.1)
         let event = CHHapticEvent(
             eventType: .hapticContinuous,

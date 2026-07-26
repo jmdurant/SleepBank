@@ -210,7 +210,13 @@ class NoiseService {
             return noErr
         }
         engine.attach(node)
-        engine.connect(node, to: engine.mainMixerNode, format: format)
+        do {
+            try engine.connectNode(node, to: engine.mainMixerNode, format: format)
+        } catch {
+            engine.detach(node)
+            print("[NoiseService] audio graph connection failed: \(error)")
+            return
+        }
         engine.mainMixerNode.outputVolume = 0
         sourceNode = node
     }
