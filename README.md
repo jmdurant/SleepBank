@@ -525,3 +525,15 @@ SleepChartKit is available under the MIT license. See the LICENSE file for more 
 <img width="1920" height="1080" alt="Shots Mockups (43)" src="https://github.com/user-attachments/assets/4bb626ef-51e0-40cb-ab10-220226abf814" />
 
 *Sample sleep chart showing a night's sleep with deep sleep, REM, and wake periods.*
+
+## Sensor fixes — October 17, 2026
+
+Ported the corresponding DiaBLE H10/Muse fixes while retaining nap recording and Watch relay.
+H10 processing now honors contact/available RR data and uses the accelerometer sample clock;
+Muse waits for subscription acknowledgements, rejects packet gaps, and consumes complete
+one-second EEG frames. HealthKit HR keeps its original measurement date.
+
+Run `bash scripts/test-sensors.sh` (9 signal-processing regressions). The SleepBank Xcode scheme
+has 13 passing simulator tests, including contact, batched motion, stale EEG, and nap integration
+coverage. Its unsigned phone/Watch build passes in Xcode 27. Physical sensor and radio-loss checks
+remain necessary. There is no Radius T integration in SleepBank to update.

@@ -1,22 +1,5 @@
-//
-//  EEGSleepProcessor.swift
-//  SleepBank
-//
-//  Harvested from SexKit's EEGProcessor. The signal-processing core — vDSP real
-//  FFT over 256-sample (1 s) Hanning-windowed frames at 256 Hz, per-channel band
-//  powers, artifact rejection — is kept intact because it is domain-neutral and
-//  well-built. What's replaced is the *derived* layer: instead of arousal/flow
-//  metrics, we compute the two events a nap cares about, which a frontal montage
-//  (AF7/AF8 + TP9/TP10) can actually see:
-//
-//    • Sleep ONSET — alpha attenuation + theta emergence (the N1 signature).
-//    • Deep-sleep APPROACH — rising delta (the "wake now" trigger).
-//
-//  Plus a spindle-band (sigma, ~12–15 Hz) power as an N2 hint and a crude
-//  per-channel contact-quality gate, since EEG-derived state should only be
-//  trusted when the electrodes are actually on the skin.
-//
-
+// Muse EEG spectra and experimental sleep-related heuristics for SleepBank.
+// Frames contain 256 samples per channel at 256 Hz. These heuristics are not validated sleep staging.
 import Foundation
 import Accelerate
 
@@ -56,6 +39,8 @@ class EEGSleepProcessor {
     var channelQuality: [Float] = [0, 0, 0, 0]
     /// Whether enough channels have contact to trust EEG-derived state.
     var hasGoodSignal = false
+    private(set) var lastFrameDate: Date?
+    private(set) var processedFrameCount = 0
     /// Live raw per-channel diagnostics (12-bit ADC units) for calibration.
     var channelRange: [Float] = [0, 0, 0, 0]
     var channelMean: [Float] = [0, 0, 0, 0]
@@ -92,9 +77,7 @@ class EEGSleepProcessor {
     private let baselineTarget = 30
     private var onsetHoldFrames = 0
     private var deepHoldFrames = 0
-    // Sleep staging is scored on 30 s epochs (AASM). We make sleep decisions on a
-    // ~30 s rolling average of the per-second band powers, not single 1 s frames —
-    // this matches the standard and removes the frame-to-frame flag flicker.
+    // Average spectra over 30 complete one-second frames before applying the heuristic.
     private var epochWindow: [BandPowers] = []
     private let epochFrames = 30
 
@@ -110,16 +93,22 @@ class EEGSleepProcessor {
     }
 
     func reset() {
-        hasGoodSignal = false
-        channelQuality = [0, 0, 0, 0]
-        tp9Powers = BandPowers(); af7Powers = BandPowers()
-        af8Powers = BandPowers(); tp10Powers = BandPowers(); avgPowers = BandPowers()
-        deltaDominance = 0; spindlePower = 0
         channelBuffers = [[], [], [], []]
         cleanHistory = [[], [], [], []]
         channelRange = [0, 0, 0, 0]
         channelMean = [0, 0, 0, 0]
         traceSamples = []
+        channelQuality = [0, 0, 0, 0]
+        hasGoodSignal = false
+        lastFrameDate = nil
+        processedFrameCount = 0
+        tp9Powers = BandPowers()
+        af7Powers = BandPowers()
+        af8Powers = BandPowers()
+        tp10Powers = BandPowers()
+        avgPowers = BandPowers()
+        deltaDominance = 0
+        spindlePower = 0
         alphaBaseline = 0
         deltaBaseline = 0
         baselineCaptured = false
@@ -138,7 +127,7 @@ class EEGSleepProcessor {
 
     /// Feed raw samples for one channel (Muse delivers 12 per packet per channel).
     func feedSamples(channel: Int, samples: [Float]) {
-        guard channel < channels else { return }
+        guard (0..<channels).contains(channel) else { return }
         channelBuffers[channel].append(contentsOf: samples)
         let maxSamples = fftSize * 2
         if channelBuffers[channel].count > maxSamples {
@@ -151,8 +140,8 @@ class EEGSleepProcessor {
                 traceSamples.removeFirst(traceSamples.count - traceLength)
             }
         }
-        // Channel 0 filling up triggers a full multi-channel update.
-        if channel == 0 && channelBuffers[0].count >= fftSize {
+        // Consume one complete second from every channel. Packet arrival cadence is not frame cadence.
+        while channelBuffers.allSatisfy({ $0.count >= fftSize }) {
             processAllChannels()
         }
     }
@@ -160,13 +149,18 @@ class EEGSleepProcessor {
     // MARK: - FFT pipeline
 
     private func processAllChannels() {
+        lastFrameDate = Date()
+        processedFrameCount += 1
+        var currentPowers: [BandPowers] = []
+        var cleanFrontalChannels = 0
         for ch in 0..<channels {
-            guard channelBuffers[ch].count >= fftSize else { continue }
-            let samples = Array(channelBuffers[ch].suffix(fftSize))
+            let samples = Array(channelBuffers[ch].prefix(fftSize))
+            channelBuffers[ch].removeFirst(fftSize)
 
             let (clean, contact) = assessQuality(samples, channel: ch)
             recordQuality(channel: ch, contact: contact)   // contact, not cleanliness
-            guard clean && contact else { continue }       // skip artifacted/no-contact frames for the FFT
+            guard clean && contact else { continue }
+            if ch == 1 || ch == 2 { cleanFrontalChannels += 1 }
 
             // Remove the DC offset (raw Muse samples sit ~2048) before windowing —
             // otherwise the baseline dominates the low-frequency bins and delta
@@ -177,6 +171,7 @@ class EEGSleepProcessor {
             var windowed = [Float](repeating: 0, count: fftSize)
             vDSP_vmul(centered, 1, window, 1, &windowed, 1, vDSP_Length(fftSize))
             let powers = computeFFT(windowed)
+            currentPowers.append(powers)
 
             switch ch {
             case 0: tp9Powers = powers
@@ -187,10 +182,20 @@ class EEGSleepProcessor {
             }
         }
 
-        computeAveragePowers()
+        computeAveragePowers(currentPowers)
         updateSignalQuality()
-
-        guard hasGoodSignal else { return }
+        hasGoodSignal = hasGoodSignal && cleanFrontalChannels == 2
+        guard hasGoodSignal else {
+            onsetIndex = 0
+            onsetDetected = false
+            deepSleepApproaching = false
+            deltaDominance = 0
+            spindlePower = 0
+            onsetHoldFrames = 0
+            deepHoldFrames = 0
+            epochWindow.removeAll()
+            return
+        }
 
         // Roll the ~30 s epoch average that sleep decisions are made on.
         epochWindow.append(avgPowers)
@@ -297,9 +302,9 @@ class EEGSleepProcessor {
         hasGoodSignal = channelQuality[1] > 0.5 && channelQuality[2] > 0.5
     }
 
-    private func computeAveragePowers() {
+    private func computeAveragePowers(_ current: [BandPowers]) {
         func avg(_ k: (BandPowers) -> Float) -> Float {
-            (k(tp9Powers) + k(af7Powers) + k(af8Powers) + k(tp10Powers)) / 4
+            current.isEmpty ? 0 : current.map(k).reduce(0, +) / Float(current.count)
         }
         avgPowers = BandPowers(
             delta: avg(\.delta), theta: avg(\.theta), alpha: avg(\.alpha),

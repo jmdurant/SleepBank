@@ -20,6 +20,17 @@ final class SensorFreshnessTests: XCTestCase {
         XCTAssertEqual(h10.currentHeartRate, 0)
         XCTAssertEqual(h10.hrvRMSSD, 0)
     }
+    func testH10RejectsLostContactAndUsesBatchedSampleClock() {
+        let h10 = PolarH10Service(); h10.isConnected = true
+        h10.receiveHeartRate(bpm: 64, rr: [900, 950, 900, 950, 900, 950, 900, 950, 900, 950])
+        h10.receiveHeartRate(bpm: 64, rr: [], contact: false)
+        XCTAssertNil(h10.freshHeartRate)
+        XCTAssertNil(h10.freshHRV)
+        for index in 0...1000 {
+            h10.feedAccel(x: 0, y: 0, z: 1, timestamp: UInt64(index) * 5_000_000)
+        }
+        XCTAssertEqual(h10.stillSeconds, 5, accuracy: 0.001)
+    }
     func testMotionGapDoesNotCountAsStillness() {
         var now = Date()
         let h10 = PolarH10Service(now: { now }); h10.isConnected = true
@@ -36,6 +47,9 @@ final class SensorFreshnessTests: XCTestCase {
         let muse = MuseService()
         muse.isConnected = true; muse.isStreaming = true
         for channel in 0..<4 { muse.parseEEGPacket(Data(repeating: 0, count: 20), channel: channel) }
+        for channel in 0..<4 {
+            muse.eeg.feedSamples(channel: channel, samples: (0..<256).map { 2048 + Float(100 * sin(2 * Double.pi * 10 * Double($0) / 256)) })
+        }
         muse.eeg.hasGoodSignal = true; muse.eeg.onsetIndex = 0.9; muse.eeg.deepSleepApproaching = true
         XCTAssertTrue(muse.hasFreshEEG)
         muse.disconnect()

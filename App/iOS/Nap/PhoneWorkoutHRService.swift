@@ -38,7 +38,7 @@ final class PhoneWorkoutHRService: NSObject, HKWorkoutSessionDelegate, HKLiveWor
     /// Fresh HR only — nil if no reading in the last 10 s (so the nap loop can fall
     /// back to another source rather than trust a stale value).
     var freshHeartRate: Int? {
-        guard currentHeartRate > 0, let t = lastUpdate, Date().timeIntervalSince(t) <= 10 else { return nil }
+        guard isActive, currentHeartRate > 0, let t = lastUpdate, (0...10).contains(Date().timeIntervalSince(t)) else { return nil }
         return currentHeartRate
     }
 
@@ -85,7 +85,11 @@ final class PhoneWorkoutHRService: NSObject, HKWorkoutSessionDelegate, HKLiveWor
 
     func stop() {
         session?.end()       // delegate discards the (unsaved) workout on .ended
+        session = nil
+        builder = nil
         isActive = false
+        currentHeartRate = 0
+        lastUpdate = nil
     }
 
     /// Safety net: we never intentionally persist a workout (we discard), so ANY
@@ -111,18 +115,22 @@ final class PhoneWorkoutHRService: NSObject, HKWorkoutSessionDelegate, HKLiveWor
 
     func workoutSession(_ s: HKWorkoutSession, didChangeTo to: HKWorkoutSessionState,
                         from: HKWorkoutSessionState, date: Date) {
-        if to == .ended {
-            builder?.endCollection(withEnd: date) { [weak self] _, _ in
-                self?.builder?.discardWorkout()   // never persist a nap as a workout
-                self?.session = nil
-                self?.builder = nil
-            }
+        guard to == .ended else { return }
+        let endedBuilder = s.associatedWorkoutBuilder()
+        endedBuilder.endCollection(withEnd: date) { _, _ in endedBuilder.discardWorkout() }
+        DispatchQueue.main.async {
+            guard s === self.session else { return }
+            self.session = nil; self.builder = nil
+            self.isActive = false; self.currentHeartRate = 0; self.lastUpdate = nil
         }
     }
 
     func workoutSession(_ s: HKWorkoutSession, didFailWithError error: Error) {
         log.error("workout session failed: \(error.localizedDescription)")
-        isActive = false
+        DispatchQueue.main.async {
+            guard s === self.session else { return }
+            self.stop()
+        }
     }
 
     // MARK: - HKLiveWorkoutBuilderDelegate
@@ -131,14 +139,16 @@ final class PhoneWorkoutHRService: NSObject, HKWorkoutSessionDelegate, HKLiveWor
 
     func workoutBuilder(_ b: HKLiveWorkoutBuilder, didCollectDataOf types: Set<HKSampleType>) {
         guard types.contains(HKQuantityType(.heartRate)) else { return }
-        let bpm = b.statistics(for: HKQuantityType(.heartRate))?
-            .mostRecentQuantity()?
+        let statistics = b.statistics(for: HKQuantityType(.heartRate))
+        let bpm = statistics?.mostRecentQuantity()?
             .doubleValue(for: .count().unitDivided(by: .minute())) ?? 0
-        guard bpm > 0 else { return }
+        guard bpm.isFinite, bpm > 0, let sampleDate = statistics?.mostRecentQuantityDateInterval()?.end else { return }
         DispatchQueue.main.async {
+            guard self.isActive, b === self.builder,
+                  sampleDate > (self.lastUpdate ?? .distantPast) else { return }
             self.currentHeartRate = Int(bpm)
-            self.lastUpdate = Date()
-            self.heartRateHistory.append(HeartRateSample(timestamp: Date(), bpm: Int(bpm)))
+            self.lastUpdate = sampleDate
+            self.heartRateHistory.append(HeartRateSample(timestamp: sampleDate, bpm: Int(bpm)))
             if self.heartRateHistory.count > 240 { self.heartRateHistory.removeFirst() }
         }
     }

@@ -113,12 +113,16 @@ class NapWorkoutService: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutBuilde
             guard let quantityType = type as? HKQuantityType else { continue }
 
             if quantityType == HKQuantityType(.heartRate) {
-                let bpm = workoutBuilder.statistics(for: quantityType)?
-                    .mostRecentQuantity()?
+                let statistics = workoutBuilder.statistics(for: quantityType)
+                let bpm = statistics?.mostRecentQuantity()?
                     .doubleValue(for: HKUnit.count().unitDivided(by: .minute())) ?? 0
+                guard bpm.isFinite, bpm > 0,
+                      let sampleDate = statistics?.mostRecentQuantityDateInterval()?.end else { continue }
                 DispatchQueue.main.async {
+                    guard workoutBuilder === self.builder,
+                          sampleDate > (self.heartRateSamples.last?.timestamp ?? .distantPast) else { return }
                     self.currentHeartRate = Int(bpm)
-                    self.heartRateSamples.append(HeartRateSample(timestamp: Date(), bpm: Int(bpm)))
+                    self.heartRateSamples.append(HeartRateSample(timestamp: sampleDate, bpm: Int(bpm)))
                 }
             }
 

@@ -23,6 +23,8 @@ class PolarH10Service: NSObject {
     static let shared = PolarH10Service()
 
     // Connection / status
+    var isScanning = false
+    var isConnecting = false
     var isConnected = false
     var isStreaming = false
     var deviceId: String?
@@ -61,7 +63,7 @@ class PolarH10Service: NSObject {
     var freshHRV: Double? { isStreaming && fresh(lastRRUpdate) && hrvRMSSD > 0 ? hrvRMSSD : nil }
     var hasFreshMotion: Bool { isAccStreaming && fresh(lastAccUpdate, maxAge: 5) }
     var freshBreathingRate: Double? {
-        hasFreshMotion && fresh(lastBreathPeak, maxAge: 12) && breathingRate > 0 ? breathingRate : nil
+        hasFreshMotion && breathingRate > 0 ? breathingRate : nil
     }
 
     private func clearHeartRate() {
@@ -73,11 +75,11 @@ class PolarH10Service: NSObject {
 
     private func clearMotion() {
         isAccStreaming = false
-        lastAccUpdate = nil; lastBreathPeak = nil
+        lastAccUpdate = nil
+        motion = ChestMotionSignal()
         movementIntensity = 0; stillSeconds = 0; breathingRate = 0
         isLyingDown = false
-        accBuffer.removeAll(); breathIntervals.removeAll()
-        slowZ = 0; fastZ = 0; prevBreath = 0; prevPrevBreath = 0
+        accelX = 0; accelY = 0; accelZ = 0
     }
 
     private func clearSignals() {
@@ -93,15 +95,8 @@ class PolarH10Service: NSObject {
     private var accDisposable: Disposable?
     private var searchDisposable: Disposable?
     private var pendingAutoConnect = false
-    @ObservationIgnored private var accBuffer: [Double] = []
     @ObservationIgnored private var lastAccUpdate: Date?
-    // Breathing estimator state (slow chest-normal oscillation).
-    @ObservationIgnored private var slowZ = 0.0
-    @ObservationIgnored private var fastZ = 0.0
-    @ObservationIgnored private var prevBreath = 0.0
-    @ObservationIgnored private var prevPrevBreath = 0.0
-    @ObservationIgnored private var lastBreathPeak: Date?
-    @ObservationIgnored private var breathIntervals: [Double] = []
+    @ObservationIgnored private var motion = ChestMotionSignal()
 
     override convenience init() { self.init(now: Date.init) }
 
@@ -126,32 +121,45 @@ class PolarH10Service: NSObject {
     // MARK: - Connect
 
     func autoConnect() {
-        guard !isConnected else { return }
+        guard !isConnected, !isConnecting else { return }
         pendingAutoConnect = true
+        isScanning = true
+        guard api.isBlePowered else { return }
         searchDisposable?.dispose()
         searchDisposable = api.searchForDevice()
             .observe(on: MainScheduler.instance)
             .subscribe(
                 onNext: { [weak self] device in
-                    guard let self, !self.isConnected, device.name.contains("H10") else { return }
+                    guard let self, self.pendingAutoConnect, !self.isConnected, !self.isConnecting, device.connectable, device.name.contains("H10") else { return }
                     self.searchDisposable?.dispose()
                     self.connect(deviceId: device.deviceId)
                 },
-                onError: { logger.notice("[PolarH10] Search error: \($0)") }
+                onError: { [weak self] error in
+                    self?.pendingAutoConnect = false; self?.isScanning = false
+                    self?.lastStreamError = error.localizedDescription
+                }
             )
-        pendingAutoConnect = false
     }
 
     func connect(deviceId: String) {
+        guard !isConnected, !isConnecting else { return }
+        pendingAutoConnect = false
+        isScanning = false
+        isConnecting = true
         do {
             try api.connectToDevice(deviceId)
             self.deviceId = deviceId
         } catch {
+            isConnecting = false
+            lastStreamError = error.localizedDescription
             logger.notice("[PolarH10] Connect error: \(error)")
         }
     }
 
     func disconnect() {
+        pendingAutoConnect = false
+        isScanning = false
+        isConnecting = false
         hrDisposable?.dispose(); hrDisposable = nil
         accDisposable?.dispose(); accDisposable = nil
         searchDisposable?.dispose(); searchDisposable = nil
@@ -170,7 +178,8 @@ class PolarH10Service: NSObject {
                 onNext: { [weak self] hrData in
                     guard let self, self.isConnected else { return }
                     for sample in hrData {
-                        self.receiveHeartRate(bpm: Int(sample.hr), rr: sample.rrsMs.map(Double.init))
+                        self.receiveHeartRate(bpm: Int(sample.hr), rr: sample.rrAvailable ? sample.rrsMs.map(Double.init) : [],
+                                              contact: !sample.contactStatusSupported || sample.contactStatus)
                     }
                     // Forward to the watch nap loop (best-effort when reachable).
                     if hrData.contains(where: { $0.hr > 0 }), let bpm = self.freshHeartRate {
@@ -182,19 +191,21 @@ class PolarH10Service: NSObject {
                     self?.hrDisposable = nil
                     self?.lastStreamError = "HR: \($0)"
                     logger.notice("[PolarH10] HR stream error: \($0)")
-                }
+                },
+                onCompleted: { [weak self] in self?.clearHeartRate(); self?.hrDisposable = nil }
             )
     }
 
     /// One delivered HR packet. Freshness follows acquisition, not nap-loop polling.
-    func receiveHeartRate(bpm: Int, rr: [Double]) {
-        guard isConnected, bpm > 0 else { return }
+    func receiveHeartRate(bpm: Int, rr: [Double], contact: Bool = true) {
+        guard isConnected else { return }
+        guard contact, bpm > 0 else { clearHeartRate(); return }
         if !fresh(lastRRUpdate) { rrIntervals.removeAll(); hrvRMSSD = 0 }
         let date = now()
         currentHeartRate = bpm; lastHRUpdate = date; isStreaming = true
         heartRateHistory.append(HeartRateSample(timestamp: date, bpm: bpm))
         if heartRateHistory.count > 300 { heartRateHistory.removeFirst() }
-        for value in rr where value > 0 {
+        for value in rr where value.isFinite && value > 0 {
             lastRRUpdate = date; lastRRInterval = value
             rrIntervals.append(value)
             if rrIntervals.count > 60 { rrIntervals.removeFirst() }
@@ -217,7 +228,7 @@ class PolarH10Service: NSObject {
                     for sample in accData {
                         self.feedAccel(x: Double(sample.x) / 1000.0,
                                        y: Double(sample.y) / 1000.0,
-                                       z: Double(sample.z) / 1000.0)
+                                       z: Double(sample.z) / 1000.0, timestamp: sample.timeStamp)
                     }
                     self.isAccStreaming = true
                 },
@@ -226,59 +237,26 @@ class PolarH10Service: NSObject {
                     self?.accDisposable = nil
                     self?.lastStreamError = "ACC: \($0)"
                     logger.notice("[PolarH10] ACC stream error: \($0)")
-                }
+                },
+                onCompleted: { [weak self] in self?.clearMotion(); self?.accDisposable = nil }
             )
     }
 
-    /// Convert a chest-accel sample (g) into a normalized movement level + a
-    /// running stillness duration, mirroring the watch's MotionService.
-    func feedAccel(x: Double, y: Double, z: Double) {
+    /// Arrival time controls expiry; the Polar nanosecond clock controls elapsed motion time.
+    func feedAccel(x: Double, y: Double, z: Double, timestamp: UInt64? = nil) {
+        guard isConnected, x.isFinite, y.isFinite, z.isFinite else { return }
         if !fresh(lastAccUpdate, maxAge: 5) { clearMotion() }
+        let date = now()
+        // The optional clock supports non-SDK callers and deterministic app tests.
+        let clock = timestamp ?? UInt64(max(0, date.timeIntervalSinceReferenceDate) * 1e9)
+        motion.feed(x: x, y: y, z: z, timestamp: clock)
         accelX = x; accelY = y; accelZ = z
-        let magnitude = (x * x + y * y + z * z).squareRoot()
-        let movement = abs(magnitude - 1.0)        // subtract gravity
-
-        accBuffer.append(movement)
-        if accBuffer.count > 50 { accBuffer.removeFirst() }
-        let avg = accBuffer.reduce(0, +) / Double(accBuffer.count)
-        movementIntensity = min(avg / 0.5, 1.0)
-
-        // Upright, the H10's X axis aligns with gravity (|x|≈1); lying down, gravity
-        // shifts off X onto the chest-normal axis. (Calibrated to the strap's
-        // typical mounting — empirically upright reads x≈-0.9.)
+        movementIntensity = motion.movementIntensity
+        stillSeconds = motion.stillSeconds
+        breathingRate = motion.breathingRate
         isLyingDown = abs(x) < 0.5
-
-        let now = self.now()
-        let dt = lastAccUpdate.map { now.timeIntervalSince($0) } ?? 0
-        lastAccUpdate = now
-        if avg > 0.05 { stillSeconds = 0 } else { stillSeconds += dt }
-
-        estimateBreathing(z: z, now: now, dt: dt)
-    }
-
-    /// Breathing rate from the slow chest-normal (z) oscillation: band-limit with
-    /// a fast/slow EMA pair, peak-detect, and convert peak intervals to bpm.
-    /// An estimate — respiration slows and regularizes at sleep onset.
-    private func estimateBreathing(z: Double, now: Date, dt: TimeInterval) {
-        guard dt > 0 else { return }
-        slowZ += (z - slowZ) * min(1, dt / 8.0)     // ~posture / DC
-        fastZ += (z - fastZ) * min(1, dt / 0.5)     // light smoothing
-        let breath = fastZ - slowZ                  // ~breathing band
-
-        if prevBreath > prevPrevBreath, prevBreath > breath, prevBreath > 0.008 {
-            if let last = lastBreathPeak {
-                let interval = now.timeIntervalSince(last)
-                if interval > 2.0, interval < 10.0 {     // 6–30 breaths/min
-                    breathIntervals.append(interval)
-                    if breathIntervals.count > 8 { breathIntervals.removeFirst() }
-                    let mean = breathIntervals.reduce(0, +) / Double(breathIntervals.count)
-                    breathingRate = 60.0 / mean
-                }
-            }
-            lastBreathPeak = now
-        }
-        prevPrevBreath = prevBreath
-        prevBreath = breath
+        lastAccUpdate = date
+        isAccStreaming = true
     }
 
     private func computeHRV() {
@@ -292,9 +270,12 @@ class PolarH10Service: NSObject {
 // MARK: - PolarBleApiObserver
 
 extension PolarH10Service: PolarBleApiObserver {
-    func deviceConnecting(_ identifier: PolarDeviceInfo) {}
+    func deviceConnecting(_ identifier: PolarDeviceInfo) { isConnecting = true }
 
     func deviceConnected(_ identifier: PolarDeviceInfo) {
+        isConnecting = false
+        isScanning = false
+        pendingAutoConnect = false
         clearSignals()
         isConnected = true
         deviceId = identifier.deviceId
@@ -307,6 +288,8 @@ extension PolarH10Service: PolarBleApiObserver {
     }
 
     func deviceDisconnected(_ identifier: PolarDeviceInfo, pairingError: Bool) {
+        guard identifier.deviceId == deviceId else { return }
+        isConnecting = false
         isConnected = false
         hrDisposable?.dispose(); hrDisposable = nil
         accDisposable?.dispose(); accDisposable = nil
@@ -334,6 +317,8 @@ extension PolarH10Service: PolarBleApiPowerStateObserver {
         if pendingAutoConnect && !isConnected { autoConnect() }
     }
     func blePowerOff() {
+        isConnecting = false
+        searchDisposable?.dispose(); searchDisposable = nil
         isConnected = false
         hrDisposable?.dispose(); hrDisposable = nil
         accDisposable?.dispose(); accDisposable = nil
@@ -345,7 +330,7 @@ extension PolarH10Service: PolarBleApiPowerStateObserver {
 
 extension PolarH10Service: PolarBleApiDeviceFeaturesObserver {
     func bleSdkFeatureReady(_ identifier: String, feature: PolarBleSdkFeature) {
-        if feature == .feature_polar_online_streaming {
+        if feature == .feature_polar_online_streaming, isConnected, identifier == deviceId {
             streamingFeatureReady = true
             if let id = deviceId, hrDisposable == nil { startHRStream(id) }
             // ACC needs PMD notifications enabled — brief delay after subscribe.

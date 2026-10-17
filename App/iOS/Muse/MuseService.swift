@@ -1,18 +1,4 @@
-//
-//  MuseService.swift
-//  SleepBank
-//
-//  Harvested from SexKit. Connects to a Muse headband over CoreBluetooth and
-//  streams raw 4-channel EEG (TP9/AF7/AF8/TP10) at 256 Hz, unpacking the 12-bit
-//  packed samples and feeding them to EEGSleepProcessor. No InteraXon SDK — the
-//  BLE protocol is spoken directly (based on the muse-js / XvMuse reversing).
-//
-//  Per the project's topology decision, Muse pairs to the *phone* (watchOS won't
-//  do generic third-party BLE), so this lives on the iOS side and provides the
-//  high-fidelity at-home nap mode plus the n=1 validation signal against the
-//  watch-only onset detector.
-//
-
+// Muse BLE EEG stream for SleepBank (phone-side connection).
 import Foundation
 import CoreBluetooth
 import os
@@ -25,6 +11,18 @@ class MuseService: NSObject {
     static let shared = MuseService()
 
     var isScanning = false
+    var isConnecting = false
+    var isBusy: Bool { isScanning || isConnecting || isConnected }
+    var lastError: String?
+    private var channelDates: [Date?] = Array(repeating: nil, count: 4)
+    private var sequenceNumbers: [UInt16?] = Array(repeating: nil, count: 4)
+    var hasFreshEEG: Bool {
+        isStreaming && eeg.hasGoodSignal
+        && SensorFreshness.isFresh(eeg.lastFrameDate, within: SensorFreshness.eeg)
+        && [1, 2].allSatisfy {
+            SensorFreshness.isFresh(channelDates[$0], within: SensorFreshness.eeg)
+        }
+    }
     var isConnected = false
     var isStreaming = false
     var deviceName: String?
@@ -35,25 +33,14 @@ class MuseService: NSObject {
     var lastPacketLength = 0
 
     let eeg = EEGSleepProcessor()
-    private var channelUpdates: [Date?] = Array(repeating: nil, count: 4)
-    var hasFreshEEG: Bool {
-        let now = Date()
-        return isConnected && isStreaming && eeg.hasGoodSignal && channelUpdates.allSatisfy {
-            guard let date = $0 else { return false }
-            return (0...3).contains(now.timeIntervalSince(date))
-        }
-    }
-
-    private func clearEEG() {
-        channelUpdates = Array(repeating: nil, count: 4)
-        eeg.reset()
-    }
 
     private var centralManager: CBCentralManager?
     private var peripheral: CBPeripheral?
     private var controlCharacteristic: CBCharacteristic?
-    private var eegForwardCounter = 0
     private var didStartStreaming = false
+    private var wantsConnection = false
+    private var notifiedChannels: Set<CBUUID> = []
+    private var streamGeneration = UUID()
 
     // Muse BLE UUIDs
     private let museServiceUUID = CBUUID(string: "0000fe8d-0000-1000-8000-00805f9b34fb")
@@ -64,6 +51,10 @@ class MuseService: NSObject {
     private let eeg4CharUUID = CBUUID(string: "273e0006-4c4d-454d-96be-f03bac821358")  // TP10
 
     func startScanning() {
+        guard !isConnected, !isConnecting else { return }
+        wantsConnection = true
+        isScanning = true
+        lastError = nil
         guard centralManager == nil else {
             if centralManager?.state == .poweredOn { beginScan() }
             return
@@ -72,13 +63,41 @@ class MuseService: NSObject {
     }
 
     func disconnect() {
+        wantsConnection = false
+        centralManager?.stopScan()
         if let peripheral { centralManager?.cancelPeripheralConnection(peripheral) }
+        self.peripheral = nil
+        resetConnection()
+    }
+
+    private func resetConnection() {
+        isScanning = false
+        isConnecting = false
         isConnected = false
         isStreaming = false
-        clearEEG()
+        didStartStreaming = false
+        controlCharacteristic = nil
+        notifiedChannels.removeAll()
+        subscribedChannels = 0
+        streamGeneration = UUID()
+        channelDates = Array(repeating: nil, count: 4)
+        sequenceNumbers = Array(repeating: nil, count: 4)
+        eeg.reset()
+    }
+
+    private func fail(_ error: Error) {
+        lastError = error.localizedDescription
+        disconnect()
+    }
+
+    private func startIfReady() {
+        guard isConnected, controlCharacteristic != nil, notifiedChannels.count == 4, !didStartStreaming else { return }
+        didStartStreaming = true
+        startStreaming()
     }
 
     private func beginScan() {
+        guard wantsConnection, !isConnected, !isConnecting else { return }
         isScanning = true
         centralManager?.scanForPeripherals(withServices: [museServiceUUID], options: nil)
     }
@@ -88,19 +107,20 @@ class MuseService: NSObject {
             mlog.error("startStreaming: no control characteristic")
             return
         }
-        clearEEG()
+        eeg.reset()
         let supportsResp = controlCharacteristic.properties.contains(.write)
         let supportsNoResp = controlCharacteristic.properties.contains(.writeWithoutResponse)
         mlog.info("startStreaming: control props resp=\(supportsResp) noResp=\(supportsNoResp)")
         // Muse control protocol: halt → set preset (p21 enables the 4 EEG channels)
         // → status → resume. Commands are length-prefixed and newline-terminated.
         let sequence = ["h", "p21", "s", "d"]
+        let generation = streamGeneration
         for (i, cmd) in sequence.enumerated() {
             DispatchQueue.main.asyncAfter(deadline: .now() + Double(i) * 0.2) { [weak self] in
-                self?.writeCommand(cmd)
+                guard let self, self.isConnected, self.streamGeneration == generation else { return }
+                self.writeCommand(cmd)
             }
         }
-        isStreaming = true
     }
 
     /// Encode and send a Muse control command: [length, ascii…, 0x0A].
@@ -117,14 +137,22 @@ class MuseService: NSObject {
 
     /// Unpack a Muse EEG packet: 2-byte sequence header then 12 × 12-bit samples.
     func parseEEGPacket(_ data: Data, channel: Int, at now: Date = Date()) {
-        guard data.count >= 20, channel < 4 else {
+        guard isConnected else { return }
+        guard data.count >= 20, (0..<4).contains(channel) else {
             if packetsReceived <= 12 { mlog.notice("short/odd EEG packet len=\(data.count) ch=\(channel)") }
             return
         }
-        guard isConnected, isStreaming else { return }
-        if let last = channelUpdates[channel], now.timeIntervalSince(last) > 3 { clearEEG() }
-        channelUpdates[channel] = now
         let bytes = [UInt8](data)
+        let sequence = UInt16(bytes[0]) << 8 | UInt16(bytes[1])
+        if (sequenceNumbers[channel].map { sequence != $0 &+ 1 } ?? false)
+            || (channelDates[channel].map { now.timeIntervalSince($0) > 3 } ?? false) {
+            // Do not concatenate gaps into a continuous FFT window or retain old contact quality.
+            eeg.reset()
+            channelDates = Array(repeating: nil, count: 4)
+        }
+        sequenceNumbers[channel] = sequence
+        channelDates[channel] = now
+        isStreaming = true
         var samples: [Float] = []
         for i in 0..<12 {
             let byteIndex = 2 + (i * 3 / 2)
@@ -137,19 +165,13 @@ class MuseService: NSObject {
             }
             samples.append(Float(sample))
         }
+        let frameCount = eeg.processedFrameCount
         eeg.feedSamples(channel: channel, samples: samples)
         RawEEGRecorder.shared.record(channel: channel, samples: samples)
-
-        // Channel 0 drives a processor update (~1/s). Forward the EEG onset signal
-        // to the watch nap loop, but only with good contact and throttled.
-        if channel == 0 {
-            eegForwardCounter += 1
-            if eegForwardCounter % 8 == 0, hasFreshEEG {
-                PhoneConnectivity.shared.sendEEG(
-                    onsetConfidence: Double(eeg.onsetIndex),
-                    deepApproaching: eeg.deepSleepApproaching
-                )
-            }
+        if eeg.processedFrameCount != frameCount, hasFreshEEG {
+            PhoneConnectivity.shared.sendEEG(
+                onsetConfidence: Double(eeg.onsetIndex), deepApproaching: eeg.deepSleepApproaching
+            )
         }
     }
 }
@@ -159,22 +181,34 @@ class MuseService: NSObject {
 extension MuseService: CBCentralManagerDelegate {
 
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
-        if central.state == .poweredOn { beginScan() }
-        else { isConnected = false; isStreaming = false; clearEEG() }
+        if central.state == .poweredOn {
+            beginScan()
+        } else if central.state != .unknown && central.state != .resetting {
+            resetConnection()
+            isScanning = wantsConnection && central.state == .poweredOff
+            lastError = "Bluetooth is unavailable."
+        }
     }
 
     func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral,
                         advertisementData: [String: Any], rssi RSSI: NSNumber) {
-        guard (peripheral.name ?? "").lowercased().contains("muse") else { return }
+        guard wantsConnection, isScanning, (peripheral.name ?? "").lowercased().contains("muse") else { return }
         self.peripheral = peripheral
         self.deviceName = peripheral.name
         central.stopScan()
         isScanning = false
+        isConnecting = true
         central.connect(peripheral, options: nil)
     }
 
     func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
+        guard wantsConnection, peripheral === self.peripheral else {
+            central.cancelPeripheralConnection(peripheral)
+            return
+        }
+        isConnecting = false
         isConnected = true
+        lastError = nil
         didStartStreaming = false
         subscribedChannels = 0
         packetsReceived = 0
@@ -184,14 +218,16 @@ extension MuseService: CBCentralManagerDelegate {
     }
 
     func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
-        mlog.error("failed to connect: \(error?.localizedDescription ?? "?", privacy: .public)")
+        guard peripheral === self.peripheral else { return }
+        lastError = error?.localizedDescription ?? "Could not connect to Muse."
+        disconnect()
     }
 
     func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
-        mlog.notice("disconnected: \(error?.localizedDescription ?? "clean", privacy: .public)")
-        isConnected = false
-        isStreaming = false
-        clearEEG()
+        guard peripheral === self.peripheral else { return }
+        lastError = error?.localizedDescription
+        self.peripheral = nil
+        resetConnection()
     }
 }
 
@@ -200,12 +236,16 @@ extension MuseService: CBCentralManagerDelegate {
 extension MuseService: CBPeripheralDelegate {
 
     func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
+        guard peripheral === self.peripheral, isConnected else { return }
+        if let error { fail(error); return }
         let services = peripheral.services ?? []
         mlog.info("discovered \(services.count) services: \(services.map { $0.uuid.uuidString }.joined(separator: ","), privacy: .public)")
         services.forEach { peripheral.discoverCharacteristics(nil, for: $0) }
     }
 
     func peripheral(_ peripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: Error?) {
+        guard peripheral === self.peripheral, isConnected else { return }
+        if let error { fail(error); return }
         for char in service.characteristics ?? [] {
             mlog.info("char \(char.uuid.uuidString, privacy: .public) props=\(char.properties.rawValue)")
             switch char.uuid {
@@ -213,35 +253,41 @@ extension MuseService: CBPeripheralDelegate {
                 controlCharacteristic = char
             case eeg1CharUUID, eeg2CharUUID, eeg3CharUUID, eeg4CharUUID:
                 peripheral.setNotifyValue(true, for: char)
-                subscribedChannels += 1
+
             default:
                 break
             }
         }
-        // Start once we have the control char and have subscribed to EEG channels.
-        if controlCharacteristic != nil, subscribedChannels >= 4, !didStartStreaming {
-            didStartStreaming = true
-            mlog.info("all chars ready (subscribed=\(self.subscribedChannels)); starting stream")
-            startStreaming()
-        }
+        startIfReady()
     }
 
     func peripheral(_ peripheral: CBPeripheral, didWriteValueFor characteristic: CBCharacteristic, error: Error?) {
+        guard peripheral === self.peripheral, isConnected else { return }
         if let error {
-            mlog.error("control write FAILED: \(error.localizedDescription, privacy: .public)")
+            fail(error)
         } else {
             mlog.info("control write ok")
         }
     }
 
     func peripheral(_ peripheral: CBPeripheral, didUpdateNotificationStateFor characteristic: CBCharacteristic, error: Error?) {
-        if let error {
-            mlog.error("notify enable failed for \(characteristic.uuid.uuidString, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        guard peripheral === self.peripheral, isConnected else { return }
+        if let error { fail(error); return }
+        guard [eeg1CharUUID, eeg2CharUUID, eeg3CharUUID, eeg4CharUUID].contains(characteristic.uuid) else { return }
+        if characteristic.isNotifying { notifiedChannels.insert(characteristic.uuid) }
+        else {
+            notifiedChannels.remove(characteristic.uuid)
+            isStreaming = false
+            eeg.reset()
         }
+        subscribedChannels = notifiedChannels.count
+        startIfReady()
     }
 
     func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: Error?) {
-        guard error == nil, let data = characteristic.value else { clearEEG(); return }
+        guard peripheral === self.peripheral, isConnected, didStartStreaming else { return }
+        if let error { fail(error); return }
+        guard let data = characteristic.value else { return }
         packetsReceived += 1
         lastPacketLength = data.count
         if packetsReceived <= 8 {
