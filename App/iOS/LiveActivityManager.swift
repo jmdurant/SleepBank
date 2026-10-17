@@ -32,7 +32,7 @@ class LiveActivityManager {
         do {
             activity = try Activity.request(
                 attributes: attributes,
-                content: .init(state: state, staleDate: nil),
+                content: .init(state: state, staleDate: state.heartRate > 0 ? state.staleDate : nil),
                 pushType: nil
             )
             lastError = nil
@@ -43,15 +43,16 @@ class LiveActivityManager {
     }
 
     func update(_ state: NapActivityAttributes.ContentState) {
-        Task { await activity?.update(.init(state: state, staleDate: nil)) }
+        Task { await activity?.update(.init(state: state, staleDate: state.heartRate > 0 ? state.staleDate : nil)) }
     }
 
     func end() {
         let toEnd = activity
+        let orphans = Activity<NapActivityAttributes>.activities
         activity = nil
         Task {
             await toEnd?.end(nil, dismissalPolicy: .immediate)
-            for orphan in Activity<NapActivityAttributes>.activities {
+            for orphan in orphans {
                 await orphan.end(nil, dismissalPolicy: .immediate)
             }
         }

@@ -210,7 +210,9 @@ class PhoneNapController {
             phase: result.phase.rawValue,
             wakeTarget: result.wakeTarget ?? engine.ceiling,
             heartRate: heartRate,
-            onsetDetected: onsetDetected
+            onsetDetected: onsetDetected,
+            heartRateAt: polar.freshHeartRate != nil ? polar.lastHRUpdate
+                : watchHR.freshHeartRate != nil ? watchHR.lastHRAt : workoutHR.lastUpdate
         ))
     }
 

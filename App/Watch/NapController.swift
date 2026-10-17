@@ -54,7 +54,8 @@ class NapController {
     private var lastSentPhase: NapPhase?
     private var liveTickCounter = 0
 
-    var heartRate: Int { sync.freshExternalHR ?? workout.currentHeartRate }
+    var heartRate: Int { sync.freshExternalHR ?? workout.freshHeartRate ?? 0 }
+    var heartRateAt: Date? { sync.freshExternalHR != nil ? sync.externalHeartRateAt : workout.heartRateAt }
     var movementIntensity: Double { motion.movementIntensity }
     var isAlarming: Bool { alarm.isAlarming }
 
@@ -99,6 +100,7 @@ class NapController {
         SharedStore.napActive = true
         WidgetCenter.shared.reloadAllTimelines()   // refresh the complication
         // Tell the phone to connect sensors, start sound, and raise the Live Activity.
+        sync.beginNap(at: now)
         sync.sendNap(event: "start", phase: NapPhase.settling.rawValue,
                      wakeTarget: engine?.ceiling, heartRate: 0,
                      typeTitle: type.title, onset: false)
@@ -118,7 +120,7 @@ class NapController {
         // Prefer the H10 (chest strap, more reliable + gives HRV) when the phone
         // is forwarding fresh data; otherwise use wrist HR. HRV is only present
         // with the H10, so onset HRV-fusion engages automatically when available.
-        let wristHR = workout.currentHeartRate > 0 ? workout.currentHeartRate : nil
+        let wristHR = workout.freshHeartRate
         let externalHR = sync.freshExternalHR
         usingExternalHR = externalHR != nil
         let signal = OnsetSignal(
@@ -128,7 +130,7 @@ class NapController {
             hrvRMSSD: sync.freshExternalHRV,
             eegOnsetConfidence: sync.freshEEGConfidence,
             eegDeepApproaching: sync.freshEEGDeep,
-            spo2: workout.oxygenSaturation > 0 ? workout.oxygenSaturation : nil
+            spo2: workout.freshOxygenSaturation
         )
         let now = Date()
         let result = engine.tick(now: now, signal: signal)
@@ -159,12 +161,12 @@ class NapController {
             NoiseService.shared.fadeOut()
             GuidedRelaxationService.shared.stop()   // asleep — the wrist pacing is done
             sync.sendNap(event: "onset", phase: result.phase.rawValue, wakeTarget: effectiveTarget,
-                         heartRate: heartRate, typeTitle: napType.title, onset: true)
+                         heartRate: heartRate, heartRateAt: heartRateAt, typeTitle: napType.title, onset: true)
             lastSentPhase = result.phase
         } else if result.phase != lastSentPhase || liveTickCounter % 30 == 0 {
             // Phase change, or a periodic refresh so HR doesn't go stale.
             sync.sendNap(event: "update", phase: result.phase.rawValue, wakeTarget: effectiveTarget,
-                         heartRate: heartRate, typeTitle: napType.title, onset: onsetDetected)
+                         heartRate: heartRate, heartRateAt: heartRateAt, typeTitle: napType.title, onset: onsetDetected)
             lastSentPhase = result.phase
         }
 
@@ -209,7 +211,7 @@ class NapController {
         // Tell the phone to stand sensors down, end the Live Activity, and update
         // the home widget with today's banked totals (the watch is the source).
         sync.sendNap(event: "end", phase: NapPhase.finished.rawValue, wakeTarget: nil,
-                     heartRate: heartRate, typeTitle: napType.title, onset: onsetDetected,
+                     heartRate: heartRate, heartRateAt: heartRateAt, typeTitle: napType.title, onset: onsetDetected,
                      napsToday: store.countToday, minutesToday: store.minutesToday)
         timer?.invalidate()
         timer = nil

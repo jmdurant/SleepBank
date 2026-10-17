@@ -23,6 +23,10 @@ class NapWorkoutService: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutBuilde
     var oxygenSaturation: Double = 0          // SpO2 percentage (0-100)
     var heartRateSamples: [HeartRateSample] = []
     var startTime: Date?
+    var heartRateAt: Date? { heartRateSamples.last?.timestamp }
+    var freshHeartRate: Int? { isActive && RelayTimestamp.isFresh(heartRateAt) ? currentHeartRate : nil }
+    private(set) var oxygenSaturationAt: Date?
+    var freshOxygenSaturation: Double? { isActive && RelayTimestamp.isFresh(oxygenSaturationAt) ? oxygenSaturation : nil }
 
     private var session: HKWorkoutSession?
     private var builder: HKLiveWorkoutBuilder?
@@ -50,6 +54,10 @@ class NapWorkoutService: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutBuilde
             return
         }
 
+        heartRateSamples = []
+        currentHeartRate = 0
+        oxygenSaturationAt = nil
+        oxygenSaturation = 0
         let hrType = HKQuantityType(.heartRate)
         if healthStore.authorizationStatus(for: hrType) == .notDetermined {
             requestPermissions()
@@ -127,11 +135,15 @@ class NapWorkoutService: NSObject, HKWorkoutSessionDelegate, HKLiveWorkoutBuilde
             }
 
             if quantityType == HKQuantityType(.oxygenSaturation) {
-                let spo2 = workoutBuilder.statistics(for: quantityType)?
-                    .mostRecentQuantity()?
-                    .doubleValue(for: .percent()) ?? 0
+                let statistics = workoutBuilder.statistics(for: quantityType)
+                let spo2 = statistics?.mostRecentQuantity()?.doubleValue(for: .percent()) ?? 0
+                guard spo2.isFinite, (0...1).contains(spo2), spo2 > 0,
+                      let at = statistics?.mostRecentQuantityDateInterval()?.end else { continue }
                 DispatchQueue.main.async {
+                    guard workoutBuilder === self.builder,
+                          RelayTimestamp.accepts(at, after: self.oxygenSaturationAt) else { return }
                     self.oxygenSaturation = spo2 * 100
+                    self.oxygenSaturationAt = at
                 }
             }
         }

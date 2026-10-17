@@ -537,3 +537,26 @@ Run `bash scripts/test-sensors.sh` (9 signal-processing regressions). The SleepB
 has 13 passing simulator tests, including contact, batched motion, stale EEG, and nap integration
 coverage. Its unsigned phone/Watch build passes in Xcode 27. Physical sensor and radio-loss checks
 remain necessary. There is no Radius T integration in SleepBank to update.
+
+
+## Phone / Watch reliability — October 17, 2026
+
+Live relay messages carry the original HR, HRV, EEG, and motion timestamps. Repeated,
+late, implausibly future, or undated samples cannot refresh the nap detector; the Watch's own HR
+and SpO2 also expire. Live Activities hide expired HR, and replacing an activity no
+longer lets asynchronous cleanup end its replacement.
+
+Workout/HR-relay commands use a separate expiring, deduplicated channel that rejects superseded commands, with receipt
+acknowledgements. Daily summaries keep their own application context. Nap events carry
+session IDs and sequence numbers so an old session cannot control a new one. Completed
+nap traces remain on the Watch until the phone confirms a successful disk write;
+activation, reachability, and a foreground/runtime retry timer resume delivery. Delivery
+failures retain the trace, and repeat imports replace the same record ID.
+
+Watch background delivery waits for pending connectivity data and model writes. The
+scheduled smart alarm remains in place. Validation: 10 relay regressions via
+`bash scripts/test-relay.sh`, 9 signal-processing regressions via
+`bash scripts/test-sensors.sh`, and 17 simulator tests in the SleepBank Xcode scheme.
+The unsigned iOS build includes the Watch and widgets. Device checks still
+need to cover a disconnected nap followed by reconnection, app termination during trace
+transfer, locked-phone receipt, and HR stopping while motion continues.

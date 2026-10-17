@@ -22,12 +22,11 @@ final class WatchHRService {
     private(set) var movementIntensity = 0.0  // wrist movement (0…1)
     private(set) var stillSeconds = 0.0       // wrist stillness
     private(set) var heartRateHistory: [HeartRateSample] = []
-    private var lastHRAt: Date?
+    private(set) var lastHRAt: Date?
     private var lastMotionAt: Date?
 
     private func fresh(_ at: Date?) -> Bool {
-        guard let at else { return false }
-        return Date().timeIntervalSince(at) <= 10
+        RelayTimestamp.isFresh(at)
     }
 
     /// Fresh HR — nil if no reading in the last 10 s.
@@ -42,24 +41,35 @@ final class WatchHRService {
     func requestStart() {
         requested = true
         heartRateHistory = []
+        lastHRAt = nil
+        lastMotionAt = nil
+        currentHeartRate = 0
         PhoneConnectivity.shared.requestWatchHR(true)
     }
 
     func requestStop() {
         requested = false
+        lastHRAt = nil
+        lastMotionAt = nil
+        currentHeartRate = 0
         PhoneConnectivity.shared.requestWatchHR(false)
     }
 
     /// Called when a forwarded reading (HR + wrist motion) arrives from the watch.
-    func update(bpm: Int, movement: Double?, stillSeconds: Double?) {
-        let now = Date()
-        if bpm > 0 {
+    func update(bpm: Int, heartRateAt: Date?, movement: Double?, stillSeconds: Double?, motionAt: Date?, now: Date = Date()) {
+        guard requested else { return }
+        if bpm > 0, RelayTimestamp.accepts(heartRateAt, after: lastHRAt, now: now), let heartRateAt {
             currentHeartRate = bpm
-            lastHRAt = now
-            heartRateHistory.append(HeartRateSample(timestamp: now, bpm: bpm))
+            lastHRAt = heartRateAt
+            heartRateHistory.append(HeartRateSample(timestamp: heartRateAt, bpm: bpm))
             if heartRateHistory.count > 240 { heartRateHistory.removeFirst() }
         }
-        if let movement { movementIntensity = movement; lastMotionAt = now }
-        if let stillSeconds { self.stillSeconds = stillSeconds; lastMotionAt = now }
+        if RelayTimestamp.accepts(motionAt, after: lastMotionAt, now: now),
+           let movement, movement.isFinite, (0...1).contains(movement),
+           let stillSeconds, stillSeconds.isFinite, stillSeconds >= 0 {
+            movementIntensity = movement
+            self.stillSeconds = stillSeconds
+            lastMotionAt = motionAt
+        }
     }
 }

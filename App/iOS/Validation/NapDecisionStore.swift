@@ -17,16 +17,24 @@ class NapDecisionStore {
     private(set) var records: [NapDecisionRecord] = []
     private let url: URL
 
-    init() {
+    init(url: URL? = nil) {
         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        url = docs.appendingPathComponent("nap-decisions.json")
+        self.url = url ?? docs.appendingPathComponent("nap-decisions.json")
         load()
     }
 
-    func add(_ record: NapDecisionRecord) {
-        records.removeAll { $0.id == record.id }
-        records.insert(record, at: 0)   // most recent first
-        save()
+    @discardableResult
+    func add(_ record: NapDecisionRecord) -> Bool {
+        var next = records.filter { $0.id != record.id }
+        next.insert(record, at: 0)
+        do {
+            try JSONEncoder().encode(next).write(to: url, options: .atomic)
+            records = next
+            return true
+        } catch {
+            print("[NapDecisionStore] Trace not saved; withholding ACK: \(error)")
+            return false
+        }
     }
 
     /// Total feature rows across all naps — the size of the training set.
@@ -38,8 +46,4 @@ class NapDecisionStore {
         records = decoded
     }
 
-    private func save() {
-        guard let data = try? JSONEncoder().encode(records) else { return }
-        try? data.write(to: url, options: .atomic)
-    }
 }

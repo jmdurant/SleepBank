@@ -52,8 +52,8 @@ class PolarH10Service: NSObject {
     var accelZ: Double = 0
 
     @ObservationIgnored private let now: () -> Date
-    private var lastHRUpdate: Date?
-    private var lastRRUpdate: Date?
+    private(set) var lastHRUpdate: Date?
+    private(set) var lastRRUpdate: Date?
 
     private func fresh(_ date: Date?, maxAge: TimeInterval = 10) -> Bool {
         guard isConnected, let date else { return false }
@@ -183,7 +183,7 @@ class PolarH10Service: NSObject {
                     }
                     // Forward to the watch nap loop (best-effort when reachable).
                     if hrData.contains(where: { $0.hr > 0 }), let bpm = self.freshHeartRate {
-                        PhoneConnectivity.shared.sendLiveHR(bpm: bpm, hrv: self.freshHRV ?? 0)
+                        PhoneConnectivity.shared.sendLiveHR(bpm: bpm, hrv: self.freshHRV ?? 0, heartRateAt: self.lastHRUpdate, hrvAt: self.lastRRUpdate)
                     }
                 },
                 onError: { [weak self] in

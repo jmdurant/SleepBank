@@ -26,7 +26,7 @@ class MotionService {
     private let motionManager = CMMotionManager()
     private var recentAccelerations: [Double] = []
     private let sampleWindow = 20
-    private var lastUpdate: Date?
+    private(set) var lastUpdate: Date?
 
     func startMonitoring() {
         guard motionManager.isAccelerometerAvailable else { return }
@@ -52,13 +52,13 @@ class MotionService {
             self.isMoving = avg > self.stillnessThreshold
 
             // Accumulate / reset stillness duration.
-            let now = Date()
+            let now = Date(timeIntervalSinceNow: data.timestamp - ProcessInfo.processInfo.systemUptime)
             let dt = self.lastUpdate.map { now.timeIntervalSince($0) } ?? 0
             self.lastUpdate = now
             if self.isMoving {
                 self.stillSeconds = 0
             } else {
-                self.stillSeconds += dt
+                self.stillSeconds = (0...1).contains(dt) ? self.stillSeconds + dt : 0
             }
         }
     }

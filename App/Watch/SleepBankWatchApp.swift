@@ -7,6 +7,15 @@ import SwiftUI
 import WatchKit
 
 final class SleepBankWatchDelegate: NSObject, WKApplicationDelegate {
+    override init() {
+        super.init()
+        _ = WatchConnectivityService.shared
+    }
+
+    func handle(_ backgroundTasks: Set<WKRefreshBackgroundTask>) {
+        ConnectivityBackgroundDelivery.shared.receive(backgroundTasks)
+    }
+
     func handle(_ extendedRuntimeSession: WKExtendedRuntimeSession) {
         NapController.shared.alarm.adopt(extendedRuntimeSession)
     }

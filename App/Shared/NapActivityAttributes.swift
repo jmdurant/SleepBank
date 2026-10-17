@@ -18,6 +18,8 @@ struct NapActivityAttributes: ActivityAttributes {
         var wakeTarget: Date?      // for the live countdown
         var heartRate: Int
         var onsetDetected: Bool
+        var heartRateAt: Date? = nil
+        var staleDate: Date { (heartRateAt ?? .distantPast).addingTimeInterval(10) }
     }
 
     var napTitle: String           // "Power Nap" / "Cycle Nap"

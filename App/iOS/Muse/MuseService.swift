@@ -170,7 +170,7 @@ class MuseService: NSObject {
         RawEEGRecorder.shared.record(channel: channel, samples: samples)
         if eeg.processedFrameCount != frameCount, hasFreshEEG {
             PhoneConnectivity.shared.sendEEG(
-                onsetConfidence: Double(eeg.onsetIndex), deepApproaching: eeg.deepSleepApproaching
+                onsetConfidence: Double(eeg.onsetIndex), deepApproaching: eeg.deepSleepApproaching, sampledAt: eeg.lastFrameDate
             )
         }
     }

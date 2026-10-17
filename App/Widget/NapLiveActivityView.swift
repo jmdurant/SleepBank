@@ -27,8 +27,8 @@ struct NapLiveActivityWidget: Widget {
                 }
                 DynamicIslandExpandedRegion(.trailing) {
                     if context.state.heartRate > 0 {
-                        Label("\(context.state.heartRate)", systemImage: "heart.fill")
-                            .font(.caption).foregroundStyle(.red)
+                        Label(context.isStale || context.state.staleDate <= .now ? "HR unavailable" : "\(context.state.heartRate)", systemImage: "heart.fill")
+                            .font(.caption).foregroundStyle(context.isStale ? Color.secondary : Color.red)
                     }
                 }
                 DynamicIslandExpandedRegion(.bottom) {
@@ -67,8 +67,8 @@ struct NapLiveActivityWidget: Widget {
             VStack(alignment: .trailing, spacing: 2) {
                 countdown(context).font(.system(size: 28, weight: .semibold, design: .rounded))
                 if context.state.heartRate > 0 {
-                    Label("\(context.state.heartRate)", systemImage: "heart.fill")
-                        .font(.caption2).foregroundStyle(.red)
+                    Label(context.isStale || context.state.staleDate <= .now ? "HR unavailable" : "\(context.state.heartRate)", systemImage: "heart.fill")
+                        .font(.caption2).foregroundStyle(context.isStale ? Color.secondary : Color.red)
                 }
             }
         }

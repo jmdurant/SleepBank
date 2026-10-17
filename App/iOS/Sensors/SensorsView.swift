@@ -53,6 +53,9 @@ struct SensorsView: View {
                 if watch.requested { watch.requestStop(); checkingWatch = false }
                 else { watch.requestStart(); checkingWatch = true }
             }
+            if watch.requested, !watch.isStreaming, let status = PhoneConnectivity.shared.lastCommandStatus {
+                Text(status).font(.caption2).foregroundStyle(.secondary)
+            }
             if let hr = watch.freshHeartRate {
                 LabeledContent("Heart rate", value: "\(hr) bpm")
             }

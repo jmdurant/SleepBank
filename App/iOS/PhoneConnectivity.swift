@@ -18,6 +18,12 @@ import SleepBankCore
 class PhoneConnectivity: NSObject, WCSessionDelegate {
 
     static let shared = PhoneConnectivity()
+    private var pendingSummary: [String: Any]?
+    private var pendingCommands: [[String: Any]] = []
+    private var lastCommandID: String?
+    private(set) var lastCommandStatus: String?
+    private var napState = NapRelayState.load()
+
 
     private override init() {
         super.init()
@@ -30,7 +36,6 @@ class PhoneConnectivity: NSObject, WCSessionDelegate {
     /// light streak (for the watch complication). One application context, since the
     /// system keeps only the latest. Safe to call repeatedly.
     func sendDailySummary(samples: [SleepSample], morningLightStreak: Int, rhythmSnapshot: Data?) {
-        guard WCSession.default.activationState == .activated else { return }
         var context: [String: Any] = ["morningLightStreak": morningLightStreak]
         if let data = try? JSONEncoder().encode(samples.dtos) {
             context["lastNight"] = data
@@ -38,47 +43,70 @@ class PhoneConnectivity: NSObject, WCSessionDelegate {
         if let rhythmSnapshot { context["rhythmSnapshot"] = rhythmSnapshot }
         // Carry the chosen wind-down guide so a watch-started nap can pace it on the wrist.
         context["relaxGuide"] = GuidedRelaxationService.shared.guide.rawValue
-        try? WCSession.default.updateApplicationContext(context)
+        pendingSummary = context
+        flushSummary()
     }
 
     /// Forward a live H10 reading to the watch's nap loop. Best-effort: only sent
     /// when the watch app is reachable (it is during a nap, kept alive by the
     /// workout session); otherwise the watch falls back to its own wrist HR.
-    func sendLiveHR(bpm: Int, hrv: Double) {
+    func sendLiveHR(bpm: Int, hrv: Double, heartRateAt: Date?, hrvAt: Date?) {
         let session = WCSession.default
         guard session.activationState == .activated, session.isReachable, bpm > 0 else { return }
-        session.sendMessage(["liveHR": bpm, "liveHRV": hrv], replyHandler: nil, errorHandler: nil)
+        var payload: [String: Any] = ["liveHR": bpm, "liveHRV": hrv]
+        if let heartRateAt { payload["heartRateAt"] = heartRateAt.timeIntervalSince1970 }
+        if let hrvAt { payload["hrvAt"] = hrvAt.timeIntervalSince1970 }
+        session.sendMessage(payload, replyHandler: nil, errorHandler: nil)
     }
 
-    /// Ask the watch to start a real workout (walk / general) from a reminder's
-    /// action button. Best-effort: `sendMessage` if the watch app is reachable, else
-    /// queue it as application context for when it next wakes.
-    func startWorkout(_ kind: String) {
+    /// State snapshots never share their channel with expiring commands.
+    func startWorkout(_ kind: String) { sendCommand(["startWorkout": kind]) }
+    func requestWatchHR(_ on: Bool) { sendCommand(["watchHRMirror": on]) }
+
+    private func sendCommand(_ command: [String: Any]) {
+        var payload = command
+        let id = UUID().uuidString
+        payload["commandID"] = id
+        lastCommandID = id
+        payload["issuedAt"] = Date().timeIntervalSince1970
+        payload["expiresAt"] = Date().addingTimeInterval(30).timeIntervalSince1970
+        lastCommandStatus = "Waiting for Watch"
+        pendingCommands.append(payload)
+        flushCommands()
+    }
+
+    private func flushCommands() {
         let session = WCSession.default
         guard session.activationState == .activated else { return }
-        let payload: [String: Any] = ["startWorkout": kind, "ts": Date().timeIntervalSince1970]
-        if session.isReachable {
-            session.sendMessage(payload, replyHandler: nil, errorHandler: { _ in
-                try? session.updateApplicationContext(payload)
-            })
-        } else {
-            try? session.updateApplicationContext(payload)
+        let pending = pendingCommands
+        pendingCommands.removeAll()
+        for payload in pending {
+            guard let expires = RelayTimestamp.date(payload["expiresAt"]), expires > Date() else {
+                if payload["commandID"] as? String == lastCommandID {
+                    lastCommandStatus = "Request expired. Open SleepBank on Watch and try again."
+                }
+                continue
+            }
+            if session.isReachable {
+                session.sendMessage(payload, replyHandler: nil) { _ in session.transferUserInfo(payload) }
+            } else { session.transferUserInfo(payload) }
         }
     }
 
-    /// Ask the watch to start/stop relaying its wrist HR for a phone nap. Best-effort:
-    /// only works when the watch app is reachable (it can't be cold-launched here).
-    func requestWatchHR(_ on: Bool) {
-        let session = WCSession.default
-        guard session.activationState == .activated, session.isReachable else { return }
-        session.sendMessage(["watchHRMirror": on], replyHandler: nil, errorHandler: nil)
+    private func flushSummary() {
+        guard WCSession.default.activationState == .activated, let pendingSummary else { return }
+        do {
+            try WCSession.default.updateApplicationContext(pendingSummary)
+            self.pendingSummary = nil
+        } catch { print("[PhoneConnectivity] Summary delivery deferred: \(error)") }
     }
 
     /// Forward the Muse EEG onset signal to the watch nap loop.
-    func sendEEG(onsetConfidence: Double, deepApproaching: Bool) {
+    func sendEEG(onsetConfidence: Double, deepApproaching: Bool, sampledAt: Date?) {
         let session = WCSession.default
         guard session.activationState == .activated, session.isReachable else { return }
-        session.sendMessage(["eegOnset": onsetConfidence, "eegDeep": deepApproaching],
+        guard let sampledAt else { return }
+        session.sendMessage(["eegOnset": onsetConfidence, "eegDeep": deepApproaching, "eegAt": sampledAt.timeIntervalSince1970],
                             replyHandler: nil, errorHandler: nil)
     }
 
@@ -87,8 +115,18 @@ class PhoneConnectivity: NSObject, WCSessionDelegate {
     /// The watch told us a nap started/ended. On start, connect and stream the
     /// paired sensors so their data feeds the nap loop; on end, stand down.
     func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any]) {
+        if let status = userInfo["status"] as? String, let id = userInfo["commandAck"] as? String {
+            DispatchQueue.main.async {
+                guard id == self.lastCommandID else { return }
+                self.lastCommandStatus = ["accepted", "duplicate"].contains(status)
+                    ? "Watch received request" : "Request expired. Open SleepBank on Watch and try again."
+            }
+            return
+        }
         guard let event = userInfo["napEvent"] as? String else { return }
         DispatchQueue.main.async {
+            guard self.napState.receive(userInfo) else { return }
+            self.napState.save()
             switch event {
             case "start":
                 PolarH10Service.shared.autoConnect()
@@ -96,7 +134,7 @@ class PhoneConnectivity: NSObject, WCSessionDelegate {
                 if NoiseService.shared.autoPlayDuringNap { NoiseService.shared.play() }
                 LiveActivityManager.shared.start(
                     title: userInfo["type"] as? String ?? "Nap",
-                    sessionStart: Date(),
+                    sessionStart: RelayTimestamp.date(userInfo["napStartedAt"]) ?? Date(),
                     state: Self.contentState(from: userInfo)
                 )
                 SharedStore.napActive = true
@@ -127,7 +165,13 @@ class PhoneConnectivity: NSObject, WCSessionDelegate {
         guard let data = try? Data(contentsOf: file.fileURL),
               let record = try? JSONDecoder().decode(NapDecisionRecord.self, from: data) else { return }
         DispatchQueue.main.async {
-            NapDecisionStore.shared.add(record)
+            if NapDecisionStore.shared.add(record) {
+                let today = NapDecisionStore.shared.records.filter { Calendar.current.isDateInToday($0.end) }
+                SharedStore.napsToday = today.count
+                SharedStore.minutesToday = today.reduce(0) { $0 + $1.asleepMinutes }
+                WidgetCenter.shared.reloadAllTimelines()
+                session.transferUserInfo(["decisionAck": record.id.uuidString])
+            }
         }
     }
 
@@ -137,7 +181,8 @@ class PhoneConnectivity: NSObject, WCSessionDelegate {
             phase: info["phase"] as? String ?? "settling",
             wakeTarget: wake,
             heartRate: info["hr"] as? Int ?? 0,
-            onsetDetected: info["onset"] as? Bool ?? false
+            onsetDetected: info["onset"] as? Bool ?? false,
+            heartRateAt: RelayTimestamp.date(info["heartRateAt"])
         )
     }
 
@@ -147,12 +192,15 @@ class PhoneConnectivity: NSObject, WCSessionDelegate {
         let bpm = message["watchHR"] as? Int ?? 0
         let move = message["watchMove"] as? Double
         let still = message["watchStill"] as? Double
-        DispatchQueue.main.async { WatchHRService.shared.update(bpm: bpm, movement: move, stillSeconds: still) }
+        DispatchQueue.main.async { WatchHRService.shared.update(bpm: bpm, heartRateAt: RelayTimestamp.date(message["heartRateAt"]),
+                                                         movement: move, stillSeconds: still, motionAt: RelayTimestamp.date(message["motionAt"])) }
     }
 
     // MARK: - WCSessionDelegate (iOS requires all three lifecycle methods)
 
-    func session(_ session: WCSession, activationDidCompleteWith state: WCSessionActivationState, error: Error?) {}
+    func session(_ session: WCSession, activationDidCompleteWith state: WCSessionActivationState, error: Error?) {
+        DispatchQueue.main.async { self.flushSummary(); self.flushCommands() }
+    }
     func sessionDidBecomeInactive(_ session: WCSession) {}
     func sessionDidDeactivate(_ session: WCSession) {
         // Re-activate for the next paired watch.
