@@ -13,6 +13,7 @@ import Foundation
 import WidgetKit
 import SleepBankCore
 
+@MainActor
 @Observable
 class PhoneNapController {
 
@@ -52,19 +53,19 @@ class PhoneNapController {
 
     /// Fused live HR — priority: chest strap > Apple Watch > AirPods.
     var heartRate: Int {
-        if polar.currentHeartRate > 0 { return polar.currentHeartRate }
+        if let hr = polar.freshHeartRate { return hr }
         return watchHR.freshHeartRate ?? workoutHR.freshHeartRate ?? 0
     }
     /// Which sensor is driving the live heart rate right now (for the nap readout).
     var heartRateSource: String? {
-        if polar.currentHeartRate > 0 { return "H10" }
+        if polar.freshHeartRate != nil { return "H10" }
         if watchHR.freshHeartRate != nil { return "Watch" }
         if workoutHR.freshHeartRate != nil { return "AirPods" }
         return nil
     }
-    var hrv: Double { polar.hrvRMSSD }
-    var breathingRate: Double { polar.breathingRate }
-    var museGood: Bool { muse.eeg.hasGoodSignal }
+    var hrv: Double { polar.freshHRV ?? 0 }
+    var breathingRate: Double { polar.freshBreathingRate ?? 0 }
+    var museGood: Bool { muse.hasFreshEEG }
     /// Whether a chest strap is providing HRV + breathing (the only live source).
     var hasChestStrap: Bool { polar.isConnected }
     /// Whether the Muse is providing EEG.
@@ -87,7 +88,10 @@ class PhoneNapController {
             // Arm the hard ceiling immediately while the user is awake. Onset
             // later replaces it with the more precise smart-wake target.
             armedWakeTarget = ceiling
-            Task { [alarm] in await alarm.scheduleWake(at: ceiling, napTitle: type.title) }
+            Task { [weak self] in
+                guard let self, self.isNapping, !self.alarm.isAlarming, self.engine?.sessionStart == now else { return }
+                await self.alarm.scheduleWake(at: ceiling, napTitle: type.title)
+            }
         }
         recorder.begin(at: now)
         motion.startMonitoring()
@@ -123,7 +127,9 @@ class PhoneNapController {
         SharedStore.napActive = true
         WidgetCenter.shared.reloadAllTimelines()
 
-        timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in self?.tick() }
+        timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.tick() }
+        }
     }
 
     private func tick() {
@@ -141,7 +147,7 @@ class PhoneNapController {
         // Watch's wrist motion (forwarded), then AirPods head-stillness, then the
         // phone's own motion (the phone may sit still on a nightstand, so its motion
         // is the weakest signal). The first three are on the body; the phone isn't.
-        let usingChest = polar.isAccStreaming
+        let usingChest = polar.hasFreshMotion
         let movement: Double
         let still: Double
         if usingChest {
@@ -154,13 +160,13 @@ class PhoneNapController {
             movement = motion.movementIntensity; still = motion.stillSeconds
         }
         let signal = OnsetSignal(
-            heartRate: polar.currentHeartRate > 0 ? polar.currentHeartRate : (watchHR.freshHeartRate ?? workoutHR.freshHeartRate),
+            heartRate: polar.freshHeartRate ?? watchHR.freshHeartRate ?? workoutHR.freshHeartRate,
             movementIntensity: movement,
             stillSeconds: still,
-            hrvRMSSD: polar.hrvRMSSD > 0 ? polar.hrvRMSSD : nil,
-            eegOnsetConfidence: muse.eeg.hasGoodSignal ? Double(muse.eeg.onsetIndex) : nil,
-            eegDeepApproaching: muse.eeg.hasGoodSignal && muse.eeg.deepSleepApproaching,
-            breathing: (usingChest && polar.breathingRate > 0) ? polar.breathingRate : nil,
+            hrvRMSSD: polar.freshHRV,
+            eegOnsetConfidence: muse.hasFreshEEG ? Double(muse.eeg.onsetIndex) : nil,
+            eegDeepApproaching: muse.hasFreshEEG && muse.eeg.deepSleepApproaching,
+            breathing: polar.freshBreathingRate,
             spo2: spo2 > 0 ? spo2 : nil
         )
         let result = engine.tick(now: now, signal: signal)
@@ -193,14 +199,17 @@ class PhoneNapController {
            armedWakeTarget.map({ abs($0.timeIntervalSince(target)) > 1 }) ?? true {
             armedWakeTarget = target
             let title = napType.title
-            Task { [alarm] in await alarm.scheduleWake(at: target, napTitle: title) }
+            Task { [weak self] in
+                guard let self, self.isNapping, !self.alarm.isAlarming, self.engine === engine else { return }
+                await self.alarm.scheduleWake(at: target, napTitle: title)
+            }
         }
         if result.isAlarming { alarm.start() }
 
         LiveActivityManager.shared.update(.init(
             phase: result.phase.rawValue,
             wakeTarget: result.wakeTarget ?? engine.ceiling,
-            heartRate: polar.currentHeartRate,
+            heartRate: heartRate,
             onsetDetected: onsetDetected
         ))
     }

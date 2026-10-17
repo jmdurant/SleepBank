@@ -17,15 +17,18 @@ import Foundation
 import HealthKit
 import SleepBankCore
 
+@Observable
 final class NapHealthWriter {
 
     static let shared = NapHealthWriter()
     private let store = HKHealthStore()
+    private(set) var lastError: String?
 
     /// Save the nap's asleep window to Health. No-op if onset was never detected
     /// (no real sleep to record). Authorization is requested alongside the
     /// workout permissions in NapWorkoutService.
     func write(_ record: NapRecord) {
+        DispatchQueue.main.async { self.lastError = nil }
         guard HKHealthStore.isHealthDataAvailable(), let onset = record.onset, record.end > onset else { return }
         let type = HKCategoryType(.sleepAnalysis)
         let sample = HKCategorySample(
@@ -38,9 +41,24 @@ final class NapHealthWriter {
                 "SleepBankNapType": record.type.rawValue,
             ]
         )
-        store.save(sample) { success, error in
-            if let error { print("[NapHealthWriter] save failed: \(error.localizedDescription)") }
-            else { print("[NapHealthWriter] wrote nap to Health: success=\(success)") }
+        Task {
+            do {
+                // A phone-only install may not have opened the permissions screen.
+                if store.authorizationStatus(for: type) == .notDetermined {
+                    try await store.requestAuthorization(toShare: [type], read: [])
+                }
+                guard store.authorizationStatus(for: type) == .sharingAuthorized else {
+                    await MainActor.run {
+                        self.lastError = "Saved in SleepBank. To also save naps in Apple Health, allow SleepBank to write Sleep in Health permissions."
+                    }
+                    return
+                }
+                try await store.save(sample)
+            } catch {
+                await MainActor.run {
+                    self.lastError = "Saved in SleepBank, but Apple Health could not save this nap: \(error.localizedDescription)"
+                }
+            }
         }
     }
 }

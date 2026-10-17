@@ -14,12 +14,21 @@ import SleepBankCore
 
 enum NapFiles {
     static let iCloudContainer = "iCloud.com.doctordurant.sleepbank"
+    static let syncPreferenceKey = "napRecordingICloudSyncEnabled"
 
-    /// iCloud Documents (syncs to the Mac) when available, else local Documents.
+    /// Product sync is independent of research participation and defaults off.
+    static var iCloudSyncEnabled: Bool {
+        get { UserDefaults.standard.bool(forKey: syncPreferenceKey) }
+        set { UserDefaults.standard.set(newValue, forKey: syncPreferenceKey) }
+    }
+
+    /// Local Documents unless the user explicitly enabled recording sync.
     /// Call off the main thread — resolving the ubiquity container can block.
     static func documentsDirectory() -> URL {
         let fm = FileManager.default
-        if let container = fm.url(forUbiquityContainerIdentifier: iCloudContainer) {
+        if iCloudSyncEnabled,
+           let container = fm.url(forUbiquityContainerIdentifier: iCloudContainer),
+           iCloudSyncEnabled {
             let docs = container.appendingPathComponent("Documents")
             try? fm.createDirectory(at: docs, withIntermediateDirectories: true)
             return docs

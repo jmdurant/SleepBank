@@ -147,7 +147,8 @@ struct ContentView: View {
         }
         // Snapshot the rhythm so the widget + watch can compute the Alertness Score / plan.
         let snapshot = RhythmSnapshot(rhythm: AlertnessProvider.rhythm(now: Date()),
-                                      morningLightStreak: health.morningLightStreak, updated: Date())
+                                      morningLightStreak: health.morningLightStreak, updated: Date(),
+                                      sleepDay: AlertnessProvider.hasSleepData(health: health) ? Date() : nil)
         snapshot.save()
         PhoneConnectivity.shared.sendDailySummary(
             samples: health.lastNightSamples,

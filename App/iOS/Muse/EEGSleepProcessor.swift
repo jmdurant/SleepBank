@@ -110,6 +110,11 @@ class EEGSleepProcessor {
     }
 
     func reset() {
+        hasGoodSignal = false
+        channelQuality = [0, 0, 0, 0]
+        tp9Powers = BandPowers(); af7Powers = BandPowers()
+        af8Powers = BandPowers(); tp10Powers = BandPowers(); avgPowers = BandPowers()
+        deltaDominance = 0; spindlePower = 0
         channelBuffers = [[], [], [], []]
         cleanHistory = [[], [], [], []]
         channelRange = [0, 0, 0, 0]

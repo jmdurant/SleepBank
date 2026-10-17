@@ -15,8 +15,7 @@ struct DayPlanView: View {
     var health = HealthKitService.shared
     var store = NapDecisionStore.shared
     var dayStore = DayPlanStore.shared
-    @State private var scheduledNap: Date? = PlanNotificationService.scheduledNapAt
-    @State private var scheduledActivities = PlanNotificationService.scheduledActivities
+    @State private var scheduledItems = PlanNotificationService.scheduledItems
     @State private var showCalendar = false
 
     var body: some View {
@@ -35,11 +34,10 @@ struct DayPlanView: View {
                     dayNav(now: now, isToday: isToday)
                     if isToday {
                         AlertnessRecapView()
-                        if let napAt = scheduledNap { scheduledNapCard(napAt) }
-                        ForEach(scheduledActivities) { scheduledActivityCard($0) }
                     }
+                    ForEach(scheduledItems.filter { Calendar.current.isDate($0.at, inSameDayAs: dayStore.selectedDate) }) { scheduledCard($0) }
                     if !planned.isEmpty { plannedCard(planned) }
-                    agendaCard(plan)
+                    if !isToday || AlertnessProvider.hasSleepData(health: health) { agendaCard(plan) }
                     if isToday && plan.napBlockedByCalendar {
                         Label("Your calendar's booked through your dip — grab even 10 min if a gap opens.",
                               systemImage: "calendar.badge.exclamationmark")
@@ -70,8 +68,7 @@ struct DayPlanView: View {
             if await health.requestAuthorization() { await health.refreshAll() }
         }
         .onAppear {
-            scheduledNap = PlanNotificationService.scheduledNapAt
-            scheduledActivities = PlanNotificationService.scheduledActivities
+            scheduledItems = PlanNotificationService.scheduledItems
         }
     }
 
@@ -144,60 +141,23 @@ struct DayPlanView: View {
         return "\(Int(item.minutes)) min · \(item.outdoors ? "outside ☀️" : "inside")"
     }
 
-    /// A scheduled walk/workout from the alertness curve, with a one-tap cancel.
-    private func scheduledActivityCard(_ item: PlanNotificationService.ScheduledActivity) -> some View {
-        let isWalk = item.kind.caseInsensitiveCompare("Walk") == .orderedSame
-        let tint: Color = isWalk ? .sand : .pink
-        return HStack(spacing: 12) {
-            ZStack {
-                Circle().fill(tint.opacity(0.18)).frame(width: 32, height: 32)
-                Image(systemName: isWalk ? "figure.walk" : "figure.run").font(.caption).foregroundStyle(tint)
-            }
-            VStack(alignment: .leading, spacing: 1) {
-                Text("\(item.kind) scheduled for \(clock(item.at))").font(.subheadline.weight(.semibold))
-                Text(item.outdoors ? "Outside — movement + daylight to anchor tonight's sleep."
-                                    : "Indoors — a movement lift to stay sharp.")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
-            Spacer()
-            Button {
-                PlanNotificationService.shared.cancelActivity(kind: item.kind)
-                scheduledActivities = PlanNotificationService.scheduledActivities
-            } label: {
-                Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Cancel scheduled \(item.kind)")
-        }
-        .padding()
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 16))
-    }
-
-    /// The nap the user scheduled off the alertness curve, with a one-tap cancel.
-    private func scheduledNapCard(_ napAt: Date) -> some View {
+    private func scheduledCard(_ item: PlanReminder) -> some View {
         HStack(spacing: 12) {
-            ZStack {
-                Circle().fill(.ocean.opacity(0.18)).frame(width: 32, height: 32)
-                Image(systemName: "moon.zzz.fill").font(.caption).foregroundStyle(.ocean)
-            }
-            VStack(alignment: .leading, spacing: 1) {
-                Text("Nap scheduled for \(clock(napAt))").font(.subheadline.weight(.semibold))
-                Text("We'll remind you — settle in to stay sharp through the afternoon.")
+            Image(systemName: item.kind == .nap ? "moon.zzz.fill" : (item.kind == .walk ? "figure.walk" : "figure.run"))
+                .foregroundStyle(.ocean)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("\(item.title) scheduled for \(clock(item.at))").font(.subheadline.weight(.semibold))
+                Text(item.kind == .nap ? item.napType.subtitle : "\(Int(item.minutes)) min · \(item.outdoors ? "outside" : "inside")")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
             Button {
-                PlanNotificationService.shared.cancelScheduledNap()
-                scheduledNap = nil
-            } label: {
-                Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Cancel scheduled nap")
+                PlanNotificationService.shared.cancelReminder(id: item.id)
+                scheduledItems = PlanNotificationService.scheduledItems
+            } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary) }
+                .buttonStyle(.plain).accessibilityLabel("Cancel \(item.title) at \(clock(item.at))")
         }
-        .padding()
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding().frame(maxWidth: .infinity, alignment: .leading)
         .background(.ocean.opacity(0.12), in: RoundedRectangle(cornerRadius: 16))
     }
 

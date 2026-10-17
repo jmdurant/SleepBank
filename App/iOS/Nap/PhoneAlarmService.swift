@@ -33,70 +33,80 @@ private struct StopSleepBankAlarmIntent: LiveActivityIntent {
     }
 }
 
-@Observable
-class PhoneAlarmService {
+@MainActor
+protocol SystemWakeAlarm {
+    func authorize() async throws -> Bool
+    func schedule(id: UUID, at: Date, napTitle: String) async throws
+    func isAlerting(id: UUID) -> Bool
+    func cancel(id: UUID)
+}
 
+@MainActor
+private struct AlarmKitWakeAlarm: SystemWakeAlarm {
+    func authorize() async throws -> Bool {
+        let manager = AlarmManager.shared
+        if manager.authorizationState == .notDetermined {
+            return try await manager.requestAuthorization() == .authorized
+        }
+        return manager.authorizationState == .authorized
+    }
+    func schedule(id: UUID, at date: Date, napTitle: String) async throws {
+        let attributes = AlarmAttributes(
+            presentation: AlarmPresentation(alert: AlarmPresentation.Alert(title: "SleepBank — time to wake")),
+            metadata: SleepBankAlarmMetadata(napTitle: napTitle), tintColor: .orange)
+        let configuration = AlarmManager.AlarmConfiguration.alarm(
+            schedule: .fixed(date), attributes: attributes, stopIntent: StopSleepBankAlarmIntent())
+        _ = try await AlarmManager.shared.schedule(id: id, configuration: configuration)
+    }
+    func isAlerting(id: UUID) -> Bool {
+        (try? AlarmManager.shared.alarms.contains { $0.id == id && $0.state == .alerting }) ?? false
+    }
+    func cancel(id: UUID) {
+        try? AlarmManager.shared.stop(id: id)
+        try? AlarmManager.shared.cancel(id: id)
+    }
+}
+
+protocol PhoneWakeOutput {
+    func pulse(elapsed: TimeInterval)
+    func pause()
+    func stop()
+}
+
+@MainActor
+@Observable
+final class PhoneAlarmService {
     private(set) var isAlarming = false
     private(set) var systemAlarmArmed = false
-
-    @ObservationIgnored private let engine = AVAudioEngine()
-    @ObservationIgnored private var node: AVAudioSourceNode?
+    @ObservationIgnored private let system: SystemWakeAlarm
+    @ObservationIgnored private let output: PhoneWakeOutput
     @ObservationIgnored private var timer: Timer?
-    @ObservationIgnored private var startAt: Date?
-    @ObservationIgnored private var systemAlarmID: UUID?
-    @ObservationIgnored private var scheduleGeneration: UInt = 0
-    @ObservationIgnored private var sampleIndex: Float = 0
-    @ObservationIgnored private let sampleRate: Float = 44_100
+    @ObservationIgnored private var earlyWakeTask: Task<Void, Never>?
+    private var startAt: Date?
+    private var systemAlarmID: UUID?
+    private var scheduleGeneration: UInt = 0
 
-    /// Schedule the onset-relative target as a real system alarm. If permission
-    /// is denied or scheduling fails, `start()` retains the in-app fallback.
+    init(system: SystemWakeAlarm? = nil, output: PhoneWakeOutput? = nil) {
+        self.system = system ?? AlarmKitWakeAlarm()
+        self.output = output ?? SynthesizedWakeOutput()
+    }
+
     func scheduleWake(at date: Date, napTitle: String) async {
-        guard date > Date() else { return }
-
         scheduleGeneration &+= 1
         let generation = scheduleGeneration
-        cancelSystemAlarm()
-
-        let manager = AlarmManager.shared
-        var authorization = manager.authorizationState
-        if authorization == .notDetermined {
-            do {
-                authorization = try await manager.requestAuthorization()
-            } catch {
-                alarmLog.error("Alarm authorization failed: \(error.localizedDescription)")
-                return
-            }
-        }
-        guard authorization == .authorized else {
-            alarmLog.notice("System wake unavailable; using in-app alarm fallback")
-            return
-        }
-
-        let id = UUID()
-        let presentation = AlarmPresentation(
-            alert: AlarmPresentation.Alert(title: "SleepBank — time to wake")
-        )
-        let attributes = AlarmAttributes(
-            presentation: presentation,
-            metadata: SleepBankAlarmMetadata(napTitle: napTitle),
-            tintColor: .orange
-        )
-        let configuration = AlarmManager.AlarmConfiguration.alarm(
-            schedule: .fixed(date),
-            attributes: attributes,
-            stopIntent: StopSleepBankAlarmIntent()
-        )
-
         do {
-            _ = try await manager.schedule(id: id, configuration: configuration)
-            // The nap may have ended while authorization/scheduling was awaiting.
-            guard generation == scheduleGeneration else {
-                try? manager.cancel(id: id)
+            guard try await system.authorize(), generation == scheduleGeneration, !Task.isCancelled else { return }
+            let id = UUID()
+            try await system.schedule(id: id, at: max(date, Date().addingTimeInterval(0.5)), napTitle: napTitle)
+            guard generation == scheduleGeneration, !Task.isCancelled else {
+                system.cancel(id: id)
                 return
             }
+            // Retain the old safety alarm until its replacement actually exists.
+            let previous = systemAlarmID
             systemAlarmID = id
             systemAlarmArmed = true
-            alarmLog.info("Scheduled system wake at \(date)")
+            if let previous { system.cancel(id: previous) }
         } catch {
             alarmLog.error("System wake scheduling failed: \(error.localizedDescription)")
         }
@@ -106,46 +116,62 @@ class PhoneAlarmService {
         guard !isAlarming else { return }
         isAlarming = true
         startAt = Date()
-
-        // AlarmKit is already presenting and sounding the system alarm. Running
-        // a second audio engine over it would produce a doubled alarm.
-        guard !systemAlarmArmed else { return }
-
-        configureSession()
-        if node == nil { installNode() }
-        engine.mainMixerNode.outputVolume = 0.5
-        try? engine.start()
+        // Only an actually alerting system alarm may silence the fallback.
         pulse()
-        timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in self?.pulse() }
+        timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.pulse() }
+        }
+        if !systemAlarmIsAlerting {
+            earlyWakeTask = Task { [weak self] in
+                guard let self, self.isAlarming, !Task.isCancelled else { return }
+                await self.scheduleWake(at: Date().addingTimeInterval(1), napTitle: "Nap")
+            }
+        }
     }
 
     func stop() {
         isAlarming = false
         timer?.invalidate(); timer = nil
+        earlyWakeTask?.cancel(); earlyWakeTask = nil
         startAt = nil
-        engine.pause()
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        output.stop()
         scheduleGeneration &+= 1
-        cancelSystemAlarm()
-    }
-
-    private func cancelSystemAlarm() {
-        guard let id = systemAlarmID else {
-            systemAlarmArmed = false
-            return
-        }
-        // stop silences an alert in progress; cancel removes the fixed alarm.
-        try? AlarmManager.shared.stop(id: id)
-        try? AlarmManager.shared.cancel(id: id)
+        if let id = systemAlarmID { system.cancel(id: id) }
         systemAlarmID = nil
         systemAlarmArmed = false
     }
 
-    /// Haptic on each beat; volume ramps the longer it goes unanswered.
+    private var systemAlarmIsAlerting: Bool {
+        systemAlarmID.map { system.isAlerting(id: $0) } ?? false
+    }
+
     private func pulse() {
-        let elapsed = startAt.map { Date().timeIntervalSince($0) } ?? 0
+        guard isAlarming else { return }
+        if systemAlarmIsAlerting { output.pause() }
+        else { output.pulse(elapsed: startAt.map { Date().timeIntervalSince($0) } ?? 0) }
+    }
+}
+
+private final class SynthesizedWakeOutput: PhoneWakeOutput {
+    private let engine = AVAudioEngine()
+    private var node: AVAudioSourceNode?
+    private var sampleIndex: Float = 0
+    private let sampleRate: Float = 44_100
+
+    func pulse(elapsed: TimeInterval) {
+        if !engine.isRunning {
+            configureSession()
+            if node == nil { installNode() }
+            do { try engine.start() }
+            catch { alarmLog.error("Fallback audio failed: \(error.localizedDescription)") }
+        }
         UINotificationFeedbackGenerator().notificationOccurred(.warning)
-        engine.mainMixerNode.outputVolume = min(1.0, 0.5 + Float(elapsed) / 30)
+        engine.mainMixerNode.outputVolume = min(1, 0.5 + Float(elapsed) / 30)
+    }
+    func pause() { engine.pause() }
+    func stop() {
+        engine.pause()
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 
     private func configureSession() {

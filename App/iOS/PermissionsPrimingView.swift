@@ -51,7 +51,7 @@ struct PermissionsPrimingView: View {
         }
         var detail: String {
             switch self {
-            case .health:        return "Reads your sleep, heart rate, and HRV to tune your alertness curve and naps."
+            case .health:        return "Reads your sleep, heart rate, and HRV, and can save completed naps to Apple Health."
             case .notifications: return "Sounds your nap wake-up alarm and sends your daily alertness nudges."
             case .motion:        return "Detects when you've settled and fallen asleep — including head-stillness from AirPods."
             case .location:      return "Coarse location for your local sunrise & sunset, so light is timed to your day."

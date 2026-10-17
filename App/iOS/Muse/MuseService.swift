@@ -35,6 +35,19 @@ class MuseService: NSObject {
     var lastPacketLength = 0
 
     let eeg = EEGSleepProcessor()
+    private var channelUpdates: [Date?] = Array(repeating: nil, count: 4)
+    var hasFreshEEG: Bool {
+        let now = Date()
+        return isConnected && isStreaming && eeg.hasGoodSignal && channelUpdates.allSatisfy {
+            guard let date = $0 else { return false }
+            return (0...3).contains(now.timeIntervalSince(date))
+        }
+    }
+
+    private func clearEEG() {
+        channelUpdates = Array(repeating: nil, count: 4)
+        eeg.reset()
+    }
 
     private var centralManager: CBCentralManager?
     private var peripheral: CBPeripheral?
@@ -62,6 +75,7 @@ class MuseService: NSObject {
         if let peripheral { centralManager?.cancelPeripheralConnection(peripheral) }
         isConnected = false
         isStreaming = false
+        clearEEG()
     }
 
     private func beginScan() {
@@ -74,7 +88,7 @@ class MuseService: NSObject {
             mlog.error("startStreaming: no control characteristic")
             return
         }
-        eeg.reset()
+        clearEEG()
         let supportsResp = controlCharacteristic.properties.contains(.write)
         let supportsNoResp = controlCharacteristic.properties.contains(.writeWithoutResponse)
         mlog.info("startStreaming: control props resp=\(supportsResp) noResp=\(supportsNoResp)")
@@ -102,11 +116,14 @@ class MuseService: NSObject {
     }
 
     /// Unpack a Muse EEG packet: 2-byte sequence header then 12 × 12-bit samples.
-    private func parseEEGPacket(_ data: Data, channel: Int) {
+    func parseEEGPacket(_ data: Data, channel: Int, at now: Date = Date()) {
         guard data.count >= 20, channel < 4 else {
             if packetsReceived <= 12 { mlog.notice("short/odd EEG packet len=\(data.count) ch=\(channel)") }
             return
         }
+        guard isConnected, isStreaming else { return }
+        if let last = channelUpdates[channel], now.timeIntervalSince(last) > 3 { clearEEG() }
+        channelUpdates[channel] = now
         let bytes = [UInt8](data)
         var samples: [Float] = []
         for i in 0..<12 {
@@ -127,7 +144,7 @@ class MuseService: NSObject {
         // to the watch nap loop, but only with good contact and throttled.
         if channel == 0 {
             eegForwardCounter += 1
-            if eegForwardCounter % 8 == 0, eeg.hasGoodSignal {
+            if eegForwardCounter % 8 == 0, hasFreshEEG {
                 PhoneConnectivity.shared.sendEEG(
                     onsetConfidence: Double(eeg.onsetIndex),
                     deepApproaching: eeg.deepSleepApproaching
@@ -143,6 +160,7 @@ extension MuseService: CBCentralManagerDelegate {
 
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
         if central.state == .poweredOn { beginScan() }
+        else { isConnected = false; isStreaming = false; clearEEG() }
     }
 
     func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral,
@@ -173,6 +191,7 @@ extension MuseService: CBCentralManagerDelegate {
         mlog.notice("disconnected: \(error?.localizedDescription ?? "clean", privacy: .public)")
         isConnected = false
         isStreaming = false
+        clearEEG()
     }
 }
 
@@ -222,7 +241,7 @@ extension MuseService: CBPeripheralDelegate {
     }
 
     func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: Error?) {
-        guard let data = characteristic.value else { return }
+        guard error == nil, let data = characteristic.value else { clearEEG(); return }
         packetsReceived += 1
         lastPacketLength = data.count
         if packetsReceived <= 8 {

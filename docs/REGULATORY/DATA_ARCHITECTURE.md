@@ -17,7 +17,7 @@
 |---|---|---|
 | **Local store** | UserDefaults / files (current) | Source of truth; everything works offline, private by default |
 | **Collection + consent** | ResearchKit-shaped flow (native today) | *How* we legally collect for research |
-| **Per-user sync** *(optional, product)* | **CloudKit private DB** | Sync the user's *own* history across *their* devices |
+| **Nap recording sync** *(optional, product; default off)* | **iCloud Drive Documents** | Sync new feature/EEG CSVs to the user's own devices after a separate Settings opt-in |
 | **Research backend** | Partner REDCap / MyDataHelps **[SEAM]** | Where consented, de-identified data lands for analysis |
 
 **CloudKit is not the research store.** The CloudKit *private* database is the user's
@@ -48,6 +48,10 @@ Not the storage brand — governance, in order:
   data (Epworth, PSAS, KSS) + chronotype/sleep-need covariates, keyed by
   `participantID`. **Gated on current consent.** Output goes to a share sheet today.
 
+- **`NapFiles`** — local recording storage by default. A separate Settings toggle
+  enables iCloud Drive for new feature/EEG files. Disabling it does not delete existing
+  cloud files; users can manage those in Files. Research withdrawal does not change it.
+
 ## 4. The seams to wire at study time
 - Replace the native consent flow with **ResearchKit `ORKConsentDocument` +
   `ORKTaskViewController`** (the questionnaires become `ORKFormStep`s). **[SEAM]**
@@ -62,7 +66,8 @@ Not the storage brand — governance, in order:
 ## 5. Principles
 - **On-device-first.** Default to local; transmit only on explicit consent.
 - **De-identified by construction.** The export schema has no name/contact/device id.
-- **Consent is reversible and versioned.** Withdrawal stops future sharing; a material
-  consent-text change requires re-consent.
+- **Research consent is reversible and versioned.** Withdrawal disables future
+  research exports; a material consent-text change requires re-consent. It does not
+  delete previously shared files or change the separate iCloud recording-sync setting.
 - **Governance rides on the partnership.** A solo developer can't shoulder HIPAA for
   identifiable data; the covered-entity partner's IRB + systems carry it.

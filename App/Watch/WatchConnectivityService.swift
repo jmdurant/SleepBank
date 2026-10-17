@@ -112,8 +112,12 @@ class WatchConnectivityService: NSObject, WCSessionDelegate {
     /// Recompute the compact plan digest the complication reads, from the latest
     /// synced rhythm snapshot. Safe to call on launch and on each sync.
     static func refreshPlanSummary() {
-        guard let snapshot = RhythmSnapshot.load() else { return }
-        let plan = DayPlan.build(rhythm: snapshot.rebuild(), now: Date())
+        guard let snapshot = RhythmSnapshot.load(), let rhythm = snapshot.rebuild() else {
+            SharedStore.planSummary = nil
+            WidgetCenter.shared.reloadAllTimelines()
+            return
+        }
+        let plan = DayPlan.build(rhythm: rhythm, now: Date())
         let summary = PlanSummary(
             startPct: Int((plan.startingLevel * 100).rounded()),
             isShortNight: plan.isShortNight,

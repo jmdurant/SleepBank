@@ -11,9 +11,11 @@ cd tools/yasa
 ```
 
 ## The loop (mostly automatic)
-1. **On the phone:** just take naps with the Muse connected. Each nap's raw EEG
-   is written to the app's **iCloud Drive** container and **syncs to this Mac
-   automatically** (Finder → iCloud Drive → SleepBank). No AirDrop needed.
+1. **On the phone:** recordings stay local by default. To sync new recordings,
+   enable **Settings → Nap recording privacy → Sync nap recordings with iCloud Drive**,
+   then take naps with the Muse connected. New raw EEG and feature CSVs sync to
+   **Finder → iCloud Drive → SleepBank**. This opt-in is separate from research consent;
+   turning it off stops new cloud recordings but does not delete existing files.
    *(Fallback: Validation → Export raw EEG → AirDrop to ~/Downloads also works.)*
 2. **On the Mac, whenever:** double-click **`Stage Naps.command`**.
    - It finds **every** `eeg-*.csv` that hasn't been staged yet (in the iCloud

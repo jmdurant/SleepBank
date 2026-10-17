@@ -2,8 +2,8 @@
 //  ResearchConsentStore.swift
 //  SleepBank
 //
-//  Consent state for optional research participation. Nothing leaves the device
-//  unless the user explicitly consents here; on consent we mint a *pseudonymous*
+//  Consent state for optional research check-in exports. Personal nap-recording
+//  iCloud sync has a separate opt-in. On consent we mint a *pseudonymous*
 //  participant ID (a random UUID) that keys any export — the user's name/identity is
 //  never part of the exported data (the linking key, if a study ever needs one, is
 //  held separately by the study team, not in the export).
@@ -21,7 +21,7 @@ final class ResearchConsentStore {
     static let shared = ResearchConsentStore()
 
     /// Bump when the consent text materially changes — re-consent is then required.
-    static let consentVersion = "2026-06-11-v1"
+    static let consentVersion = "2026-10-16-v2"
 
     private(set) var hasConsented: Bool = UserDefaults.standard.bool(forKey: K.consented)
     private(set) var consentedAt: Date? = UserDefaults.standard.object(forKey: K.date) as? Date

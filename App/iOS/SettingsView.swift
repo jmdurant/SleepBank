@@ -9,6 +9,7 @@
 import SwiftUI
 
 struct SettingsView: View {
+    @AppStorage(NapFiles.syncPreferenceKey) private var syncNapRecordings = false
     @State private var noise = NoiseService.shared
     @State private var relax = GuidedRelaxationService.shared
     @State private var calendar = CalendarService.shared
@@ -127,6 +128,14 @@ struct SettingsView: View {
                 }
             } footer: {
                 Text("Review what SleepBank can use — Health, notifications, motion, location. All optional.")
+            }
+
+            Section {
+                Toggle("Sync nap recordings with iCloud Drive", isOn: $syncNapRecordings)
+            } header: {
+                Text("Nap recording privacy")
+            } footer: {
+                Text("Off by default. When enabled, new nap sensor recordings and any raw Muse EEG are saved to your iCloud Drive and may sync to your other devices. This is separate from research sharing. Turning it off keeps new recordings local; it does not delete existing iCloud files. Manage those in Files → iCloud Drive → SleepBank.")
             }
 
             Section {

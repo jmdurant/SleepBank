@@ -39,6 +39,8 @@ struct AlertnessCurveView: View {
     @State private var items: [PlanItem] = []
     @State private var focusedID: UUID?
     @State private var scheduledKey: String?
+    @State private var scheduleError: String?
+    @State private var scheduling = false
     @State private var editing = false
     @State private var isDragging = false
     @State private var showCalendar = false
@@ -263,18 +265,20 @@ struct AlertnessCurveView: View {
     }
 
     private func scheduleButton(_ m: Marker) -> some View {
-        let done = scheduledKey == key(m)
+        let done = scheduledKey == key(m) || PlanNotificationService.scheduledItems.contains {
+            $0.id == m.id && abs($0.at.timeIntervalSince(m.start)) < 1
+        }
         let tint: Color = done ? .green : (m.late ? .sand : m.kind.tint)
         return Button {
             Task {
-                let ok: Bool
-                if m.kind == .nap {
-                    ok = await PlanNotificationService.shared.scheduleNap(at: m.start, type: focused?.napType ?? .power)
-                } else {
-                    ok = await PlanNotificationService.shared.scheduleActivity(
-                        at: m.start, title: m.kind.label, outdoors: focused?.outdoors ?? true,
-                        minutes: focused?.minutes ?? 30)
-                }
+                scheduling = true
+                defer { scheduling = false }
+                let item = items.first { $0.id == m.id }
+                let reminder = PlanReminder(id: m.id, kind: PlanReminder.Kind(rawValue: m.kind.rawValue)!,
+                                            at: m.start, napType: item?.napType ?? .power,
+                                            outdoors: item?.outdoors ?? true, minutes: item?.minutes ?? 30)
+                let ok = await PlanNotificationService.shared.schedule(reminder)
+                if !ok { scheduleError = PlanNotificationService.shared.lastScheduleError }
                 if ok { scheduledKey = key(m) }
             }
         } label: {
@@ -282,6 +286,10 @@ struct AlertnessCurveView: View {
                 .font(.title3).foregroundStyle(tint).symbolEffect(.bounce, value: done)
         }
         .buttonStyle(.plain)
+        .disabled(scheduling)
+        .alert("Reminder not scheduled", isPresented: Binding(get: { scheduleError != nil }, set: { if !$0 { scheduleError = nil } })) {
+            Button("OK", role: .cancel) { scheduleError = nil }
+        } message: { Text(scheduleError ?? "Please try again.") }
         .accessibilityLabel(done ? "Scheduled" : "Schedule \(m.kind.label)")
     }
 
@@ -600,13 +608,16 @@ struct AlertnessCurveView: View {
         items.append(item); focusedID = item.id; scheduledKey = nil
     }
     private func removeFocused() {
-        if let id = focusedID ?? items.first?.id { items.removeAll { $0.id == id } }
+        if let id = focusedID ?? items.first?.id {
+            PlanNotificationService.shared.cancelReminder(id: id)
+            items.removeAll { $0.id == id }
+        }
         focusedID = items.first?.id; scheduledKey = nil
     }
     private func focusedMarker(_ markers: [Marker]) -> Marker? {
         markers.first { $0.id == focused?.id } ?? markers.first
     }
-    private func key(_ m: Marker) -> String { "\(m.kind.rawValue)-\(Int(m.start.timeIntervalSinceReferenceDate / 60))" }
+    private func key(_ m: Marker) -> String { "\(m.id)-\(Int(m.start.timeIntervalSinceReferenceDate / 60))" }
 
     // MARK: - Geometry helpers
 

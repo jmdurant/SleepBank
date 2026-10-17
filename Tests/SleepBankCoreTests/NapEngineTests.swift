@@ -137,6 +137,25 @@ final class NapEngineTests: XCTestCase {
         XCTAssertFalse(detected, "Even confident EEG onset must not fire while moving")
     }
 
+    func testCycleNapContinuesThroughEEGDeepeningUntilTarget() {
+        let engine = NapEngine(type: .cycle, sessionStart: t0, detector: StubOnsetDetector(onsetAfter: t0))
+        _ = engine.tick(now: t0, signal: stillSignal)
+        let deep = OnsetSignal(heartRate: 60, movementIntensity: 0, stillSeconds: 600, eegDeepApproaching: true)
+        XCTAssertFalse(engine.tick(now: t0.addingTimeInterval(60), signal: deep).isAlarming)
+        let target = engine.tick(now: t0.addingTimeInterval(90 * 60), signal: deep)
+        XCTAssertTrue(target.isAlarming)
+        XCTAssertEqual(target.wakeReason, .reachedTarget)
+    }
+
+    func testCycleNapContinuesThroughPhysiologicalDeepening() {
+        let engine = NapEngine(type: .cycle, sessionStart: t0, detector: StubOnsetDetector(onsetAfter: t0))
+        for second in stride(from: 0, through: 700, by: 10) {
+            let tick = engine.tick(now: t0.addingTimeInterval(Double(second)), signal:
+                OnsetSignal(heartRate: second <= 120 ? 60 : 56, movementIntensity: 0, stillSeconds: Double(second + 120)))
+            XCTAssertFalse(tick.isAlarming, "Cycle nap must continue through deepening at \(second)s")
+        }
+    }
+
     func testEngineWakesEarlyOnEEGDeepening() {
         let onset = t0.addingTimeInterval(120)
         let detector = StubOnsetDetector(onsetAfter: onset)

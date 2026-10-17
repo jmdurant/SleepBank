@@ -49,6 +49,43 @@ class PolarH10Service: NSObject {
     var accelY: Double = 0
     var accelZ: Double = 0
 
+    @ObservationIgnored private let now: () -> Date
+    private var lastHRUpdate: Date?
+    private var lastRRUpdate: Date?
+
+    private func fresh(_ date: Date?, maxAge: TimeInterval = 10) -> Bool {
+        guard isConnected, let date else { return false }
+        return (0...maxAge).contains(now().timeIntervalSince(date))
+    }
+    var freshHeartRate: Int? { isStreaming && fresh(lastHRUpdate) && currentHeartRate > 0 ? currentHeartRate : nil }
+    var freshHRV: Double? { isStreaming && fresh(lastRRUpdate) && hrvRMSSD > 0 ? hrvRMSSD : nil }
+    var hasFreshMotion: Bool { isAccStreaming && fresh(lastAccUpdate, maxAge: 5) }
+    var freshBreathingRate: Double? {
+        hasFreshMotion && fresh(lastBreathPeak, maxAge: 12) && breathingRate > 0 ? breathingRate : nil
+    }
+
+    private func clearHeartRate() {
+        isStreaming = false
+        lastHRUpdate = nil; lastRRUpdate = nil
+        currentHeartRate = 0; lastRRInterval = 0; hrvRMSSD = 0
+        rrIntervals.removeAll()
+    }
+
+    private func clearMotion() {
+        isAccStreaming = false
+        lastAccUpdate = nil; lastBreathPeak = nil
+        movementIntensity = 0; stillSeconds = 0; breathingRate = 0
+        isLyingDown = false
+        accBuffer.removeAll(); breathIntervals.removeAll()
+        slowZ = 0; fastZ = 0; prevBreath = 0; prevPrevBreath = 0
+    }
+
+    private func clearSignals() {
+        clearHeartRate()
+        clearMotion()
+        streamingFeatureReady = false
+    }
+
     var posture: String { isLyingDown ? "Lying down" : "Upright" }
 
     private var api: PolarBleApi!
@@ -66,7 +103,10 @@ class PolarH10Service: NSObject {
     @ObservationIgnored private var lastBreathPeak: Date?
     @ObservationIgnored private var breathIntervals: [Double] = []
 
-    override init() {
+    override convenience init() { self.init(now: Date.init) }
+
+    init(now: @escaping () -> Date) {
+        self.now = now
         super.init()
         api = PolarBleApiDefaultImpl.polarImplementation(
             DispatchQueue.main,
@@ -117,8 +157,7 @@ class PolarH10Service: NSObject {
         searchDisposable?.dispose(); searchDisposable = nil
         if let id = deviceId { try? api.disconnectFromDevice(id) }
         isConnected = false
-        isStreaming = false
-        isAccStreaming = false
+        clearSignals()
         deviceId = nil
     }
 
@@ -129,27 +168,38 @@ class PolarH10Service: NSObject {
             .observe(on: MainScheduler.instance)
             .subscribe(
                 onNext: { [weak self] hrData in
-                    guard let self else { return }
+                    guard let self, self.isConnected else { return }
                     for sample in hrData {
-                        self.currentHeartRate = Int(sample.hr)
-                        self.heartRateHistory.append(HeartRateSample(timestamp: Date(), bpm: Int(sample.hr)))
-                        if self.heartRateHistory.count > 300 { self.heartRateHistory.removeFirst() }
-                        for rr in sample.rrsMs {
-                            self.lastRRInterval = Double(rr)
-                            self.rrIntervals.append(Double(rr))
-                            if self.rrIntervals.count > 60 { self.rrIntervals.removeFirst() }
-                        }
+                        self.receiveHeartRate(bpm: Int(sample.hr), rr: sample.rrsMs.map(Double.init))
                     }
-                    self.isStreaming = true
-                    if self.rrIntervals.count >= 10 { self.computeHRV() }
                     // Forward to the watch nap loop (best-effort when reachable).
-                    PhoneConnectivity.shared.sendLiveHR(bpm: self.currentHeartRate, hrv: self.hrvRMSSD)
+                    if hrData.contains(where: { $0.hr > 0 }), let bpm = self.freshHeartRate {
+                        PhoneConnectivity.shared.sendLiveHR(bpm: bpm, hrv: self.freshHRV ?? 0)
+                    }
                 },
                 onError: { [weak self] in
+                    self?.clearHeartRate()
+                    self?.hrDisposable = nil
                     self?.lastStreamError = "HR: \($0)"
                     logger.notice("[PolarH10] HR stream error: \($0)")
                 }
             )
+    }
+
+    /// One delivered HR packet. Freshness follows acquisition, not nap-loop polling.
+    func receiveHeartRate(bpm: Int, rr: [Double]) {
+        guard isConnected, bpm > 0 else { return }
+        if !fresh(lastRRUpdate) { rrIntervals.removeAll(); hrvRMSSD = 0 }
+        let date = now()
+        currentHeartRate = bpm; lastHRUpdate = date; isStreaming = true
+        heartRateHistory.append(HeartRateSample(timestamp: date, bpm: bpm))
+        if heartRateHistory.count > 300 { heartRateHistory.removeFirst() }
+        for value in rr where value > 0 {
+            lastRRUpdate = date; lastRRInterval = value
+            rrIntervals.append(value)
+            if rrIntervals.count > 60 { rrIntervals.removeFirst() }
+        }
+        if rrIntervals.count >= 10 { computeHRV() }
     }
 
     // MARK: - Accelerometer stream (immobility + posture)
@@ -163,7 +213,7 @@ class PolarH10Service: NSObject {
             .observe(on: MainScheduler.instance)
             .subscribe(
                 onNext: { [weak self] accData in
-                    guard let self else { return }
+                    guard let self, self.isConnected else { return }
                     for sample in accData {
                         self.feedAccel(x: Double(sample.x) / 1000.0,
                                        y: Double(sample.y) / 1000.0,
@@ -172,6 +222,8 @@ class PolarH10Service: NSObject {
                     self.isAccStreaming = true
                 },
                 onError: { [weak self] in
+                    self?.clearMotion()
+                    self?.accDisposable = nil
                     self?.lastStreamError = "ACC: \($0)"
                     logger.notice("[PolarH10] ACC stream error: \($0)")
                 }
@@ -180,7 +232,8 @@ class PolarH10Service: NSObject {
 
     /// Convert a chest-accel sample (g) into a normalized movement level + a
     /// running stillness duration, mirroring the watch's MotionService.
-    private func feedAccel(x: Double, y: Double, z: Double) {
+    func feedAccel(x: Double, y: Double, z: Double) {
+        if !fresh(lastAccUpdate, maxAge: 5) { clearMotion() }
         accelX = x; accelY = y; accelZ = z
         let magnitude = (x * x + y * y + z * z).squareRoot()
         let movement = abs(magnitude - 1.0)        // subtract gravity
@@ -195,7 +248,7 @@ class PolarH10Service: NSObject {
         // typical mounting — empirically upright reads x≈-0.9.)
         isLyingDown = abs(x) < 0.5
 
-        let now = Date()
+        let now = self.now()
         let dt = lastAccUpdate.map { now.timeIntervalSince($0) } ?? 0
         lastAccUpdate = now
         if avg > 0.05 { stillSeconds = 0 } else { stillSeconds += dt }
@@ -242,6 +295,7 @@ extension PolarH10Service: PolarBleApiObserver {
     func deviceConnecting(_ identifier: PolarDeviceInfo) {}
 
     func deviceConnected(_ identifier: PolarDeviceInfo) {
+        clearSignals()
         isConnected = true
         deviceId = identifier.deviceId
         deviceName = identifier.name
@@ -254,7 +308,9 @@ extension PolarH10Service: PolarBleApiObserver {
 
     func deviceDisconnected(_ identifier: PolarDeviceInfo, pairingError: Bool) {
         isConnected = false
-        isStreaming = false
+        hrDisposable?.dispose(); hrDisposable = nil
+        accDisposable?.dispose(); accDisposable = nil
+        clearSignals()
     }
 }
 
@@ -277,7 +333,12 @@ extension PolarH10Service: PolarBleApiPowerStateObserver {
     func blePowerOn() {
         if pendingAutoConnect && !isConnected { autoConnect() }
     }
-    func blePowerOff() {}
+    func blePowerOff() {
+        isConnected = false
+        hrDisposable?.dispose(); hrDisposable = nil
+        accDisposable?.dispose(); accDisposable = nil
+        clearSignals()
+    }
 }
 
 // MARK: - PolarBleApiDeviceFeaturesObserver

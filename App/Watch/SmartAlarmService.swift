@@ -124,11 +124,8 @@ class SmartAlarmService: NSObject, WKExtendedRuntimeSessionDelegate {
 
     private func playAudioFallback() {
         guard audioPlayer == nil else { return }   // already playing
-        // Looks for a bundled "alarm" sound. Until an asset ships, this is a
-        // no-op and we lean on the strongest haptic tier.
-        guard let url = Bundle.main.url(forResource: "alarm", withExtension: "caf")
-            ?? Bundle.main.url(forResource: "alarm", withExtension: "mp3") else {
-            log.notice("No bundled alarm audio asset — relying on haptics only")
+        guard let url = Bundle.main.url(forResource: "alarm", withExtension: "wav") else {
+            log.error("Bundled alarm audio is missing")
             return
         }
         do {

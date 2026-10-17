@@ -335,7 +335,8 @@ struct SleepEntrySheet: View {
         ManualSleepStore.shared.log(hours: hours, awakenings: awakenings)
         let health = HealthKitService.shared
         let snapshot = RhythmSnapshot(rhythm: AlertnessProvider.rhythm(now: Date()),
-                                      morningLightStreak: health.morningLightStreak, updated: Date())
+                                      morningLightStreak: health.morningLightStreak, updated: Date(),
+                                      sleepDay: AlertnessProvider.hasSleepData(health: health) ? Date() : nil)
         snapshot.save()
         PhoneConnectivity.shared.sendDailySummary(
             samples: health.lastNightSamples,

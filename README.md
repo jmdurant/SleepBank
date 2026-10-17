@@ -41,8 +41,9 @@ score can even feed it.)
 - The alarm fires off **detected sleep onset**, not the clock — it wakes you in
   light sleep, **before slow-wave (N3) sleep consolidates**, to dodge the grogginess
   of sleep inertia.
-- Wakes on the earliest of: your target, a safety ceiling, **deep-sleep approach**,
-  or a **spontaneous awakening** — tiered haptic → audible.
+- Power naps wake at the target, safety ceiling, or **deep-sleep approach**. Cycle
+  naps continue through deep sleep to their target. A **spontaneous awakening**
+  ends either session; alarms escalate from haptics to sound.
 
 ### ⚡ The interactive alertness curve — *plan your day*
 - A predicted **two-process** curve (circadian rhythm − sleep pressure) for the whole
@@ -72,9 +73,9 @@ score can even feed it.)
 ### 📉 The recovery recap — *how much of the gap did you fill?*
 - A short night opens a **gap** between your curve and a fully-rested one. The Today-tab
   recap **draws that gap** — grey for what's lost, **green for what your naps, light,
-  and movement actually recovered** — and sums it to a single number: *"recovered X% of
-  the alertness your short night cost."* Forward-looking by day, a retrospective by
-  evening.
+  and movement are estimated to recover** — summarized as *"estimated recovery of
+  X% of the modeled short-night gap."* This is an illustrative model, not a
+  measured alertness outcome. Before/after sleepiness check-ins remain separate.
 
 ### 🔋 Energy ring — your Alert Score, at a glance
 - An Apple-Activity-style **battery ring** showing your overall predicted alertness
@@ -141,8 +142,10 @@ score can even feed it.)
 ### 🍏 Health & data pipeline
 - Writes naps to **Apple Health**.
 - A built-in **validation + training-data pipeline**: every nap is captured as a
-  labeled trace, and raw Muse EEG auto-syncs via iCloud to a Mac-side **YASA**
-  staging tool — building toward an on-device Core ML onset model.
+  labeled trace. Recordings stay local by default; optional **Settings → Nap recording
+  privacy → Sync nap recordings with iCloud Drive** sends new features/raw Muse EEG
+  to the user's iCloud Drive for the Mac-side **YASA** staging tool. Research exports
+  have their own consent and share-sheet flow.
 
 ## The evidence base
 

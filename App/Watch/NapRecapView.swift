@@ -38,6 +38,9 @@ struct NapRecapView: View {
                     stat("Woke via", wakeText, .secondary)
                 }
 
+                if let error = NapHealthWriter.shared.lastError {
+                    Text(error).font(.caption2).foregroundStyle(.secondary)
+                }
                 Button(action: onDone) {
                     Label("Done", systemImage: "checkmark")
                         .frame(maxWidth: .infinity)

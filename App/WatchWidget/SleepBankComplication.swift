@@ -207,7 +207,8 @@ struct PlanComplicationProvider: TimelineProvider {
     }
     private func entry(at date: Date) -> PlanComplicationEntry {
         guard let data = SharedStore.planSummary,
-              let plan = try? JSONDecoder().decode(PlanSummary.self, from: data) else {
+              let plan = try? JSONDecoder().decode(PlanSummary.self, from: data),
+              let day = plan.day, Calendar.current.isDate(day, inSameDayAs: date) else {
             return PlanComplicationEntry(date: date, kind: nil, time: nil, hasPlan: false)
         }
         let next = plan.next(at: date)

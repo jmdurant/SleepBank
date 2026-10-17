@@ -111,8 +111,9 @@ enum AlertnessProvider {
     /// Rebuild the rhythm snapshot and push it everywhere downstream (widget + watch)
     /// — call after anything that changes the curve's inputs (manual sleep, profile).
     static func publishSnapshot(health: HealthKitService = .shared) {
-        let snapshot = RhythmSnapshot(rhythm: rhythm(now: Date()),
-                                      morningLightStreak: health.morningLightStreak, updated: Date())
+        let snapshot = RhythmSnapshot(rhythm: rhythm(health: health, now: Date()),
+                                      morningLightStreak: health.morningLightStreak, updated: Date(),
+                                      sleepDay: AlertnessProvider.hasSleepData(health: health) ? Date() : nil)
         snapshot.save()
         PhoneConnectivity.shared.sendDailySummary(
             samples: health.lastNightSamples,
@@ -126,7 +127,9 @@ enum AlertnessProvider {
     /// would default to "rested" and read near the ceiling, which is misleading); the
     /// UI prompts for an estimate instead.
     static func hasSleepData(health: HealthKitService = .shared) -> Bool {
-        (health.lastNightSleep?.totalHours ?? 0) > 0 || ManualSleepStore.shared.today != nil
+        let healthIsCurrent = health.lastRefresh.map { Calendar.current.isDateInToday($0) } ?? false
+        return (healthIsCurrent && (health.lastNightSleep?.totalHours ?? 0) > 0)
+            || ManualSleepStore.shared.today != nil
     }
 
     /// True once HealthKit has finished its first load, so a "no sleep data" state is

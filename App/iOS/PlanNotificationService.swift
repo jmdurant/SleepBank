@@ -23,27 +23,9 @@ final class PlanNotificationService: NSObject, UNUserNotificationCenterDelegate 
     private let id = "dailyPlan"
 
     private let windDownId = "windDown"
-    private let napId = "scheduledNap"
-
-    /// The user-scheduled nap time for today (set from the alertness curve's "+"),
-    /// surfaced so the plan/UI can reflect it. Cleared on a new day.
-    static var scheduledNapAt: Date? {
-        get {
-            let t = UserDefaults.standard.double(forKey: "scheduledNapAt")
-            guard t > 0 else { return nil }
-            let date = Date(timeIntervalSinceReferenceDate: t)
-            return Calendar.current.isDateInToday(date) ? date : nil
-        }
-        set {
-            UserDefaults.standard.set(newValue?.timeIntervalSinceReferenceDate ?? 0, forKey: "scheduledNapAt")
-        }
-    }
-
-    /// The scheduled nap's type, so the Recap can rebuild its curve effect.
-    static var scheduledNapType: NapType {
-        get { NapType(rawValue: UserDefaults.standard.string(forKey: "scheduledNapType") ?? "") ?? .power }
-        set { UserDefaults.standard.set(newValue.rawValue, forKey: "scheduledNapType") }
-    }
+    private static let reminders = PlanReminderStore()
+    static var scheduledItems: [PlanReminder] { reminders.upcoming(onOrAfter: Date()) }
+    private(set) var lastScheduleError: String?
 
     /// Set whenever a notification is tapped, so a cold-started ContentView can route
     /// even if it missed the live post.
@@ -105,92 +87,54 @@ final class PlanNotificationService: NSObject, UNUserNotificationCenterDelegate 
         schedule(id: windDownId, content: content, fire: windDownFireTime())
     }
 
-    /// Schedule a one-shot reminder for a nap the user picked off the alertness
-    /// curve. Replaces any previously-scheduled nap. Returns false if the time is in
-    /// the past or notifications are denied.
+    /// A plan item owns its reminder. Adding another of the same kind preserves
+    /// all existing reminders; rescheduling this ID replaces only this item.
     @discardableResult
-    func scheduleNap(at date: Date, type: NapType) async -> Bool {
-        let interval = date.timeIntervalSinceNow
-        guard interval > 60 else { return false }
-        Self.scheduledNapType = type
-        let granted = (try? await center.requestAuthorization(options: [.alert, .sound])) ?? false
-        guard granted else { return false }
-
-        let content = UNMutableNotificationContent()
-        content.title = "😴 Time for your \(type.title.lowercased())"
-        content.body = "Settle in now — a nap here keeps you sharp through the rest of the day, no caffeine needed."
-        content.sound = .default
-        content.userInfo = ["route": "nap"]
-        content.categoryIdentifier = "NAP_REMINDER"
-
-        center.removePendingNotificationRequests(withIdentifiers: [napId])
-        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: interval, repeats: false)
-        try? await center.add(UNNotificationRequest(identifier: napId, content: content, trigger: trigger))
-        Self.scheduledNapAt = date
-        return true
-    }
-
-    /// A walk/workout the user scheduled off the curve, surfaced on Today's Plan.
-    struct ScheduledActivity: Codable, Identifiable {
-        var kind: String       // "Walk" / "Workout"
-        var at: Date
-        var outdoors: Bool
-        var minutes: Double = 30
-        var id: String { kind }
-    }
-
-    private static let activitiesKey = "scheduledActivities"
-
-    /// Today's scheduled activities (auto-prunes anything not from today).
-    static var scheduledActivities: [ScheduledActivity] {
-        get {
-            guard let data = UserDefaults.standard.data(forKey: activitiesKey),
-                  let all = try? JSONDecoder().decode([ScheduledActivity].self, from: data) else { return [] }
-            return all.filter { Calendar.current.isDateInToday($0.at) }
+    func schedule(_ item: PlanReminder) async -> Bool {
+        lastScheduleError = nil
+        guard item.at.timeIntervalSinceNow > 60 else {
+            lastScheduleError = "Choose a time at least a minute from now."
+            return false
         }
-        set {
-            UserDefaults.standard.set(try? JSONEncoder().encode(newValue), forKey: activitiesKey)
+        do {
+            guard try await center.requestAuthorization(options: [.alert, .sound]) else {
+                lastScheduleError = "Allow notifications in Settings to receive plan reminders. Your plan is still saved."
+                return false
+            }
+            let content = UNMutableNotificationContent()
+            content.title = "Time for your \(item.title.lowercased())"
+            content.body = item.kind == .nap ? "Your planned nap is coming up. Open SleepBank when you're ready."
+                : "Your planned \(Int(item.minutes))-minute \(item.title.lowercased()) is coming up."
+            content.sound = .default
+            content.userInfo = ["route": item.kind == .nap ? "nap" : "plan", "planItemID": item.id.uuidString,
+                                "napType": item.napType.rawValue]
+            switch item.kind {
+            case .nap: content.categoryIdentifier = "NAP_REMINDER"
+            case .walk: content.categoryIdentifier = "WALK_REMINDER"
+            case .workout: content.categoryIdentifier = "WORKOUT_REMINDER"
+            }
+            let interval = item.at.timeIntervalSinceNow
+            guard interval > 0 else {
+                lastScheduleError = "That reminder time has passed. Choose a new time."
+                return false
+            }
+            let trigger = UNTimeIntervalNotificationTrigger(timeInterval: interval, repeats: false)
+            try await center.add(UNNotificationRequest(identifier: item.notificationID, content: content, trigger: trigger))
+            if let oldID = Self.reminders.all().first(where: { $0.id == item.id })?.legacyNotificationID {
+                center.removePendingNotificationRequests(withIdentifiers: [oldID])
+            }
+            Self.reminders.upsert(item)
+            return true
+        } catch {
+            lastScheduleError = "Couldn't schedule the reminder: \(error.localizedDescription)"
+            return false
         }
     }
 
-    private func activityId(_ kind: String) -> String { "scheduledActivity-\(kind.lowercased())" }
-
-    /// Schedule a one-shot reminder for a planned walk/workout from the curve, and
-    /// record it for Today's Plan.
-    @discardableResult
-    func scheduleActivity(at date: Date, title: String, outdoors: Bool, minutes: Double = 30) async -> Bool {
-        let interval = date.timeIntervalSinceNow
-        guard interval > 60 else { return false }
-        let granted = (try? await center.requestAuthorization(options: [.alert, .sound])) ?? false
-        guard granted else { return false }
-
-        let content = UNMutableNotificationContent()
-        content.title = "\(outdoors ? "☀️" : "💪") Time for your \(title.lowercased())"
-        content.body = outdoors
-            ? "Get outside — the movement lifts you now and the daylight steadies tonight's sleep."
-            : "A bit of movement now keeps you sharp through the rest of the day."
-        content.sound = .default
-        content.userInfo = ["route": "plan"]
-        content.categoryIdentifier = title.caseInsensitiveCompare("walk") == .orderedSame ? "WALK_REMINDER" : "WORKOUT_REMINDER"
-
-        center.removePendingNotificationRequests(withIdentifiers: [activityId(title)])
-        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: interval, repeats: false)
-        try? await center.add(UNNotificationRequest(identifier: activityId(title), content: content, trigger: trigger))
-
-        var items = Self.scheduledActivities.filter { $0.kind.caseInsensitiveCompare(title) != .orderedSame }
-        items.append(ScheduledActivity(kind: title, at: date, outdoors: outdoors, minutes: minutes))
-        Self.scheduledActivities = items
-        return true
-    }
-
-    func cancelActivity(kind: String) {
-        center.removePendingNotificationRequests(withIdentifiers: [activityId(kind)])
-        Self.scheduledActivities = Self.scheduledActivities.filter { $0.kind.caseInsensitiveCompare(kind) != .orderedSame }
-    }
-
-    func cancelScheduledNap() {
-        center.removePendingNotificationRequests(withIdentifiers: [napId])
-        Self.scheduledNapAt = nil
+    func cancelReminder(id: UUID) {
+        guard let item = Self.reminders.all().first(where: { $0.id == id }) else { return }
+        center.removePendingNotificationRequests(withIdentifiers: [item.notificationID] + [item.legacyNotificationID].compactMap { $0 })
+        Self.reminders.remove(id: id)
     }
 
     private func schedule(id: String, content: UNMutableNotificationContent, fire: (Int, Int)) {
@@ -207,7 +151,7 @@ final class PlanNotificationService: NSObject, UNUserNotificationCenterDelegate 
     // MARK: - Content
 
     private func teaser() -> String {
-        guard let snap = RhythmSnapshot.load() else {
+        guard let snap = RhythmSnapshot.load(), snap.rebuild() != nil else {
             return "See how to stay sharp today — naps, light, and timing."
         }
         return snap.isShortNight
@@ -217,7 +161,7 @@ final class PlanNotificationService: NSObject, UNUserNotificationCenterDelegate 
 
     /// ~20 min after the most recent wake time, else 7:30.
     private func morningFireTime() -> (Int, Int) {
-        guard let snap = RhythmSnapshot.load() else { return (7, 30) }
+        guard let snap = RhythmSnapshot.load(), snap.rebuild() != nil else { return (7, 30) }
         let fire = snap.wakeTime.addingTimeInterval(20 * 60)
         let c = Calendar.current.dateComponents([.hour, .minute], from: fire)
         return (c.hour ?? 7, c.minute ?? 30)
@@ -225,7 +169,7 @@ final class PlanNotificationService: NSObject, UNUserNotificationCenterDelegate 
 
     /// ~15.5 h after the recent wake time (the plan's wind-down marker), else 22:00.
     private func windDownFireTime() -> (Int, Int) {
-        guard let snap = RhythmSnapshot.load() else { return (22, 0) }
+        guard let snap = RhythmSnapshot.load(), snap.rebuild() != nil else { return (22, 0) }
         let fire = snap.wakeTime.addingTimeInterval(15.5 * 3600)
         let c = Calendar.current.dateComponents([.hour, .minute], from: fire)
         return (c.hour ?? 22, c.minute ?? 0)

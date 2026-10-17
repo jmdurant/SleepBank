@@ -13,8 +13,8 @@ import SleepBankCore
 struct WatchDayPlanView: View {
     var body: some View {
         TimelineView(.periodic(from: .now, by: 600)) { context in
-            if let snapshot = RhythmSnapshot.load() {
-                let plan = DayPlan.build(rhythm: snapshot.rebuild(), now: context.date)
+            if let snapshot = RhythmSnapshot.load(), let rhythm = snapshot.rebuild(asOf: context.date) {
+                let plan = DayPlan.build(rhythm: rhythm, now: context.date)
                 ScrollView {
                     VStack(alignment: .leading, spacing: 10) {
                         header(plan)

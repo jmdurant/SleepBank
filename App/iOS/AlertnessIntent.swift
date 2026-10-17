@@ -18,13 +18,12 @@ struct AlertnessIntent: AppIntent {
     static var allowedExecutionTargets: IntentExecutionTargets { .main }
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
-        guard let snap = RhythmSnapshot.load() else {
-            return .result(dialog: "Open SleepBank once so it can read your sleep and set up your alertness rhythm.")
-        }
         let now = Date()
-        let rhythm = snap.rebuild()
+        guard let snap = RhythmSnapshot.load(), let rhythm = snap.rebuild(asOf: now) else {
+            return .result(dialog: "I don't have current sleep data for an alertness estimate. Open SleepBank to refresh Health or log last night's sleep.")
+        }
         let level = rhythm.level(at: now)
-        let phase = AlertnessRhythm.phaseLabel(at: now).lowercased()
+        let phase = AlertnessRhythm.phaseLabel(at: now, shiftHours: rhythm.circadianShiftHours).lowercased()
         var message = "Your alert score is about \(pct(level)) — \(phase)."
 
         // Add a nap suggestion only if a nap now would meaningfully lift the day.

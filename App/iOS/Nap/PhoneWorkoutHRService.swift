@@ -45,7 +45,7 @@ final class PhoneWorkoutHRService: NSObject, HKWorkoutSessionDelegate, HKLiveWor
     func requestPermissions() {
         // Starting a session needs workoutType share access; HR is read. We never
         // save the workout, but the API still requires share auth to open a session.
-        let share: Set<HKSampleType> = [HKQuantityType.workoutType()]
+        let share: Set<HKSampleType> = [HKQuantityType.workoutType(), HKCategoryType(.sleepAnalysis)]
         let read: Set<HKObjectType> = [HKQuantityType(.heartRate), HKObjectType.workoutType()]
         healthStore.requestAuthorization(toShare: share, read: read) { ok, err in
             log.info("workout HR auth: \(ok), \(err?.localizedDescription ?? "none")")

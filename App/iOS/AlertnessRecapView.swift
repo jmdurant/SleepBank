@@ -6,7 +6,7 @@
 //  forward: last night set a ceiling; here's the highest-leverage way to make the
 //  most of it. *After* the peak — once the day has largely played out — it becomes a
 //  retrospective: it draws the gap a short night opened between your curve and a
-//  rested one, fills in green what your naps/light/movement actually recovered, and
+//  rested one, fills in green what the model estimates from your naps/light/movement, and
 //  quantifies it as a single "% recovered."
 //
 
@@ -26,8 +26,8 @@ struct AlertnessRecapView: View {
             let r = AlertnessProvider.rhythm(health: health, store: store, now: now)
             let wake = r.wakeTime
             let dayEnd = wake.addingTimeInterval(17 * 3600)
-            let bare = AlertnessRhythm(wakeTime: wake, sleepDebt: r.sleepDebt)
-            let rested = AlertnessRhythm(wakeTime: wake, sleepDebt: 0.05)
+            let bare = AlertnessRhythm(wakeTime: wake, sleepDebt: r.sleepDebt, circadianShiftHours: r.circadianShiftHours)
+            let rested = AlertnessRhythm(wakeTime: wake, sleepDebt: 0.05, circadianShiftHours: r.circadianShiftHours)
             let evening = now > wake.addingTimeInterval(13 * 3600)
             // What actually happened, up to now — fills in live through the day.
             let pts = samples(actual: r, bare: bare, rested: rested, from: wake, to: now)
@@ -38,11 +38,18 @@ struct AlertnessRecapView: View {
 
             VStack(alignment: .leading, spacing: 10) {
                 Text(evening ? "Today's Alertness — recap" : "Today's Alertness, so far").font(.headline)
-                headline(recovered: recovered, gapArea: gapArea, evening: evening)
-                gapChart(pts)
-                legend(hasGain: fillArea > 0.001)
-                line("bed.double.fill", .ocean, recapLine(score: sleepScore(), gapArea: gapArea))
-                leverChip(napPeak: napLevel.map(pct), evening: evening)
+                if AlertnessProvider.hasSleepData(health: health) {
+                    headline(recovered: recovered, gapArea: gapArea, evening: evening)
+                    gapChart(pts)
+                    legend(hasGain: fillArea > 0.001)
+                    line("bed.double.fill", .ocean, recapLine(score: sleepScore(), gapArea: gapArea))
+                    leverChip(napPeak: napLevel.map(pct), evening: evening)
+                    Text("An illustrative estimate from sleep, naps, light, and movement. It does not measure your alertness. Your before/after sleepiness check-ins are recorded separately.")
+                    .font(.caption2).foregroundStyle(.secondary)
+                } else {
+                    Text("Log last night's sleep or refresh Apple Health to see an alertness estimate.")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding()
@@ -53,15 +60,15 @@ struct AlertnessRecapView: View {
     private func headline(recovered: Int, gapArea: Double, evening: Bool) -> some View {
         let when = evening ? "today" : "so far"
         let text: String
-        if gapArea < 0.6 { text = "Last night did its job — you're near a fully-rested ceiling \(when)." }
-        else if recovered < 2 { text = "A short night is costing you alertness \(when) (the grey). Naps, light, and movement are the levers — fill it in." }
-        else { text = "Naps, light & movement have recovered **\(recovered)%** of the alertness your short night cost \(when)." }
+        if gapArea < 0.6 { text = "The model estimates you're near a rested-night baseline \(when)." }
+        else if recovered < 2 { text = "The model estimates lower alertness after a short night \(when) (the grey). Naps, light, and movement are the levers — fill it in." }
+        else { text = "Estimated recovery from naps, light & movement: **\(recovered)%** of the modeled short-night gap \(when)." }
         return Text(.init(text)).font(.subheadline).foregroundStyle(.primary)
     }
 
     private func recapLine(score: Int?, gapArea: Double) -> String {
-        if gapArea < 0.6 { return "The grey is what a short night would cost — yours was small." }
-        let lost = "The grey that's left is the part only a better night fixes — tonight's wind-down is the lever."
+        if gapArea < 0.6 { return "The model estimates a small gap from a rested-night baseline." }
+        let lost = "The remaining grey is the modeled gap. Protecting tonight's sleep is the next step."
         if let score { return "Last night scored \(score). \(lost)" }
         return lost
     }
@@ -101,8 +108,8 @@ struct AlertnessRecapView: View {
 
     private func legend(hasGain: Bool) -> some View {
         HStack(spacing: 12) {
-            if hasGain { swatch(.green.opacity(0.5), "Recovered") }
-            swatch(.gray.opacity(0.35), "Still lost")
+            if hasGain { swatch(.green.opacity(0.5), "Estimated recovery") }
+            swatch(.gray.opacity(0.35), "Remaining gap")
             HStack(spacing: 4) { Capsule().fill(.teal).frame(width: 10, height: 2); Text("Rested night") }
             Spacer()
         }

@@ -72,7 +72,7 @@ class HealthKitService {
             HKScoredAssessmentType(.GAD7),
         ]
         do {
-            try await store.requestAuthorization(toShare: [], read: readTypes)
+            try await store.requestAuthorization(toShare: [HKCategoryType(.sleepAnalysis)], read: readTypes)
             do {
                 earliestAuthorizedDates = try await store.earliestAuthorizedSampleDate(for: readTypes)
             } catch {
@@ -241,12 +241,8 @@ class HealthKitService {
         await fetchLatestQuantity(.oxygenSaturation, unit: .percent()) * 100
     }
 
-    /// The window for *last night's* sleep — yesterday evening (18:00) to this
-    /// morning (noon, or now if earlier). With `.strictStartDate` (which filters by
-    /// each sample's START), this cleanly takes only last night's session: the prior
-    /// night's samples all start before 18:00 yesterday, and today's daytime naps
-    /// start after noon — both excluded. (The old 00:00-yesterday start swept in the
-    /// prior night's post-midnight hours, double-counting them into "last night.")
+    /// Last night's query window: yesterday 18:00 through today's noon (or now).
+    /// Queries include crossing samples; normalization clips them to the window.
     private func lastNightWindow(now: Date = Date(), calendar: Calendar = .current) -> (start: Date, end: Date) {
         nightWindow(ending: now, now: now, calendar: calendar)
     }
@@ -275,12 +271,9 @@ class HealthKitService {
         let window = window ?? lastNightWindow()
         let start = authorizedStart(for: sleepType, requested: window.start)
         guard start < window.end else { return [] }
-        let predicate = HKQuery.predicateForSamples(withStart: start, end: window.end, options: .strictStartDate)
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: window.end, options: [])
         guard let raw = try? await querySamples(sleepType, predicate: predicate) else { return [] }
-        if #available(iOS 16.0, *) {
-            return SleepSample.samples(from: raw)
-        }
-        return []
+        return HealthSleepTimeline.chartSamples(HealthSleepTimeline.resolve(raw, start: start, end: window.end))
     }
 
     // MARK: - Sleep
@@ -290,10 +283,11 @@ class HealthKitService {
         let window = window ?? lastNightWindow()
         let start = authorizedStart(for: sleepType, requested: window.start)
         guard start < window.end else { return nil }
-        let predicate = HKQuery.predicateForSamples(withStart: start, end: window.end, options: .strictStartDate)
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: window.end, options: [])
 
         do {
-            let samples = try await querySamples(sleepType, predicate: predicate)
+            let raw = try await querySamples(sleepType, predicate: predicate)
+            let samples = HealthSleepTimeline.resolve(raw, start: start, end: window.end)
 
             var asleep: TimeInterval = 0
             var rem: TimeInterval = 0, deep: TimeInterval = 0, core: TimeInterval = 0, awake: TimeInterval = 0
@@ -302,23 +296,15 @@ class HealthKitService {
             var sessionStart: Date?, sessionEnd: Date?
 
             for sample in samples {
-                let value = HKCategoryValueSleepAnalysis(rawValue: sample.value)
-                let counts: Bool
-                switch value {
-                case .inBed, .asleepUnspecified, .asleep, .asleepREM, .asleepDeep, .asleepCore, .awake:
-                    counts = true
-                default: counts = false
-                }
-                guard counts else { continue }
-                if sessionStart == nil || sample.startDate < sessionStart! { sessionStart = sample.startDate }
-                if sessionEnd == nil || sample.endDate > sessionEnd! { sessionEnd = sample.endDate }
+                if sessionStart == nil || sample.start < sessionStart! { sessionStart = sample.start }
+                if sessionEnd == nil || sample.end > sessionEnd! { sessionEnd = sample.end }
 
-                let duration = sample.endDate.timeIntervalSince(sample.startDate)
-                switch value {
-                case .asleepUnspecified, .asleep: asleep += duration
-                case .asleepREM: rem += duration; asleep += duration
-                case .asleepDeep: deep += duration; asleep += duration
-                case .asleepCore: core += duration; asleep += duration
+                let duration = sample.end.timeIntervalSince(sample.start)
+                switch sample.stage {
+                case .asleep: asleep += duration
+                case .rem: rem += duration; asleep += duration
+                case .deep: deep += duration; asleep += duration
+                case .core: core += duration; asleep += duration
                 case .awake: awake += duration
                 default: break   // .inBed contributes to the span only
                 }
@@ -354,16 +340,12 @@ class HealthKitService {
         let weekAgo = Calendar.current.date(byAdding: .day, value: -7, to: now)!
         let start = authorizedStart(for: sleepType, requested: weekAgo)
         guard start < now else { return 0 }
-        let predicate = HKQuery.predicateForSamples(withStart: start, end: now, options: .strictStartDate)
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: now, options: [])
 
         do {
-            let samples = try await querySamples(sleepType, predicate: predicate)
-            let totalSleep = samples.filter {
-                switch HKCategoryValueSleepAnalysis(rawValue: $0.value) {
-                case .asleepUnspecified, .asleep, .asleepREM, .asleepDeep, .asleepCore: return true
-                default: return false
-                }
-            }.reduce(0.0) { $0 + $1.endDate.timeIntervalSince($1.startDate) }
+            let raw = try await querySamples(sleepType, predicate: predicate)
+            let samples = HealthSleepTimeline.resolve(raw, start: start, end: now)
+            let totalSleep = samples.filter { $0.stage.isAsleep }.reduce(0.0) { $0 + $1.duration }
             // Don't divide a two-day authorized slice by seven; that would turn
             // privacy-limited history into an artificially poor sleep average.
             let authorizedDays = min(7, max(1, now.timeIntervalSince(start) / 86_400))
@@ -387,32 +369,21 @@ class HealthKitService {
         let start = authorizedStart(for: sleepType, requested: requestedStart)
         guard start < now,
               let raw = try? await querySamples(sleepType,
-                  predicate: HKQuery.predicateForSamples(withStart: start, end: now, options: .strictStartDate))
+                  predicate: HKQuery.predicateForSamples(withStart: start, end: now, options: []))
         else { return [] }
 
-        func isAsleep(_ s: HKCategorySample) -> Bool {
-            switch HKCategoryValueSleepAnalysis(rawValue: s.value) {
-            case .asleepUnspecified, .asleep, .asleepREM, .asleepDeep, .asleepCore: return true
-            default: return false
-            }
-        }
-        let inBed = raw.filter {
-            switch HKCategoryValueSleepAnalysis(rawValue: $0.value) {
-            case .inBed, .asleepUnspecified, .asleep, .asleepREM, .asleepDeep, .asleepCore, .awake: return true
-            default: return false
-            }
-        }.sorted { $0.startDate < $1.startDate }
+        let inBed = HealthSleepTimeline.resolve(raw, start: start, end: now)
 
         // Coalesce into sessions; a gap > 3 h starts a new one.
         var sessions: [(start: Date, end: Date, asleep: TimeInterval)] = []
         for s in inBed {
-            let dur = isAsleep(s) ? s.endDate.timeIntervalSince(s.startDate) : 0
-            if var last = sessions.last, s.startDate.timeIntervalSince(last.end) < 3 * 3600 {
-                last.end = max(last.end, s.endDate)
+            let dur = s.stage.isAsleep ? s.duration : 0
+            if var last = sessions.last, s.start.timeIntervalSince(last.end) < 3 * 3600 {
+                last.end = max(last.end, s.end)
                 last.asleep += dur
                 sessions[sessions.count - 1] = last
             } else {
-                sessions.append((s.startDate, s.endDate, dur))
+                sessions.append((s.start, s.end, dur))
             }
         }
 

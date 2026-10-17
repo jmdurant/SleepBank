@@ -46,6 +46,10 @@ targets:
       path: App/iOS/Info.plist
       properties:
         CFBundleDisplayName: SleepBank
+        CFBundleURLTypes:
+          - CFBundleURLName: com.doctordurant.sleepbank
+            CFBundleURLSchemes:
+              - sleepbank
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         ITSAppUsesNonExemptEncryption: false
@@ -230,6 +234,19 @@ targets:
         com.apple.security.application-groups:
           - group.com.doctordurant.sleepbank
 
+  SleepBankTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - AppTests
+    dependencies:
+      - target: SleepBank
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.doctordurant.sleepbank.tests
+        GENERATE_INFOPLIST_FILE: YES
+
+
 schemes:
   SleepBank:
     build:
@@ -237,6 +254,9 @@ schemes:
         SleepBank: all
     run:
       config: Debug
+    test:
+      targets:
+        - SleepBankTests
   SleepBankWatch:
     build:
       targets:

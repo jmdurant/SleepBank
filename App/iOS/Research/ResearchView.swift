@@ -45,11 +45,12 @@ struct ResearchView: View {
             ])
             section("How it's protected", "lock.shield.fill", [
                 "Data is de-identified — tagged only with a random study ID, never your name, contact, or device.",
-                "Nothing leaves your phone unless you tap Export. Today that's a share sheet you control; a study would receive it through an approved, consented pipeline.",
+                "Research check-in data is shared only when you tap Export and choose a destination in the share sheet. There is no automatic study upload.",
+                "Nap sensor recordings stay local by default. Optional iCloud Drive sync is controlled separately in Settings → Nap recording privacy and is not research participation.",
             ])
             section("Voluntary & reversible", "hand.raised.fill", [
                 "Entirely optional — the app works exactly the same if you decline.",
-                "You can withdraw anytime; that stops any future sharing.",
+                "You can withdraw anytime; that disables future research exports. Previously shared files and your separate iCloud sync setting are unchanged.",
             ])
             section("Not medical care", "stethoscope", [
                 "This is research/wellness, not medical advice, diagnosis, or treatment.",

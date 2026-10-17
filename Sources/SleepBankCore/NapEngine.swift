@@ -79,9 +79,10 @@ public final class NapEngine {
             reason = (wt >= ceiling) ? .ceiling : .reachedTarget; fireAlarm = true
         } else if now >= ceiling {
             reason = .ceiling; fireAlarm = true
-        } else if onsetTime != nil && (signal.eegDeepApproaching || physiologicalDeepening) {
+        } else if type == .power && onsetTime != nil && (signal.eegDeepApproaching || physiologicalDeepening) {
             // Deep sleep is approaching (EEG delta, or HR-falling-further + deeply
-            // still) — wake now, before N3, to dodge grogginess.
+            // still) — wake a power nap before N3. A cycle nap deliberately
+            // continues through deep sleep until its target or a natural wake.
             reason = .deepening; fireAlarm = true
         }
         if fireAlarm { alarming = true }

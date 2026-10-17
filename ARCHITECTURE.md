@@ -105,9 +105,9 @@ App/
   drag. With no plan, the curve becomes a **scrubber** — drag the dot to read the
   Alert Score at any time of day.
 - **The recap (`AlertnessRecapView`, Today tab)** — draws the gap a short night opens
-  between your curve and a rested one, fills green what your logged + scheduled
-  naps/light/movement recovered, and quantifies it ("recovered X% of what your short
-  night cost"). Forward-looking by day, retrospective by evening.
+  between your curve and a rested one and shows estimated recovery from completed
+  naps and observed light/movement. The percentage is explicitly a modeled estimate,
+  not measured alertness; KSS before/after outcomes are kept separate.
 - **`AlertnessCharge`** — the energy-ring "nap charge" that fills on waking and
   fades over the benefit window.
 - **`DayPlan`** — turns the rhythm into an agenda: morning light/movement, a nap
@@ -167,3 +167,23 @@ fully unit-tested without hardware.
 The sensor/watch/EEG infrastructure was harvested and adapted from a separate app
 (SexKit) — kept as a distinct repo/app, not a dependency. Swift 5 language mode for
 now; a deliberate Swift 6 concurrency migration is a future step.
+
+## Reliability boundaries
+
+- `SleepTimeline` resolves overlapping HealthKit sleep sources before scoring,
+  charting, averaging, or bedtime-history extraction. Staged sources beat generic
+  duration logs; deterministic source IDs break ties; uncovered spans use fallback
+  sources. In-bed envelopes do not override sleep/awake stages.
+- `NapEngine` applies deepening wakes only to power naps. The phone alarm checks
+  actual AlarmKit alert state, starts fallback sound immediately when needed, and
+  requests an earlier system alarm. A failed replacement retains the safety alarm.
+- H10 HR, RR/HRV, motion and breathing expire independently. Muse requires recent
+  packets from all four channels. Disconnects/reset paths invalidate cached state.
+- `AlertnessSnapshot` carries the day of its sleep basis. Missing/legacy/previous-day
+  snapshots cannot produce widget, watch-plan, or Siri scores.
+- `PlanReminder` uses each plan item's UUID for storage and notification identity.
+  Legacy reminders migrate with their old notification IDs retained for cancellation.
+- Nap features and EEG are local by default. iCloud Drive recording sync requires
+  a separate Settings opt-in; research consent only gates research check-in exports.
+- `swift test` covers domain regressions; the `SleepBankTests` Xcode target covers
+  phone alarm delivery and sensor freshness without real sensor connections.

@@ -47,13 +47,12 @@ struct AlertnessProviderWidget: TimelineProvider {
     }
 
     private func entry(at date: Date) -> AlertnessEntry {
-        guard let snap = RhythmSnapshot.load() else {
-            return AlertnessEntry(date: date, level: 0, phase: AlertnessRhythm.phaseLabel(at: date),
+        guard let snap = RhythmSnapshot.load(), let rhythm = snap.rebuild(asOf: date) else {
+            return AlertnessEntry(date: date, level: 0, phase: "Refresh sleep data",
                                   streak: SharedStore.morningLightStreak, hasData: false)
         }
-        let rhythm = snap.rebuild(asOf: date)
         return AlertnessEntry(date: date, level: rhythm.level(at: date),
-                              phase: AlertnessRhythm.phaseLabel(at: date),
+                              phase: AlertnessRhythm.phaseLabel(at: date, shiftHours: rhythm.circadianShiftHours),
                               streak: snap.morningLightStreak, hasData: true)
     }
 }

@@ -261,6 +261,9 @@ struct NapView: View {
                 .buttonStyle(.bordered).tint(.ocean)
             }
 
+            if let error = NapHealthWriter.shared.lastError {
+                Text(error).font(.caption).foregroundStyle(.secondary)
+            }
             Button { ratedSession = nil; kss.cancelOpenSession(); nap.dismissRecap() } label: {
                 Label("Done", systemImage: "checkmark").frame(maxWidth: .infinity).padding(.vertical, 6)
             }

@@ -32,7 +32,7 @@ class PhoneConnectivity: NSObject, WCSessionDelegate {
     func sendDailySummary(samples: [SleepSample], morningLightStreak: Int, rhythmSnapshot: Data?) {
         guard WCSession.default.activationState == .activated else { return }
         var context: [String: Any] = ["morningLightStreak": morningLightStreak]
-        if !samples.isEmpty, let data = try? JSONEncoder().encode(samples.dtos) {
+        if let data = try? JSONEncoder().encode(samples.dtos) {
             context["lastNight"] = data
         }
         if let rhythmSnapshot { context["rhythmSnapshot"] = rhythmSnapshot }

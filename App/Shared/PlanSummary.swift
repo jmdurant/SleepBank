@@ -18,6 +18,7 @@ struct PlanSummary: Codable {
         let done: Bool
     }
 
+    var day: Date? = Date()
     let startPct: Int
     let isShortNight: Bool
     let items: [Item]
